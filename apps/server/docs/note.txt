@@ -1,0 +1,37 @@
+
+lib
+    actix-web
+    diesel
+
+dev
+    lib search
+        https://crates.io/
+    spec
+        https://rust-lang.github.io/api-guidelines/
+        https://rust-coding-guidelines.github.io/rust-coding-guidelines-zh/overview.html
+    project-structure
+            https://learning-rust.github.io/docs/cargo-crates-and-basic-project-structure/
+        ├── Cargo.toml
+        ├── Cargo.lock
+        ├── src
+        │   ├── main.rs
+        │   ├── lib.rs
+        │   └── bin
+        │       ├── another_executable.rs
+        │       └── multi_file_executable
+        │           ├── main.rs
+        │           └── some_module.rs
+        ├── tests
+        │   └── some_integration_tests.rs
+        ├── benches
+        │   └── simple_bench.rs
+        └── examples
+            └── simple_example.rs
+    bdd
+        tdd
+
+cmd
+    cargo watch -x run
+        Auto-Reloading
+    docker 
+        brew cask install docker

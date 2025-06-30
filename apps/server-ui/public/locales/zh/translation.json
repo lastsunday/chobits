@@ -1,0 +1,42 @@
+{
+  "title": "Chobits",
+  "core": "Angel Heart",
+  "navigator": "导航",
+  "menu": {
+    "home": "主页"
+  },
+  "admin": {
+    "menu": {
+      "dashboard": "仪表板"
+    },
+    "confirm_logout": "确认登出？",
+    "password_not_equal": "密码不一致",
+    "password_update_success": "密码修改成功",
+    "login_again": "请重新登录",
+    "update_password": "修改密码",
+    "password": {
+      "title": "密码",
+      "hint": "请输入密码",
+      "old_password": "原密码",
+      "old_password_hint": "请输入原密码",
+      "confirm_password": "确认密码",
+      "confirm_password_hint": "请输入确认密码",
+      "update_password": "修改密码"
+    }
+  },
+  "login": {
+    "title": "登录",
+    "wellcome": "欢迎回来",
+    "form": {
+      "account": "账号",
+      "account_hint": "请输入账号",
+      "password": "密码",
+      "password_hint": "请输入密码"
+    }
+  },
+  "error": "错误",
+  "version": "版本",
+  "version_unknow": "未知",
+  "loading": "加载中",
+  "logout": "登出"
+}
