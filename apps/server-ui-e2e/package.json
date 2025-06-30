@@ -1,0 +1,14 @@
+{
+  "name": "@chobits/server-ui-e2e",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "e2e:install": "playwright install --with-deps",
+    "e2e": "playwright test"
+  },
+  "nx": {
+    "implicitDependencies": [
+      "@chobits/server-ui"
+    ]
+  }
+}

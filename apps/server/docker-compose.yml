@@ -1,0 +1,13 @@
+networks:
+  app-tier:
+    driver: bridge
+
+services:
+  postgresql:
+    image: 'bitnami/postgresql:17.2.0'
+    environment:
+      - POSTGRESQL_PASSWORD=changeme
+    ports:
+      - 5432:5432
+    networks:
+      - app-tier
