@@ -17,6 +17,9 @@ i18n
   .init({
     fallbackLng: 'zh',
     debug: true,
+    backend: {
+      loadPath: '/assets/locales/{{lng}}/{{ns}}.json',
+    }
   });
 
 export default i18n;

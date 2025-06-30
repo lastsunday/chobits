@@ -7,7 +7,7 @@ use sea_orm::{ActiveValue::Set, prelude::*};
 async fn test_find_by_id() {
     let (container, state) = setup_database().await;
     let root_user = user::ActiveModel {
-        account: Set("root".to_string()),
+        account: Set("root2".to_string()),
         password: Set("$2b$12$n7NaDXwHdpCQI5LlsM1viuDJWZWofuhz/HnGAi8X.BmPRIuHvaXUy".to_string()),
         enable: Set(true),
         ..Default::default()
