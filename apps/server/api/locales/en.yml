@@ -1,0 +1,6 @@
+auth:
+  account_or_password_not_correct: Account or password not correct
+  client_id_or_client_secret_invalid: invalid client_id and client_secret
+  grant_type_must_be_refresh_token: grant_type must be refresh_token
+  account_not_found: Account not found
+  old_password_not_correct: Old password not correct

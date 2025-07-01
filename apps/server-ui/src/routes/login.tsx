@@ -2,6 +2,7 @@ import { getVersion } from "@/api";
 import {
   Button,
   Container,
+  Flex,
   Paper,
   PasswordInput,
   Text,
@@ -16,6 +17,7 @@ import { z } from 'zod';
 import { useAuth } from '../hooks/auth';
 import classes from './login.module.css';
 import { useTranslation } from "react-i18next";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 const fallback = '/admin' as const
 
@@ -80,15 +82,18 @@ function RouteComponent() {
   return (
     <Container size={420} my={40}>
       <Title ta="center" className={classes.title}>
-        {t('login.wellcome')}
-        <Text size='xs'>{t('version')}: {isVersionLoading ? '...' : isVersionSuccess ? version : t('version_unkonw')}</Text>
+        {t('login.welcome')}
+        <Text size='xs'>{t('version')}: {isVersionLoading ? '...' : isVersionSuccess ? version : t('version_unknown')}</Text>
       </Title>
 
       <Paper withBorder shadow="sm" p={22} mt={30} radius="md">
         <form className="mt-4 max-w-lg" onSubmit={onFormSubmit}>
           <TextInput name="account" label={t('login.form.account')} placeholder={t('login.form.account_hint')} required radius="md" minLength={4} maxLength={16} />
           <PasswordInput name="password" label={t('login.form.password')} placeholder={t('login.form.password_hint')} required mt="md" radius="md" minLength={6} maxLength={16} />
-          <Button type='submit' fullWidth mt="xl" radius="md" disabled={isSubmitting}>
+          <Flex justify="end" className="mt-sm">
+            <LanguageSwitcher></LanguageSwitcher>
+          </Flex>
+          <Button type='submit' fullWidth mt="sm" radius="md" disabled={isSubmitting}>
             {isLoggingIn ? `${t('loading')}...` : t('login.title')}
           </Button>
         </form>

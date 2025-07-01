@@ -1,4 +1,5 @@
 import { getAccessToken, getRefreshToken, setStoredToken, Token } from "@/hooks/auth";
+import i18n from "@/i18n/config";
 import axios, { HttpStatusCode } from "axios";
 
 export interface ApiResult<T> {
@@ -18,6 +19,7 @@ export const instance = axios.create({
 })
 
 instance.interceptors.request.use(config => {
+  config.headers.set("locale", i18n.language);
   const accessToken = getAccessToken();
   if (accessToken) {
     config.headers.setAuthorization(`Bearer ${accessToken}`);

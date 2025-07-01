@@ -26,7 +26,7 @@
   },
   "login": {
     "title": "登录",
-    "wellcome": "欢迎回来",
+    "welcome": "欢迎回来",
     "form": {
       "account": "账号",
       "account_hint": "请输入账号",
@@ -36,7 +36,7 @@
   },
   "error": "错误",
   "version": "版本",
-  "version_unknow": "未知",
+  "version_unknown": "未知",
   "loading": "加载中",
   "logout": "登出"
 }

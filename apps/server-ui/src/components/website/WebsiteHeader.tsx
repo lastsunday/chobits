@@ -3,14 +3,16 @@ import {
   Burger,
   Divider,
   Drawer,
+  Flex,
   Group,
   ScrollArea,
   Text
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import logo from '../../assets/logo.svg';
-import classes from './WebsiteHeader.module.css';
 import { useTranslation } from 'react-i18next';
+import logo from '../../assets/logo.svg';
+import { LanguageSwitcher } from '../LanguageSwitcher';
+import classes from './WebsiteHeader.module.css';
 
 export function WebsiteHeader() {
   const [drawerOpened, { toggle: toggleDrawer, close: closeDrawer }] = useDisclosure(false);
@@ -28,6 +30,7 @@ export function WebsiteHeader() {
             <a href="#" className={classes.link}>
               {t('menu.home')}
             </a>
+            <LanguageSwitcher></LanguageSwitcher>
             <Burger opened={drawerOpened} onClick={toggleDrawer} hiddenFrom="sm" />
           </Group>
 
@@ -42,13 +45,16 @@ export function WebsiteHeader() {
         padding="md"
         title={t('navigator')}
         hiddenFrom="sm"
-        zIndex={1000000}
       >
+
         <ScrollArea h="calc(100vh - 80px" mx="-md">
           <Divider my="sm" />
           <a href="#" className={classes.link}>
             {t('menu.home')}
           </a>
+          <Flex justify="end">
+            <LanguageSwitcher></LanguageSwitcher>
+          </Flex>
         </ScrollArea>
       </Drawer>
     </Box >

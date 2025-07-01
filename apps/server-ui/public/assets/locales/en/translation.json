@@ -1,0 +1,42 @@
+{
+  "title": "Chobits",
+  "core": "Angel Heart",
+  "navigator": "Navigator",
+  "menu": {
+    "home": "Home"
+  },
+  "admin": {
+    "menu": {
+      "dashboard": "Dashboard"
+    },
+    "confirm_logout": "Confirm logout?",
+    "password_not_equal": "Password not equal",
+    "password_update_success": "Update password success",
+    "login_again": "Login again",
+    "update_password": "Update password",
+    "password": {
+      "title": "Password",
+      "hint": "Please input Password",
+      "old_password": "Old password",
+      "old_password_hint": "Please input old password",
+      "confirm_password": "Confirm password",
+      "confirm_password_hint": "Please input confirm password",
+      "update_password": "Update password"
+    }
+  },
+  "login": {
+    "title": "Login",
+    "welcome": "Welcome",
+    "form": {
+      "account": "Account",
+      "account_hint": "Please input account",
+      "password": "Password",
+      "password_hint": "Please input password"
+    }
+  },
+  "error": "Error",
+  "version": "Version",
+  "version_unknown": "Unknown",
+  "loading": "Loading",
+  "logout": "Logout"
+}

@@ -10,6 +10,7 @@ import { useAuth } from '../../hooks/auth';
 import { UserButton } from '../../widget/UserButton/UserButton';
 import classes from './route.module.css';
 import { useTranslation } from 'react-i18next';
+import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 
 export const Route = createFileRoute('/_pathlessLayout/admin')({
   beforeLoad: ({ context, location }) => {
@@ -152,6 +153,7 @@ function RouteComponent() {
           </div>
 
           <div className={classes.footer}>
+            <LanguageSwitcher></LanguageSwitcher>
             <a className={classes.link} onClick={openPassword}>
               <div className="i-mdi:password size-5 mr-2"></div>
               <span>{t('admin.update_password')}</span>

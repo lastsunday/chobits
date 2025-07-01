@@ -2,7 +2,7 @@ use axum::http::{HeaderMap, HeaderValue};
 
 pub fn get_locale(headers: &HeaderMap) -> String {
     headers
-        .get("locale")
+        .get("Locale")
         .unwrap_or(&HeaderValue::from_static(""))
         .to_str()
         .unwrap_or_default()
