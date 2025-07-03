@@ -77,5 +77,7 @@ cargo test --workspace
 1. upload assets to github, docker image to docker hub
 1. openapi + ui(scalar)
 1. i18n for error(rust-i18n)
+1. ws(axum ws,futures-util)
+1. timezone(jiff)
 
 ### App

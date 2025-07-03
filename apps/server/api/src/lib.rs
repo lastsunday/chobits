@@ -3,6 +3,10 @@ pub mod auth_error;
 pub mod config;
 pub mod i18n;
 pub mod index;
+pub mod ota;
+pub mod ota_data;
+pub mod ota_error;
+pub mod ws;
 
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -82,6 +86,8 @@ pub fn create_router(state: AppState) -> Router {
     let mut api_router = OpenApiRouter::with_openapi(api);
     api_router = setup_index(api_router);
     api_router = setup_auth(api_router, state.clone());
+    api_router = setup_ota(api_router, state.clone());
+    api_router = setup_ws(api_router, state.clone());
     let (mut app, api) = api_router.split_for_parts();
     app = setup_web(app);
     app = setup_api_fallback(app);
@@ -127,8 +133,16 @@ pub fn setup_index(router: OpenApiRouter) -> OpenApiRouter {
     router.merge(index::create_routes())
 }
 
+pub fn setup_ws(router: OpenApiRouter, state: AppState) -> OpenApiRouter {
+    router.merge(ws::create_routes(state))
+}
+
 pub fn setup_auth(router: OpenApiRouter, state: AppState) -> OpenApiRouter {
     api_setup(router, auth::create_routes(state))
+}
+
+pub fn setup_ota(router: OpenApiRouter, state: AppState) -> OpenApiRouter {
+    api_setup(router, ota::create_routes(state))
 }
 
 fn api_setup(router: OpenApiRouter, api_router: OpenApiRouter) -> OpenApiRouter {

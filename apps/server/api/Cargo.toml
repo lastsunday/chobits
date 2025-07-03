@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-axum = { version = "0.8.4", features = ["macros"] }
+axum = { version = "0.8.4", features = ["macros", "ws"] }
 axum-extra = { version = "0.10.1" }
 tokio = { version = "1.45.1", features = ["full"] }
 tracing = { version = "0.1.41", features = ["async-await"] }
@@ -53,6 +53,13 @@ testcontainers-modules = { version = "0.12.1", features = [
   "gitea",
 ] }
 rust-i18n = { version = "3.1.5" }
+futures-util = { version = "0.3.31", default-features = false, features = [
+  "sink",
+  "std",
+] }
+tokio-tungstenite = { version = "0.27.0" }
+futures-channel = { version = "0.3.31" }
+jiff = { version = "0.2.15" }
 entity = { path = "../entity" }
 migration = { path = "../migration" }
 service = { path = "../service" }

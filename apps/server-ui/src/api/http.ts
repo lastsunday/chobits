@@ -19,7 +19,7 @@ export const instance = axios.create({
 })
 
 instance.interceptors.request.use(config => {
-  config.headers.set("locale", i18n.language);
+  config.headers.set("Accept-Language", i18n.language);
   const accessToken = getAccessToken();
   if (accessToken) {
     config.headers.setAuthorization(`Bearer ${accessToken}`);

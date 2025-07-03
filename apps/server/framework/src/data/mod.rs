@@ -17,6 +17,8 @@ pub struct ApiResponse<T> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<T>,
 }
 
@@ -24,6 +26,7 @@ impl<T> ApiResponse<T> {
     pub fn new(code: i32, message: Option<String>, data: Option<T>) -> Self {
         Self {
             code,
+            error: message.clone(),
             message,
             data,
         }
