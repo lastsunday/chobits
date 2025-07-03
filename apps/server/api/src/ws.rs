@@ -10,6 +10,7 @@ use axum_extra::{TypedHeader, headers};
 use framework::middleware::get_auth_layer;
 use service::AppState;
 
+use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 //allows to split the websocket stream into separate TX and RX branches
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
@@ -24,7 +25,14 @@ pub fn create_routes(state: AppState) -> OpenApiRouter {
 
 #[debug_handler]
 #[tracing::instrument(name="ws",skip_all,fields(ip = %addr))]
-#[utoipa::path(get,path = "/chobits/{version}",tag=TAG,security(()))]
+#[utoipa::path(get,
+    path = "/chobits/{version}",
+    tag=TAG,
+    security(()),
+    params(
+        ("version" = Version, Path,example="v1", description = "Version"),
+    )
+)]
 async fn ws_handler(
     _version: Version,
     ws: WebSocketUpgrade,
@@ -55,7 +63,7 @@ where
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, ToSchema)]
 enum Version {
     V1,
 }
