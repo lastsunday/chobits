@@ -12,6 +12,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use axum::Router;
+use axum::ServiceExt;
 use axum::extract::DefaultBodyLimit;
 use axum::extract::Request;
 use axum::routing::get;
@@ -29,6 +30,7 @@ use tower_http::cors::CorsLayer;
 use tower_http::normalize_path::NormalizePathLayer;
 use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
+use tower_layer::Layer;
 use utoipa::OpenApi;
 use utoipa::openapi::security::Http;
 use utoipa::openapi::security::HttpAuthScheme;
@@ -65,9 +67,10 @@ async fn start() -> anyhow::Result<()> {
     // app start
     let listener = TcpListener::bind(format!("0.0.0.0:{port}")).await?;
     tracing::info!("listening on http://0.0.0.0:{port}");
+    let app = NormalizePathLayer::trim_trailing_slash().layer(app);
     axum::serve(
         listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
+        ServiceExt::<Request>::into_make_service_with_connect_info::<SocketAddr>(app),
     )
     .await?;
     Ok(())
@@ -111,7 +114,6 @@ pub fn setup_default(router: Router) -> Router {
         .allow_headers(cors::Any)
         .allow_credentials(false)
         .max_age(Duration::from_secs(3600 * 12));
-    let normalize_path = NormalizePathLayer::trim_trailing_slash();
     let tracing = TraceLayer::new_for_http()
         .make_span_with(|request: &Request| {
             let method = request.method();
@@ -126,7 +128,6 @@ pub fn setup_default(router: Router) -> Router {
         .layer(body_limit)
         .layer(tracing)
         .layer(cors)
-        .layer(normalize_path)
 }
 
 pub fn setup_index(router: OpenApiRouter) -> OpenApiRouter {
