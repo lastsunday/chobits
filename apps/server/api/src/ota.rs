@@ -194,7 +194,7 @@ async fn ota(
     Ok(Json(OtaResult {
         mqtt: None,
         websocket: Websocket {
-            url: format!("{}://{}/ws", get().ws().schema(), hostname),
+            url: format!("{}://{}/chobits/v1", get().ws().schema(), hostname),
             token: String::from(""),
         },
         server_time: ServerTime {

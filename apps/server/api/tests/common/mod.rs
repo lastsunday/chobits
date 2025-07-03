@@ -78,6 +78,18 @@ pub fn get_from_value<T: FromStr>(value: &Value, name: &str) -> Result<T, T::Err
 }
 
 #[allow(dead_code)]
+pub fn get_string_from_value(value: &Value, name: &str) -> String {
+    value
+        .get(name)
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .to_string()
+        .parse()
+        .unwrap()
+}
+
+#[allow(dead_code)]
 pub async fn post_json(app: Router, uri: &str, json: &Value) -> Response<Body> {
     post_json_with_token(app, uri, json, None).await
 }
