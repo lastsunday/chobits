@@ -5,7 +5,7 @@ use axum::{
     http::HeaderMap,
 };
 use axum_extra::extract::Host;
-use framework::{config::get, data::valid::ValidJson, error::ApiResult};
+use framework::{config::get, data::valid::ValidJson, error::ApiResult, id::gen_id};
 use service::AppState;
 use std::net::SocketAddr;
 use utoipa_axum::{router::OpenApiRouter, routes};
@@ -13,8 +13,8 @@ use utoipa_axum::{router::OpenApiRouter, routes};
 use entity::{prelude::*, user};
 use sea_orm::{ActiveValue::Set, prelude::*};
 
-use crate::ota_data::*;
 use crate::ota_error::*;
+use crate::{i18n::t, ota_data::*};
 
 use chrono::Local;
 use jiff::tz::TimeZone;
@@ -22,7 +22,10 @@ use jiff::tz::TimeZone;
 const TAG: &str = "ota";
 
 pub fn create_routes(state: AppState) -> OpenApiRouter {
-    OpenApiRouter::new().routes(routes!(ota)).with_state(state)
+    OpenApiRouter::new()
+        .routes(routes!(ota))
+        .routes(routes!(activate))
+        .with_state(state)
 }
 
 //from https://ccnphfhqs21z.feishu.cn/wiki/FjW6wZmisimNBBkov6OcmfvknVd
@@ -188,6 +191,10 @@ async fn ota(
     if headers.get(KEY_USER_AGENT).is_none() {
         return Err(ERROR_OTA_LACK_USER_AGENT.gen_api_error(&headers));
     }
+    // TODO: save device info to database
+    let device_id = headers.get(KEY_DEVICE_ID).unwrap().to_str().unwrap();
+    // TODO: save to database and fill logic
+    let activation_code = gen_id();
     let now = Local::now();
     let tz = TimeZone::system();
     let iana_identifier = tz.iana_name().context("get iana name failure")?;
@@ -200,15 +207,46 @@ async fn ota(
         server_time: ServerTime {
             timestamp: now.timestamp_millis(),
             timezone: String::from(iana_identifier),
-            timezone_offset: now.offset().utc_minus_local() / 60,
+            timezone_offset: -(now.offset().utc_minus_local() / 60),
         },
         firmware: Some(Firmware {
             version: String::from("0.0.1"),
             url: None,
         }),
-        activation: Some(Activation {
-            code: String::from(""),
-            message: String::from(""),
-        }),
-    }))
+        activation: None,
+        // TODO: fill activate logic
+        // activation: Some(Activation {
+        //     code: activation_code.clone(),
+        //     message: format!(
+        //         "{} {}",
+        //         t("ota.activation_message", &headers),
+        //         activation_code
+        //     ),
+        //     challenge: String::from(device_id),
+        // }),
+    })) //
+}
+
+#[debug_handler]
+#[tracing::instrument(name="ota",skip_all,fields(ip = %addr,hostname = %hostname))]
+#[utoipa::path(post, path = "/ota/activate",tag=TAG,security(()),
+    params(
+        ("Device-Id" = String,Header,description="设备的唯一标识符（使用MAC地址或由硬件ID生成的伪MAC地址）",example="11:22:33:44:55:66"),
+        ("Client-Id" = Option<String>,Header,description="客户端的唯一标识符，由软件自动生成的UUID v4（擦除FLASH或重装后会变化）",example="7b94d69a-9808-4c59-9c9b-704333b38aff"),
+        ("Accept-Language" = Option<String>,Header,description="客户端的当前语言（可选，例如 zh-CN）",example="zh-CN"),
+    ),
+)]
+async fn activate(
+    State(AppState { conn }): State<AppState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    Host(hostname): Host,
+    headers: HeaderMap,
+) -> ApiResult<String> {
+    tracing::info!("{:?}", hostname);
+    if headers.get(KEY_DEVICE_ID).is_none() {
+        return Err(ERROR_OTA_LACK_DEVICE_ID.gen_api_error(&headers));
+    }
+    // TODO:check device id in database
+    // TODO:logic failure need return status code 202
+    Ok(String::from("success"))
 }

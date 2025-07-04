@@ -8,3 +8,4 @@ ota:
   lack_device_id: header lack device id
   lack_client_id: header lack client id
   lack_user_agent: header lack user agent
+  activation_message: activation code

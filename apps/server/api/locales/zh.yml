@@ -8,3 +8,4 @@ ota:
   lack_device_id: header 缺少 device id
   lack_client_id: header 缺少 client id
   lack_user_agent: header 缺少 user agent
+  activation_message: 激活码

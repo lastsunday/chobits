@@ -89,6 +89,7 @@ pub struct Activation {
     pub code: String,
     /// 屏幕显示消息
     pub message: String,
+    pub challenge: String,
 }
 
 #[derive(Debug, Serialize, ToSchema, Default)]
