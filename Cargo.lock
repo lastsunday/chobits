@@ -4901,6 +4901,7 @@ dependencies = [
  "num_cpus",
  "openssl",
  "sea-orm",
+ "serde",
  "ssh-key",
  "testcontainers",
  "testcontainers-modules",
