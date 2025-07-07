@@ -161,7 +161,9 @@ where
                             state.data.push(data.clone());
                         }
                     },
-                    None => todo!(),
+                    None => {
+                        //skip
+                    }
                 }
             }
         }
@@ -282,7 +284,7 @@ where
                 }
             }
             Err(_) => {
-                tracing::info!("unknow message = {:?}", t);
+                return ControlFlow::Continue(Some(Frame::UnknowText(t)));
             }
         },
         Message::Binary(d) => {

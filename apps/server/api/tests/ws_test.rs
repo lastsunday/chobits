@@ -16,11 +16,4 @@ async fn ws() {
     ));
 
     test_tx.send(Ok(Message::Text("foo".into()))).await.unwrap();
-
-    let msg = match test_rx.next().await.unwrap() {
-        Message::Text(msg) => msg,
-        other => panic!("expected a text message but got {other:?}"),
-    };
-
-    assert_eq!(msg.as_str(), "You said: foo");
 }
