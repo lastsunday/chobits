@@ -1,4 +1,4 @@
-use std::{collections::HashMap, net::SocketAddr, ops::ControlFlow, rc::Rc};
+use std::{cmp, collections::HashMap, net::SocketAddr, ops::ControlFlow, rc::Rc};
 
 use axum::{
     RequestPartsExt,
@@ -18,9 +18,11 @@ use service::{
     AppState,
     chobits::message::{
         AudioFormat, Transport,
-        hello::{self, AudioParam, HelloMessage},
+        abort::AbortMessage,
+        hello::{AudioParam, HelloMessage},
         listen::{ListenMessage, ListenState},
-        tts::TtsMessage,
+        stt::SttMessage,
+        tts::{TtsMessage, TtsState},
     },
 };
 
@@ -28,6 +30,8 @@ use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 //allows to split the websocket stream into separate TX and RX branches
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
+
+use crate::tts::Tts;
 
 const TAG: &str = "ws";
 
@@ -86,7 +90,9 @@ where
     W: Sink<Message> + Unpin,
     R: Stream<Item = Result<Message, axum::Error>> + Unpin,
 {
+    let session_id = Some(gen_id());
     let mut state = state;
+    let mut tts = Tts::new().await;
     while let Some(Ok(msg)) = read.next().await {
         let result = process_message(msg, &mut write).await;
         if result.is_break() {
@@ -97,7 +103,9 @@ where
                 match item {
                     Some(frame) => match frame {
                         Frame::Hello(hello_message) => {
-                            if let Some(result) = convert_hello_message_to_command(hello_message) {
+                            if let Some(result) =
+                                convert_hello_message_to_command(hello_message, session_id.clone())
+                            {
                                 match result {
                                     HelloCommand::Hello(data) => {
                                         let result: String = serde_json::to_string(&data).unwrap();
@@ -121,14 +129,12 @@ where
                                     }
                                     ListenCommand::Stop => {
                                         state.listen_start = false;
-                                        for item in state.data.clone() {
-                                            write.send(Message::Binary(item)).await;
-                                        }
+                                        // tts.say(&mut write, String::from("你好")).await;
                                     }
                                     ListenCommand::Detect(text) => {
                                         // TODO: send stt from text,
                                         // TODO: chatStreamBySentence
-                                        let data = TtsMessage::new(None, Some(text));
+                                        let data = SttMessage::new(session_id.clone(), Some(text));
                                         let result: String = serde_json::to_string(&data).unwrap();
                                         if write
                                             .send(Message::Text(result.clone().into()))
@@ -137,19 +143,25 @@ where
                                         {
                                             tracing::info!("return detect success = {}", result);
                                         }
+                                        tts.say(
+                                            &mut write,
+                                            String::from("巴山楚水凄凉地，二十三年弃置身。怀旧空吟闻笛赋，到乡翻似烂柯人。沉舟侧畔千帆过，病树前头万木春。今日听君歌一曲，暂凭杯酒长精神。"),
+                                        )
+                                        .await;
                                     }
                                     ListenCommand::Text(text) => {
                                         // TODO: if audio playing, stop audio logic, send tts message stop
                                         // TODO: else send stt from text,
-                                        let data = TtsMessage::new(None, Some(text));
-                                        let result: String = serde_json::to_string(&data).unwrap();
-                                        if write
-                                            .send(Message::Text(result.clone().into()))
-                                            .await
-                                            .is_ok()
-                                        {
-                                            tracing::info!("return text success = {}", result);
-                                        }
+                                        //  let data = TtsMessage::new(None, Some(text));
+                                        //  let result: String = serde_json::to_string(&data).unwrap();
+                                        //  if write
+                                        //      .send(Message::Text(result.clone().into()))
+                                        //      .await
+                                        //      .is_ok()
+                                        //  {
+                                        //      tracing::info!("return text success = {}", result);
+                                        //  }
+                                        tracing::info!("listen command text = {}", text);
                                     }
                                 }
                             }
@@ -158,11 +170,31 @@ where
                             tracing::warn!("unknow text = {}", utf8_bytes.to_string())
                         }
                         Frame::Voice(data) => {
-                            state.data.push(data.clone());
+                            //state.data.push(data.clone());
+                            // let data = TtsMessage::new(None, Some(String::from("hello")));
+                            // let result: String = serde_json::to_string(&data).unwrap();
+                            // if write
+                            //     .send(Message::Text(result.clone().into()))
+                            //     .await
+                            //     .is_ok()
+                            // {
+                            //     tracing::info!("return text success = {}", result);
+                            // }
+                        }
+                        Frame::Abort(abort_message) => {
+                            let data = TtsMessage::new(Some(TtsState::Stop), None);
+                            let result: String = serde_json::to_string(&data).unwrap();
+                            if write
+                                .send(Message::Text(result.clone().into()))
+                                .await
+                                .is_ok()
+                            {
+                                tracing::info!("return abort success = {}", result);
+                            }
                         }
                     },
                     None => {
-                        //skip
+                        tracing::info!("unkonw message");
                     }
                 }
             }
@@ -178,10 +210,13 @@ where
     }
 }
 
-fn convert_hello_message_to_command(message: HelloMessage) -> Option<HelloCommand> {
+fn convert_hello_message_to_command(
+    message: HelloMessage,
+    session_id: Option<String>,
+) -> Option<HelloCommand> {
     let result = HelloMessage {
         message: service::chobits::message::Message {
-            mtype: String::from(r#"hello"#),
+            mtype: service::chobits::message::Type::Hello,
         },
         transport: Some(Transport::Websocket),
         audio_params: Some(AudioParam {
@@ -192,7 +227,7 @@ fn convert_hello_message_to_command(message: HelloMessage) -> Option<HelloComman
         }),
         version: None,
         features: None,
-        session_id: Some(gen_id()),
+        session_id,
     };
     Some(HelloCommand::Hello(result))
 }
@@ -263,6 +298,15 @@ where
                                         return ControlFlow::Continue(Some(Frame::UnknowText(t)));
                                     }
                                 }
+                            } else if mtype == r#"abort"# {
+                                match serde_json::from_slice::<AbortMessage>(t.as_bytes()) {
+                                    Ok(message) => {
+                                        return ControlFlow::Continue(Some(Frame::Abort(message)));
+                                    }
+                                    Err(_) => {
+                                        return ControlFlow::Continue(Some(Frame::UnknowText(t)));
+                                    }
+                                }
                             }
                         }
                         None => {
@@ -321,6 +365,7 @@ pub enum Frame {
     Listen(ListenMessage),
     UnknowText(Utf8Bytes),
     Voice(Bytes),
+    Abort(AbortMessage),
 }
 
 #[derive(Debug, PartialEq, Eq, ToSchema)]

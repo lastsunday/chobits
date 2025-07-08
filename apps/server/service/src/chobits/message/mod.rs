@@ -1,13 +1,63 @@
 use serde::{Deserialize, Serialize};
 
+pub mod abort;
 pub mod hello;
 pub mod listen;
+pub mod stt;
 pub mod tts;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Message {
     #[serde(rename = "type")]
-    pub mtype: String,
+    pub mtype: Type,
+}
+
+#[derive(Debug, Clone)]
+pub enum Type {
+    Hello,
+    Listen,
+    Tts,
+    Stt,
+    Abort,
+}
+
+impl<'de> Deserialize<'de> for Type {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        if value == r#"hello"# {
+            Ok(Self::Hello)
+        } else if value == r#"listen"# {
+            Ok(Self::Listen)
+        } else if value == r#"tts"# {
+            Ok(Self::Tts)
+        } else if value == r#"stt"# {
+            Ok(Self::Stt)
+        } else if value == r#"abort"# {
+            Ok(Self::Abort)
+        } else {
+            Err(serde::de::Error::custom(
+                "Expected hello,listen,tts,abort for type",
+            ))
+        }
+    }
+}
+
+impl Serialize for Type {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(match self {
+            Type::Hello => r#"hello"#,
+            Type::Listen => r#"listen"#,
+            Type::Tts => r#"tts"#,
+            Type::Stt => r#"stt"#,
+            Type::Abort => r#"abort"#,
+        })
+    }
 }
 
 #[derive(Debug, Clone)]

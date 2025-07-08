@@ -85,6 +85,9 @@ impl IntoResponse for ApiError {
             Some(self.message()),
             None,
         ));
+        if state_code == StatusCode::BAD_REQUEST {
+            tracing::info!("bad request {:?}", body);
+        }
         (state_code, body).into_response()
     }
 }

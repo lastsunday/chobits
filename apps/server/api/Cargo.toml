@@ -61,6 +61,8 @@ futures-util = { version = "0.3.31", default-features = false, features = [
 tokio-tungstenite = { version = "0.27.0" }
 futures-channel = { version = "0.3.31" }
 jiff = { version = "0.2.15" }
+kokoro-tts = { version = "0.2.6" }
+opus = { version = "0.3.0" }
 entity = { path = "../entity" }
 migration = { path = "../migration" }
 service = { path = "../service" }

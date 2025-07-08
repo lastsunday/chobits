@@ -6,6 +6,7 @@ pub mod index;
 pub mod ota;
 pub mod ota_data;
 pub mod ota_error;
+pub mod tts;
 pub mod ws;
 
 use std::net::SocketAddr;

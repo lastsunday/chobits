@@ -1,3 +1,4 @@
+use framework::data::serder::deserialize_number;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use validator::Validate;
@@ -13,11 +14,13 @@ pub struct OtaParam {
     pub language: Option<String>,
     /// 设备的闪存大小
     pub flash_size: Option<u64>,
-    pub minimum_free_heap_size: Option<u64>,
+    #[serde(deserialize_with = "deserialize_number")]
+    pub minimum_free_heap_size: u64,
     /// MAC地址（与 HTTP header 里的 device-id 一致）
     pub mac_address: Option<String>,
     /// 设备的芯片型号，例如 esp32s3
     pub chip_model_name: Option<String>,
+    pub chip_info: Option<ChipInfo>,
     /// 设备的PSRAM大小
     pub psram_size: Option<u64>,
     /// ClientId（与 HTTP header 里的 client-id 一致）
@@ -49,6 +52,14 @@ pub struct Partition {
     pub subtype: u32,
     pub address: u64,
     pub size: u64,
+}
+
+#[derive(Debug, Deserialize, Validate, ToSchema)]
+pub struct ChipInfo {
+    pub model: u64,
+    pub cores: u64,
+    pub revision: u64,
+    pub features: u64,
 }
 
 #[derive(Debug, Deserialize, Validate, ToSchema)]

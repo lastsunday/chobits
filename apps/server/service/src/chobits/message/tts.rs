@@ -12,9 +12,7 @@ pub struct TtsMessage {
 impl TtsMessage {
     pub fn new(state: Option<TtsState>, text: Option<String>) -> Self {
         Self {
-            message: Message {
-                mtype: String::from(r#"tts"#),
-            },
+            message: Message { mtype: Type::Tts },
             state,
             text,
         }
@@ -26,6 +24,7 @@ pub enum TtsState {
     Start,
     Stop,
     SentenceStart,
+    SentenceEnd,
 }
 
 impl<'de> Deserialize<'de> for TtsState {
@@ -40,6 +39,8 @@ impl<'de> Deserialize<'de> for TtsState {
             Ok(TtsState::Stop)
         } else if value == r#"sentence_start"# {
             Ok(TtsState::SentenceStart)
+        } else if value == r#"sentence_end"# {
+            Ok(TtsState::SentenceEnd)
         } else {
             Err(serde::de::Error::custom(
                 "Expected start,stop,sentence_start for tts state",
@@ -57,6 +58,7 @@ impl Serialize for TtsState {
             TtsState::Start => r#"start"#,
             TtsState::Stop => r#"stop"#,
             TtsState::SentenceStart => r#"sentence_start"#,
+            TtsState::SentenceEnd => r#"sentence_end"#,
         })
     }
 }
