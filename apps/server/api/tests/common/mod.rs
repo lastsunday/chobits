@@ -1,3 +1,4 @@
+use api::AppState;
 use axum::{
     Router,
     body::Body,
@@ -7,7 +8,6 @@ use chrono::{DateTime, FixedOffset};
 use http_body_util::BodyExt;
 use migration::MigratorTrait;
 use serde_json::Value;
-use service::AppState;
 use std::str::FromStr;
 use testcontainers::ContainerAsync;
 use testcontainers_modules::postgres::Postgres;

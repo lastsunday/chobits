@@ -197,6 +197,7 @@ dependencies = [
  "testcontainers-modules",
  "thiserror 2.0.12",
  "tokio",
+ "tokio-stream",
  "tokio-tungstenite 0.27.0",
  "tower",
  "tower-http",
@@ -207,6 +208,7 @@ dependencies = [
  "utoipa-axum",
  "utoipa-scalar",
  "validator",
+ "voice_activity_detector_silero_v5",
  "web",
  "xid",
 ]
@@ -2131,7 +2133,7 @@ dependencies = [
  "syn 2.0.102",
  "textwrap",
  "thiserror 1.0.69",
- "typed-builder",
+ "typed-builder 0.15.2",
 ]
 
 [[package]]
@@ -6374,7 +6376,16 @@ version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7fe83c85a85875e8c4cb9ce4a890f05b23d38cd0d47647db7895d3d2a79566d2"
 dependencies = [
- "typed-builder-macro",
+ "typed-builder-macro 0.15.2",
+]
+
+[[package]]
+name = "typed-builder"
+version = "0.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd9d30e3a08026c78f246b173243cf07b3696d274debd26680773b6773c2afc7"
+dependencies = [
+ "typed-builder-macro 0.20.1",
 ]
 
 [[package]]
@@ -6382,6 +6393,17 @@ name = "typed-builder-macro"
 version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29a3151c41d0b13e3d011f98adc24434560ef06673a155a6c7f66b9879eecce2"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.102",
+]
+
+[[package]]
+name = "typed-builder-macro"
+version = "0.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c36781cc0e46a83726d9879608e4cf6c2505237e263a8eb8c24502989cfdb28"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6656,6 +6678,21 @@ name = "virtue"
 version = "0.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "051eb1abcf10076295e815102942cc58f9d5e3b4560e46e53c21e8ff6f3af7b1"
+
+[[package]]
+name = "voice_activity_detector_silero_v5"
+version = "0.2.0-silero-v5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0770f16e9ce1e343ba360cf20e28145a425b76b32fa62a69218398bfc9ddba40"
+dependencies = [
+ "futures",
+ "ndarray",
+ "ort",
+ "ort-sys",
+ "pin-project",
+ "thiserror 2.0.12",
+ "typed-builder 0.20.1",
+]
 
 [[package]]
 name = "walkdir"

@@ -1,3 +1,4 @@
+use api::AppState;
 use api::setup_default;
 use api::setup_ota;
 use axum::body::Body;
@@ -12,7 +13,6 @@ use cucumber::{World, given};
 use framework::auth::Jwt;
 use futures::FutureExt;
 use serde_json::json;
-use service::AppState;
 use std::net::SocketAddr;
 use tower::ServiceExt;
 use utoipa_axum::router::OpenApiRouter;

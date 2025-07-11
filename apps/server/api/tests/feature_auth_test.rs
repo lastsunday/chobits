@@ -1,3 +1,4 @@
+use api::AppState;
 use api::setup_auth;
 use api::setup_default;
 use axum::extract::connect_info::MockConnectInfo;
@@ -13,7 +14,6 @@ use framework::auth::Jwt;
 use framework::auth::Principal;
 use futures::FutureExt;
 use serde_json::json;
-use service::AppState;
 use std::net::SocketAddr;
 use utoipa_axum::router::OpenApiRouter;
 mod common;

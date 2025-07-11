@@ -79,5 +79,9 @@ cargo test --workspace
 1. i18n for error(rust-i18n)
 1. ws(axum ws,futures-util)
 1. timezone(jiff)
+1. tts(kokoro-tts)
+1. opus(opus)
+1. ?vad Voice-Activity-Detection ()
+1. ?stt,asr()
 
 ### App

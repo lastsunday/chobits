@@ -15,13 +15,12 @@ use framework::{
     password::{hash, verify},
 };
 use serde::{Deserialize, Serialize};
-use service::AppState;
 use std::net::SocketAddr;
 use utoipa::{IntoParams, ToSchema};
 use utoipa_axum::{router::OpenApiRouter, routes};
 use validator::Validate;
 
-use crate::auth_error::*;
+use crate::{AppState, auth_error::*};
 use entity::{prelude::*, user};
 use sea_orm::{ActiveValue::Set, prelude::*};
 

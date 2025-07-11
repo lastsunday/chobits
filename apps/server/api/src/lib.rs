@@ -6,7 +6,6 @@ pub mod index;
 pub mod ota;
 pub mod ota_data;
 pub mod ota_error;
-pub mod tts;
 pub mod ws;
 
 use std::net::SocketAddr;
@@ -19,7 +18,7 @@ use axum::extract::Request;
 use axum::routing::get;
 use bytesize::ByteSize;
 use migration::MigratorTrait;
-use service::AppState;
+use sea_orm::DatabaseConnection;
 use tokio::net::TcpListener;
 
 use framework::error::*;
@@ -41,6 +40,8 @@ use utoipa_scalar::{Scalar, Servable as ScalarServable};
 
 use framework::auth::Jwt;
 
+use crate::ws::tts_cache::TtsCache;
+
 #[macro_use]
 extern crate rust_i18n;
 i18n!("locales", fallback = "zh");
@@ -61,6 +62,7 @@ async fn start() -> anyhow::Result<()> {
     tracing::info!("Database connected successfully");
     // database schema init or upgrade
     migration::Migrator::up(&conn, None).await?;
+    TtsCache::init().await;
     // state
     let state = AppState { conn };
     // router
@@ -176,4 +178,9 @@ pub fn main() {
     if let Some(err) = result.err() {
         println!("Error: {err}");
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct AppState {
+    pub conn: DatabaseConnection,
 }
