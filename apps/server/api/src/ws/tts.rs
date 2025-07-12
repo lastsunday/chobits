@@ -27,13 +27,15 @@ impl Tts for TtsKokoro {
         let instance = self.instance.clone();
         tokio::spawn(async move {
             let instance = instance.lock().await;
-            let (audio, took) = instance.synth(text, Voice::Zf039(1)).await.unwrap();
-            let mut encoder =
-                opus::Encoder::new(24000, opus::Channels::Mono, opus::Application::LowDelay)
-                    .unwrap();
+            let (audio, took) = instance.synth(text, Voice::Zf001(1)).await.unwrap();
+            let mut encoder = opus::Encoder::new(
+                SAMPLE_RATE,
+                opus::Channels::Mono,
+                opus::Application::LowDelay,
+            )
+            .unwrap();
             let len = audio.len();
-            // 24000Hz * 1 channel * 60 ms / 1000 = 1440
-            let size = 1440;
+            let size = calcalute_tts_packet_size(SAMPLE_RATE, DELAY_MILLIS) as usize;
             let count = len / size;
             for n in 1..count {
                 let start = (n - 1) * size;
@@ -51,4 +53,16 @@ impl Tts for TtsKokoro {
         });
         ReceiverStream::new(rx)
     }
+}
+
+//Sampling rate of input signal (Hz) This must be one of 8000, 12000, 16000, 24000, or 48000.
+//采样率
+pub static SAMPLE_RATE: u32 = 24000;
+//WebSocket 发送间隔 ≈ 帧长度
+//one frame (2.5, 5, 10, 20, 40 or 60 ms)
+pub static DELAY_MILLIS: u64 = 60;
+
+pub fn calcalute_tts_packet_size(sample_rate: u32, delay_millis: u64) -> usize {
+    // 16000Hz * 1 channel * 60 ms / 1000 = 960
+    (sample_rate as usize) * 1 * (delay_millis as usize) / 1000
 }

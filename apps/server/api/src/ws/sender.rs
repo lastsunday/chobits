@@ -1,13 +1,13 @@
-use std::time::Duration;
+use std::{ops::Sub, time::Duration};
 
 use axum::extract::ws::Message;
 use futures_util::{Sink, SinkExt};
 use serde::Serialize;
 use service::chobits::message::tts::{TtsMessage, TtsState};
-use tokio::time::{Instant, sleep_until};
+use tokio::time::{Instant, sleep, sleep_until};
 use tokio_stream::StreamExt;
 
-use crate::ws::tts::Tts;
+use crate::ws::tts::{DELAY_MILLIS, Tts};
 
 pub struct Sender<W, T>
 where
@@ -46,13 +46,23 @@ where
     }
 
     pub async fn send_tts(&mut self, text: String) -> Result<(), SenderError> {
-        let delay = 60;
+        let delay = DELAY_MILLIS;
         let mut output = self.tts.output(text);
         let mut latest_time = Instant::now() + Duration::from_millis(delay);
+        // pre buffer count
+        let pre_buffer_frame_count: u64 = 3;
+        let mut send_frame_count: u64 = 0;
         while let Some(packet) = output.next().await {
             let now = Instant::now();
-            let offset = now - latest_time + Duration::from_millis(delay);
-            sleep_until(now + offset).await;
+            let offset = (now - latest_time).as_millis() as u64;
+            let mut actual_delay: u64 = 0;
+            if (offset < delay) {
+                actual_delay = delay - offset;
+            }
+            if send_frame_count >= pre_buffer_frame_count && actual_delay > 0 {
+                sleep(Duration::from_millis(actual_delay)).await;
+            }
+            latest_time = Instant::now();
             if self
                 .write
                 .send(Message::Binary(packet.into()))
@@ -61,7 +71,7 @@ where
             {
                 return Err(SenderError::SendError);
             }
-            latest_time = Instant::now();
+            send_frame_count += 1;
         }
         Ok(())
     }

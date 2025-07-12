@@ -84,4 +84,20 @@ cargo test --workspace
 1. ?vad Voice-Activity-Detection ()
 1. ?stt,asr()
 
+### Websocket handle flow
+
+1. http api/ota -> ws chobits/v1
+2. ws.on_upgrade
+   1. socket split write and read
+      1. read
+         1. message convert to frame with message
+         2. handler handle frame with message
+         3. handler output data use by sender
+      1. write
+         1. wrapper to sender
+         1. sender has some method
+            1. send json
+            2. send tts
+            3. send tts with text
+
 ### App
