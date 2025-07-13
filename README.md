@@ -7,7 +7,7 @@
 
 <p align="left">
   <a href="https://github.com/lastsunday/chobits/releases">
-    <img alt="GitHub Contributors" src="https://img.shields.io/github/v/release/lastsunday/chobits?logo=docker" />
+    <img alt="GitHub Release" src="https://img.shields.io/github/v/release/lastsunday/chobits?logo=docker" />
   </a>
   <a href="https://github.com/lastsunday/chobits/graphs/contributors">
     <img alt="GitHub Contributors" src="https://img.shields.io/github/contributors/lastsunday/chobits?logo=github" />
@@ -16,28 +16,29 @@
     <img alt="Issues" src="https://img.shields.io/github/issues/lastsunday/chobits?color=0088ff" />
   </a>
   <a href="https://github.com/lastsunday/chobits/pulls">
-    <img alt="GitHub pull requests" src="https://img.shields.io/github/issues-pr/lastsunday/chobits?color=0088ff" />
+    <img alt="GitHub Pull Requests" src="https://img.shields.io/github/issues-pr/lastsunday/chobits?color=0088ff" />
   </a>
   <a href="https://github.com/lastsunday/chobits/blob/main/LICENSE">
-    <img alt="GitHub pull requests" src="https://img.shields.io/badge/license-MIT-white?labelColor=black" />
+    <img alt="GitHub License" src="https://img.shields.io/badge/license-MIT-white?labelColor=black" />
   </a>
   <a href="https://github.com/lastsunday/chobits">
-    <img alt="stars" src="https://img.shields.io/github/stars/lastsunday/chobits?color=ffcb47&labelColor=black" />
+    <img alt="Stars" src="https://img.shields.io/github/stars/lastsunday/chobits?color=ffcb47&labelColor=black" />
   </a>
 </p>
 
 <details open>
 <summary>Technology stack</summary>
-    
+
 1. Rust
-    1. Axum
-    2. sea-orm
+   1. Axum
+   2. sea-orm
 2. Reactjs
 3. Database
-    1. Postgres
-    2. Sqlite 
+   1. Postgres
+   2. Sqlite
+
 </details>
-    
+
 <details>
 <summary>Feature</summary>
 
@@ -99,11 +100,11 @@
    - [ ] Unit Test
    - [ ] BDD
    - [ ] E2E
-</details>
-    
+   </details>
+
 ## Support Component
 
-| 模块名称         | 组件        |
+| 模块名称         | 组件              |
 | ---------------- | ----------------- |
 | ASR(语音识别)    |                   |
 | LLM(大模型)      |                   |

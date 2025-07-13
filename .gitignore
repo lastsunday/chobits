@@ -56,3 +56,6 @@ lua
 
 *.sqlite
 application.yaml
+
+# Model
+kokoro*
