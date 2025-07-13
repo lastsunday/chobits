@@ -50,7 +50,7 @@ where
         let mut output = self.tts.output(text);
         let mut latest_time = Instant::now() + Duration::from_millis(delay);
         // pre buffer count
-        let pre_buffer_frame_count: u64 = 3;
+        let pre_buffer_frame_count: u64 = 6;
         let mut send_frame_count: u64 = 0;
         while let Some(packet) = output.next().await {
             let now = Instant::now();
