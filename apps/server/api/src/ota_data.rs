@@ -1,5 +1,5 @@
-use framework::data::serder::deserialize_number;
 use serde::{Deserialize, Serialize};
+use serde_aux::prelude::*;
 use utoipa::ToSchema;
 use validator::Validate;
 
@@ -14,8 +14,8 @@ pub struct OtaParam {
     pub language: Option<String>,
     /// 设备的闪存大小
     pub flash_size: Option<u64>,
-    #[serde(deserialize_with = "deserialize_number")]
-    pub minimum_free_heap_size: u64,
+    #[serde(default, deserialize_with = "deserialize_option_number_from_string")]
+    pub minimum_free_heap_size: Option<u64>,
     /// MAC地址（与 HTTP header 里的 device-id 一致）
     pub mac_address: Option<String>,
     /// 设备的芯片型号，例如 esp32s3

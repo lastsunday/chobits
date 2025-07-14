@@ -66,6 +66,7 @@ cargo test --workspace
    3. ApiPageParam
    4. ApiPageResult
 1. validator(validator,axum-valid)
+1. json(serde_json,serde-aux(deserialize_with))
 1. custom valid structure(query,path,json)
 1. custom valid message
 1. auth(jwt,jsonwebtoken)
