@@ -1,32 +1,34 @@
-use crate::ws::{sender::Sender, tts::Tts};
+use crate::ws::{sender::Sender, tts::Tts, vad::Vad};
 use axum::extract::ws::Message;
 use futures_util::Sink;
 use service::chobits::message::stt::SttMessage;
-use sherpa_rs::{sense_voice::SenseVoiceRecognizer, vad::Vad};
+use sherpa_rs::sense_voice::SenseVoiceRecognizer;
 use std::{rc::Rc, sync::Arc};
 use tokio::sync::Mutex;
 
-pub struct Listener<W, T>
+pub struct Listener<W, T, V>
 where
     W: Sink<Message> + Unpin + 'static,
     T: Tts + 'static,
+    V: Vad + 'static,
 {
     session_id: String,
     sender: Arc<Mutex<Sender<W, T>>>,
     voice_data: Arc<Mutex<Vec<f32>>>,
-    vad: Arc<Mutex<Vad>>,
+    vad: Arc<Mutex<V>>,
     recognizer: Arc<Mutex<SenseVoiceRecognizer>>,
 }
 
-impl<W, T> Listener<W, T>
+impl<W, T, V> Listener<W, T, V>
 where
     W: Sink<Message> + Unpin + Send,
     T: Tts + Send,
+    V: Vad + Send,
 {
     pub fn new(
         session_id: String,
         sender: Arc<Mutex<Sender<W, T>>>,
-        vad: Arc<Mutex<Vad>>,
+        vad: Arc<Mutex<V>>,
         recognizer: Arc<Mutex<SenseVoiceRecognizer>>,
     ) -> Self {
         Self {
@@ -59,10 +61,10 @@ where
             let window_size = 512;
             while voice_data.len() > window_size {
                 let window: Vec<f32> = voice_data.drain(..window_size).collect();
-                vad.accept_waveform(window.to_vec());
-                if vad.is_speech() {
-                    while !vad.is_empty() {
-                        let segment = vad.front();
+                vad.accept_waveform(window.to_vec()).await;
+                if vad.is_speech().await {
+                    while !vad.is_empty().await {
+                        let segment = vad.front().await;
                         let start_sec = (segment.start as f32) / sample_rate as f32;
                         let duration_sec = (segment.samples.len() as f32) / sample_rate as f32;
                         tracing::info!("start={}s duration={}s", start_sec, duration_sec);
@@ -78,7 +80,7 @@ where
                             }
                         }
                         tracing::info!("recognizer result = {:?}", result);
-                        vad.pop();
+                        vad.pop().await;
                     }
                 }
             }

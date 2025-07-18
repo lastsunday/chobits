@@ -41,6 +41,7 @@ use utoipa_scalar::{Scalar, Servable as ScalarServable};
 use framework::auth::Jwt;
 
 use crate::ws::tts_cache::TtsCache;
+use crate::ws::vad_cache::VadCache;
 
 #[macro_use]
 extern crate rust_i18n;
@@ -63,6 +64,7 @@ async fn start() -> anyhow::Result<()> {
     // database schema init or upgrade
     migration::Migrator::up(&conn, None).await?;
     TtsCache::init().await;
+    VadCache::init().await;
     // state
     let state = AppState { conn };
     // router

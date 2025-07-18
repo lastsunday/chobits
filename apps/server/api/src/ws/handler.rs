@@ -12,29 +12,31 @@ use service::chobits::message::{
 
 use tokio::sync::Mutex;
 
-use crate::ws::{listener::Listener, sender::Sender, tts::Tts};
+use crate::ws::{listener::Listener, sender::Sender, tts::Tts, vad::Vad};
 use futures_util::Sink;
 
-pub struct Handler<W, T>
+pub struct Handler<W, T, V>
 where
     W: Sink<Message> + Unpin + 'static,
     T: Tts + 'static,
+    V: Vad + 'static,
 {
     session_id: String,
     sender: Arc<Mutex<Sender<W, T>>>,
     state: Arc<Mutex<State>>,
-    listener: Listener<W, T>,
+    listener: Listener<W, T, V>,
 }
 
-impl<W, T> Handler<W, T>
+impl<W, T, V> Handler<W, T, V>
 where
     W: Sink<Message> + Unpin + Send,
     T: Tts + Send,
+    V: Vad + Send,
 {
     pub fn new(
         session_id: String,
         sender: Arc<Mutex<Sender<W, T>>>,
-        listener: Listener<W, T>,
+        listener: Listener<W, T, V>,
     ) -> Self {
         Self {
             session_id,

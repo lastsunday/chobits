@@ -5,8 +5,17 @@ pub mod message_converter;
 pub mod sender;
 pub mod tts;
 pub mod tts_cache;
-use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+pub mod vad;
+pub mod vad_cache;
 
+use super::ws::sender::Sender;
+use crate::{
+    AppState,
+    ws::{
+        frame::Frame, handler::Handler, listener::Listener, message_converter::convert_to_frame,
+        tts_cache::TtsCache, vad_cache::VadCache,
+    },
+};
 use axum::{
     RequestPartsExt, debug_handler,
     extract::{ConnectInfo, FromRequestParts, Path, WebSocketUpgrade, ws::Message},
@@ -15,27 +24,13 @@ use axum::{
 };
 use axum_extra::{TypedHeader, headers};
 use framework::id::gen_id;
-
 use futures_util::{Sink, Stream, StreamExt};
+use sherpa_rs::sense_voice::{SenseVoiceConfig, SenseVoiceRecognizer};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use tokio::sync::Mutex;
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
-use tokio::sync::Mutex;
-
-use sherpa_rs::{
-    sense_voice::{SenseVoiceConfig, SenseVoiceRecognizer},
-    vad::{Vad, VadConfig},
-};
-
-use crate::{
-    AppState,
-    ws::{
-        frame::Frame, handler::Handler, listener::Listener, message_converter::convert_to_frame,
-        tts_cache::TtsCache,
-    },
-};
-
-use super::ws::sender::Sender;
 const TAG: &str = "ws";
 
 pub fn create_routes(state: AppState) -> OpenApiRouter {
@@ -81,18 +76,6 @@ where
     let tts = TtsCache::global().instance.clone();
     let sender = Sender::new(Box::new(write), tts);
     let sender = Arc::new(Mutex::new(sender));
-    let config = VadConfig {
-        //wget https://huggingface.co/deepghs/silero-vad-onnx/resolve/main/silero_vad.onnx
-        model: "silero_vad.onnx".into(),
-        min_silence_duration: 0.1,
-        min_speech_duration: 0.25,
-        max_speech_duration: 8.0,
-        threshold: 0.5,
-        window_size: 512_i32,
-        num_threads: Some(4),
-        ..Default::default()
-    };
-    let vad = Arc::new(Mutex::new(Vad::new(config, 5.0).unwrap()));
     let config = SenseVoiceConfig {
         model: "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/model.onnx".into(),
         tokens: "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/tokens.txt".into(),
@@ -101,6 +84,8 @@ where
         provider: Some(String::from("cpu")),
         ..Default::default()
     };
+    let vad = VadCache::global().instance.clone();
+    let vad = Arc::new(Mutex::new(vad));
     let recognizer = Arc::new(Mutex::new(SenseVoiceRecognizer::new(config).unwrap()));
     let listener = Listener::new(session_id.clone(), sender.clone(), vad, recognizer);
     let mut handler = Handler::new(session_id, sender.clone(), listener);
