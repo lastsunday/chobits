@@ -1,9 +1,11 @@
 pub mod frame;
 pub mod handler;
+pub mod listener;
 pub mod message_converter;
 pub mod sender;
 pub mod tts;
 pub mod tts_cache;
+pub mod vad;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 
 use axum::{
@@ -18,7 +20,6 @@ use framework::{id::gen_id, middleware::get_auth_layer};
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
-use voice_activity_detector_silero_v5::VoiceActivityDetector;
 
 use tokio::sync::Mutex;
 
@@ -74,7 +75,7 @@ where
     let session_id = gen_id();
     let tts = TtsCache::global().instance.clone();
     let sender = Sender::new(Box::new(write), tts);
-    let handler = Handler::new(session_id, Box::new(Arc::new(Mutex::new(sender))));
+    let mut handler = Handler::new(session_id, Box::new(Arc::new(Mutex::new(sender))));
     // let mut vad = VoiceActivityDetector::builder()
     //     .chunk_size(512usize)
     //     .sample_rate(16000)

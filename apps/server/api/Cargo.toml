@@ -63,10 +63,10 @@ futures-channel = { version = "0.3.31" }
 jiff = { version = "0.2.15" }
 opus = { version = "0.3.0" }
 voice_activity_detector_silero_v5 = { version = "0.2.0-silero-v5" }
-sherpa-rs = { version = "0.6.6", features = [
+sherpa-rs = { version = "0.7.0", features = [
   "static",
   "tts",
-], default-features = false }
+], default-features = false, package = "chobits-sherpa-rs" }
 tokio-stream = { version = "0.1.17" }
 futures = { version = "0.3.31" }
 entity = { path = "../entity" }

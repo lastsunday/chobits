@@ -9,9 +9,10 @@ use service::chobits::message::{
     stt::SttMessage,
     tts::{TtsMessage, TtsState},
 };
+
 use tokio::sync::Mutex;
 
-use crate::ws::{sender::Sender, tts::Tts};
+use crate::ws::{listener::Listener, sender::Sender, tts::Tts};
 use futures_util::Sink;
 
 pub struct Handler<W, T>
@@ -22,6 +23,7 @@ where
     session_id: String,
     sender: Box<Arc<Mutex<Sender<W, T>>>>,
     state: Arc<Mutex<State>>,
+    listener: Listener,
 }
 
 impl<W, T> Handler<W, T>
@@ -34,6 +36,7 @@ where
             session_id,
             sender,
             state: Arc::new(Mutex::new(State::new())),
+            listener: Listener::new(),
         }
     }
 
@@ -95,7 +98,7 @@ where
                                     tracing::info!("send tts message error {}", error);
                                 }
                             }
-                            match sender.send_tts_with_text(String::from(text.clone())).await {
+                            match sender.send_tts_with_text(text.clone()).await {
                                 Ok(_) => {}
                                 Err(error) => {
                                     tracing::info!("send stt error {}", error);
@@ -145,37 +148,8 @@ where
         });
     }
 
-    pub fn handle_voice(&self, data: Bytes) {
-        // let mut output = vec![0i16; mono_60_ms * 2];
-        // decoder.decode(&data, &mut output, false).unwrap();
-        // let probability = vad.predict(output);
-        // tracing::info!("silence_count = {}", silence_count);
-        // if probability > 0.5 {
-        //     state.listen_start = true;
-        //     tracing::info!("probability >0.5 = {}", probability);
-        //     state.data.push(data.clone());
-        //     silence_count = 0;
-        // } else {
-        //     silence_count += 1;
-        //     if silence_count >= silence_max {
-        //         if (silence_count == silence_max) {
-        //             state.listen_start = false;
-        //         }
-        //     } else {
-        //         state.data.push(data.clone());
-        //     }
-        // }
-        // //write.send(Message::Binary(data)).await;
-        //state.data.push(data.clone());
-        // let data = TtsMessage::new(None, Some(String::from("hello")));
-        // let result: String = serde_json::to_string(&data).unwrap();
-        // if write
-        //     .send(Message::Text(result.clone().into()))
-        //     .await
-        //     .is_ok()
-        // {
-        //     tracing::info!("return text success = {}", result);
-        // }
+    pub fn handle_voice(&mut self, data: Bytes) {
+        self.listener.listen(&data);
     }
 }
 
