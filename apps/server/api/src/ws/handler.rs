@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{rc::Rc, sync::Arc};
 
 use axum::{body::Bytes, extract::ws::Message};
 use service::chobits::message::{
@@ -21,9 +21,9 @@ where
     T: Tts + 'static,
 {
     session_id: String,
-    sender: Box<Arc<Mutex<Sender<W, T>>>>,
+    sender: Arc<Mutex<Sender<W, T>>>,
     state: Arc<Mutex<State>>,
-    listener: Listener,
+    listener: Listener<W, T>,
 }
 
 impl<W, T> Handler<W, T>
@@ -31,18 +31,22 @@ where
     W: Sink<Message> + Unpin + Send,
     T: Tts + Send,
 {
-    pub fn new(session_id: String, sender: Box<Arc<Mutex<Sender<W, T>>>>) -> Self {
+    pub fn new(
+        session_id: String,
+        sender: Arc<Mutex<Sender<W, T>>>,
+        listener: Listener<W, T>,
+    ) -> Self {
         Self {
             session_id,
             sender,
             state: Arc::new(Mutex::new(State::new())),
-            listener: Listener::new(),
+            listener,
         }
     }
 
-    pub fn handle_hello(&self, message: HelloMessage) {
+    pub fn handle_hello(&self, _message: HelloMessage) {
         let session_id = self.session_id.clone();
-        let sender = self.sender.as_ref().clone();
+        let sender = self.sender.clone();
         tokio::spawn(async move {
             let data = HelloMessage {
                 message: service::chobits::message::Message {
@@ -71,7 +75,7 @@ where
 
     pub fn handle_listen(&self, message: ListenMessage) {
         let message = message.clone();
-        let sender = self.sender.as_ref().clone();
+        let sender = self.sender.clone();
         let state = self.state.clone();
         let session_id = self.session_id.clone();
         tokio::spawn(async move {
@@ -134,8 +138,8 @@ where
         });
     }
 
-    pub fn handle_abort(&self, message: AbortMessage) {
-        let sender = self.sender.as_ref().clone();
+    pub fn handle_abort(&self, _message: AbortMessage) {
+        let sender = self.sender.clone();
         tokio::spawn(async move {
             let data = TtsMessage::new(Some(TtsState::Stop), None);
             let mut sender = sender.lock().await;
@@ -149,7 +153,7 @@ where
     }
 
     pub fn handle_voice(&mut self, data: Bytes) {
-        self.listener.listen(&data);
+        self.listener.listen(Rc::new(&data));
     }
 }
 

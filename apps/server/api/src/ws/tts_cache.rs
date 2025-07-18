@@ -34,7 +34,7 @@ impl TtsCache {
             },
             ..Default::default()
         };
-        let mut tts_instance = KokoroTts::new(config);
+        let tts_instance = KokoroTts::new(config);
         let tts = TtsKokoro::new(Arc::new(Mutex::new(tts_instance)));
         TTS_INSTANCE.get_or_init(|| -> Self { Self::new(Box::new(tts)) })
     }

@@ -1,10 +1,10 @@
-use std::{ops::Sub, time::Duration};
+use std::time::Duration;
 
 use axum::extract::ws::Message;
 use futures_util::{Sink, SinkExt};
 use serde::Serialize;
 use service::chobits::message::tts::{TtsMessage, TtsState};
-use tokio::time::{Instant, sleep, sleep_until};
+use tokio::time::{Instant, sleep};
 use tokio_stream::StreamExt;
 
 use crate::ws::tts::{DELAY_MILLIS, Tts};
@@ -56,7 +56,7 @@ where
             let now = Instant::now();
             let offset = (now - latest_time).as_millis() as u64;
             let mut actual_delay: u64 = 0;
-            if (offset < delay) {
+            if offset < delay {
                 actual_delay = delay - offset;
             }
             if send_frame_count >= pre_buffer_frame_count && actual_delay > 0 {

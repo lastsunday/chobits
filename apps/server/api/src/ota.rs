@@ -9,11 +9,8 @@ use framework::{config::get, data::valid::ValidJson, error::ApiResult, id::gen_i
 use std::net::SocketAddr;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
-use entity::{prelude::*, user};
-use sea_orm::{ActiveValue::Set, prelude::*};
-
+use crate::ota_data::*;
 use crate::{AppState, ota_error::*};
-use crate::{i18n::t, ota_data::*};
 
 use chrono::Local;
 use jiff::tz::TimeZone;

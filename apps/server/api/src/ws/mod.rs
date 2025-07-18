@@ -5,7 +5,6 @@ pub mod message_converter;
 pub mod sender;
 pub mod tts;
 pub mod tts_cache;
-pub mod vad;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 
 use axum::{
@@ -15,18 +14,24 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use axum_extra::{TypedHeader, headers};
-use framework::{id::gen_id, middleware::get_auth_layer};
+use framework::id::gen_id;
 
-use futures_util::{Sink, SinkExt, Stream, StreamExt};
+use futures_util::{Sink, Stream, StreamExt};
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 use tokio::sync::Mutex;
 
+use sherpa_rs::{
+    sense_voice::{SenseVoiceConfig, SenseVoiceRecognizer},
+    vad::{Vad, VadConfig},
+};
+
 use crate::{
     AppState,
     ws::{
-        frame::Frame, handler::Handler, message_converter::convert_to_frame, tts_cache::TtsCache,
+        frame::Frame, handler::Handler, listener::Listener, message_converter::convert_to_frame,
+        tts_cache::TtsCache,
     },
 };
 
@@ -57,7 +62,7 @@ async fn ws_handler(
     _version: Version,
     ws: WebSocketUpgrade,
     user_agent: Option<TypedHeader<headers::UserAgent>>,
-    headers: HeaderMap,
+    _headers: HeaderMap,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
 ) -> impl IntoResponse {
     tracing::info!("user_agent = {:?}", user_agent);
@@ -67,7 +72,7 @@ async fn ws_handler(
     })
 }
 
-pub async fn handle_socket<W, R>(mut write: W, mut read: R)
+pub async fn handle_socket<W, R>(write: W, mut read: R)
 where
     W: Sink<Message> + Unpin + Send + 'static,
     R: Stream<Item = Result<Message, axum::Error>> + Unpin,
@@ -75,17 +80,30 @@ where
     let session_id = gen_id();
     let tts = TtsCache::global().instance.clone();
     let sender = Sender::new(Box::new(write), tts);
-    let mut handler = Handler::new(session_id, Box::new(Arc::new(Mutex::new(sender))));
-    // let mut vad = VoiceActivityDetector::builder()
-    //     .chunk_size(512usize)
-    //     .sample_rate(16000)
-    //     .build()
-    //     .unwrap();
-    // // 16000Hz * 1 channel * 60 ms / 1000 =960
-    let mono_60_ms = 960;
-    let silence_max = 50;
-    let mut silence_count = 51;
-    // let mut decoder = opus::Decoder::new(16000, opus::Channels::Mono).unwrap();
+    let sender = Arc::new(Mutex::new(sender));
+    let config = VadConfig {
+        //wget https://huggingface.co/deepghs/silero-vad-onnx/resolve/main/silero_vad.onnx
+        model: "silero_vad.onnx".into(),
+        min_silence_duration: 0.1,
+        min_speech_duration: 0.25,
+        max_speech_duration: 8.0,
+        threshold: 0.5,
+        window_size: 512_i32,
+        num_threads: Some(4),
+        ..Default::default()
+    };
+    let vad = Arc::new(Mutex::new(Vad::new(config, 5.0).unwrap()));
+    let config = SenseVoiceConfig {
+        model: "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/model.onnx".into(),
+        tokens: "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/tokens.txt".into(),
+        language: String::from("auto"),
+        num_threads: Some(4),
+        provider: Some(String::from("cpu")),
+        ..Default::default()
+    };
+    let recognizer = Arc::new(Mutex::new(SenseVoiceRecognizer::new(config).unwrap()));
+    let listener = Listener::new(session_id.clone(), sender.clone(), vad, recognizer);
+    let mut handler = Handler::new(session_id, sender.clone(), listener);
     while let Some(Ok(msg)) = read.next().await {
         let result = convert_to_frame(msg).await;
         if result.is_break() {

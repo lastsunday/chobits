@@ -64,7 +64,7 @@ impl Tts for TtsKokoro {
                 encoder.get_lookahead()
             );
             let len = sample.len();
-            let size = calcalute_tts_packet_size(SAMPLE_RATE, DELAY_MILLIS) as usize;
+            let size = calcalute_tts_packet_size(SAMPLE_RATE, DELAY_MILLIS);
             let count = len / size;
             for n in 1..count {
                 let start = (n - 1) * size;
@@ -93,5 +93,5 @@ pub static DELAY_MILLIS: u64 = 60;
 
 pub fn calcalute_tts_packet_size(sample_rate: u32, delay_millis: u64) -> usize {
     // 16000Hz * 1 channel * 60 ms / 1000 = 960
-    (sample_rate as usize) * 1 * (delay_millis as usize) / 1000
+    sample_rate as usize * (delay_millis as usize) / 1000
 }
