@@ -170,6 +170,7 @@ dependencies = [
  "axum-valid 0.24.0",
  "bcrypt",
  "bytesize",
+ "chobits-sherpa-rs",
  "chrono",
  "config",
  "cucumber",
@@ -193,7 +194,6 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "service",
- "sherpa-rs",
  "testcontainers",
  "testcontainers-modules",
  "thiserror 2.0.12",
@@ -1036,6 +1036,30 @@ name = "chobits-server"
 version = "0.1.0"
 dependencies = [
  "api",
+]
+
+[[package]]
+name = "chobits-sherpa-rs"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fdcc64080ce443205c4bd10be38cd71d8bfe87a69cb4f41020fdcbeca938834a"
+dependencies = [
+ "chobits-sherpa-rs-sys",
+ "eyre",
+ "hound",
+ "tracing",
+]
+
+[[package]]
+name = "chobits-sherpa-rs-sys"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f381684ea222b40dd950b390636df8b8e420dfe86c9db5fff63f14925c3d5230"
+dependencies = [
+ "bindgen",
+ "cmake",
+ "glob",
+ "lazy_static",
 ]
 
 [[package]]
@@ -5235,30 +5259,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b1fdf65dd6331831494dd616b30351c38e96e45921a27745cf98490458b90bb"
 dependencies = [
  "dirs",
-]
-
-[[package]]
-name = "sherpa-rs"
-version = "0.6.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fba1bc44f084763ea11303ddfc12a920f9dc502607c8fd4e29556c3e2cf5f2e"
-dependencies = [
- "eyre",
- "hound",
- "sherpa-rs-sys",
- "tracing",
-]
-
-[[package]]
-name = "sherpa-rs-sys"
-version = "0.6.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65c2f8410a2375ba1a3db48cd387e743bc7a047549b0cd1172a5cf656feb554a"
-dependencies = [
- "bindgen",
- "cmake",
- "glob",
- "lazy_static",
 ]
 
 [[package]]
