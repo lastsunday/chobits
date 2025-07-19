@@ -14,7 +14,6 @@ sea-orm = { version = "1.1.12", features = [
 anyhow = { version = "1.0.98" }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-git2 = "0.20.2"
 ssh-key = { version = "0.6.7", features = ["getrandom", "ed25519"] }
 chrono = "0.4.41"
 testcontainers = "0.24.0"
@@ -22,7 +21,6 @@ testcontainers-modules = { version = "0.12.1", features = ["postgres"] }
 uuid = { version = "1.17.0", features = ["v4"] }
 tokio = { version = "1.45.1", features = ["full"] }
 num_cpus = { version = "1.17.0" }
-openssl = { version = "0.10.73", features = ["vendored"] }
 serde = { version = "1.0.219", features = ["derive"] }
 migration = { path = "../migration" }
 entity = { path = "../entity" }
@@ -30,4 +28,3 @@ framework = { path = "../framework" }
 
 [features]
 default = []
-vendored-openssl = ["git2/vendored-openssl"]
