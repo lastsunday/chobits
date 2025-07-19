@@ -69,8 +69,6 @@ sherpa-rs = { version = "0.7.0", features = [
 ], default-features = false, package = "chobits-sherpa-rs" }
 tokio-stream = { version = "0.1.17" }
 futures = { version = "0.3.31" }
-openssl = { version = "0.10.73", features = ["vendored"] }
-git2 = "0.20.2"
 entity = { path = "../entity" }
 migration = { path = "../migration" }
 service = { path = "../service" }
@@ -84,4 +82,3 @@ futures = "0.3"
 
 [features]
 default = []
-vendored-openssl = ["git2/vendored-openssl"]

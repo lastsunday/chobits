@@ -211,7 +211,6 @@ jobs:
           rm -rf ./web/dist
           mv ../server-ui/dist ./web/dist
 
-      - uses: dtolnay/rust-toolchain@d2d1e5c30cd20511f6237df9a635ca72247cf021
       - uses: taiki-e/upload-rust-binary-action@3962470d6e7f1993108411bc3f75a135ec67fc8c
         with:
           # (required) Comma-separated list of binary names (non-extension portion of filename) to build and upload.
@@ -224,7 +223,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           manifest-path: Cargo.toml
           # https://github.com/taiki-e/upload-rust-binary-action/issues/47#issuecomment-1981504973
-          features: vendored-openssl
+          #features: vendored-openssl
       - name: Rename bin file
         if: matrix.target != 'x86_64-pc-windows-msvc'
         run: |
