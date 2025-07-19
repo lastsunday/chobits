@@ -1,3 +1,5 @@
+pub mod asr;
+pub mod asr_cache;
 pub mod frame;
 pub mod handler;
 pub mod listener;
@@ -12,8 +14,8 @@ use super::ws::sender::Sender;
 use crate::{
     AppState,
     ws::{
-        frame::Frame, handler::Handler, listener::Listener, message_converter::convert_to_frame,
-        tts_cache::TtsCache, vad_cache::VadCache,
+        asr_cache::AsrCache, frame::Frame, handler::Handler, listener::Listener,
+        message_converter::convert_to_frame, tts_cache::TtsCache, vad_cache::VadCache,
     },
 };
 use axum::{
@@ -25,7 +27,6 @@ use axum::{
 use axum_extra::{TypedHeader, headers};
 use framework::id::gen_id;
 use futures_util::{Sink, Stream, StreamExt};
-use sherpa_rs::sense_voice::{SenseVoiceConfig, SenseVoiceRecognizer};
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
 use utoipa::ToSchema;
@@ -76,18 +77,11 @@ where
     let tts = TtsCache::global().instance.clone();
     let sender = Sender::new(Box::new(write), tts);
     let sender = Arc::new(Mutex::new(sender));
-    let config = SenseVoiceConfig {
-        model: "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/model.onnx".into(),
-        tokens: "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/tokens.txt".into(),
-        language: String::from("auto"),
-        num_threads: Some(4),
-        provider: Some(String::from("cpu")),
-        ..Default::default()
-    };
     let vad = VadCache::global().instance.clone();
     let vad = Arc::new(Mutex::new(vad));
-    let recognizer = Arc::new(Mutex::new(SenseVoiceRecognizer::new(config).unwrap()));
-    let listener = Listener::new(session_id.clone(), sender.clone(), vad, recognizer);
+    let asr = AsrCache::global().instance.clone();
+    let asr = Arc::new(Mutex::new(asr));
+    let listener = Listener::new(session_id.clone(), sender.clone(), vad, asr.clone());
     let mut handler = Handler::new(session_id, sender.clone(), listener);
     while let Some(Ok(msg)) = read.next().await {
         let result = convert_to_frame(msg).await;

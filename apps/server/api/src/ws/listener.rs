@@ -1,41 +1,42 @@
-use crate::ws::{sender::Sender, tts::Tts, vad::Vad};
+use crate::ws::{asr::Asr, sender::Sender, tts::Tts, vad::Vad};
 use axum::extract::ws::Message;
 use futures_util::Sink;
 use service::chobits::message::stt::SttMessage;
-use sherpa_rs::sense_voice::SenseVoiceRecognizer;
 use std::{rc::Rc, sync::Arc};
 use tokio::sync::Mutex;
 
-pub struct Listener<W, T, V>
+pub struct Listener<W, T, V, A>
 where
     W: Sink<Message> + Unpin + 'static,
     T: Tts + 'static,
     V: Vad + 'static,
+    A: Asr + 'static,
 {
     session_id: String,
     sender: Arc<Mutex<Sender<W, T>>>,
     voice_data: Arc<Mutex<Vec<f32>>>,
     vad: Arc<Mutex<V>>,
-    recognizer: Arc<Mutex<SenseVoiceRecognizer>>,
+    asr: Arc<Mutex<A>>,
 }
 
-impl<W, T, V> Listener<W, T, V>
+impl<W, T, V, A> Listener<W, T, V, A>
 where
     W: Sink<Message> + Unpin + Send,
     T: Tts + Send,
     V: Vad + Send,
+    A: Asr + Send,
 {
     pub fn new(
         session_id: String,
         sender: Arc<Mutex<Sender<W, T>>>,
         vad: Arc<Mutex<V>>,
-        recognizer: Arc<Mutex<SenseVoiceRecognizer>>,
+        asr: Arc<Mutex<A>>,
     ) -> Self {
         Self {
             session_id,
             sender,
             vad,
-            recognizer,
+            asr,
             voice_data: Arc::new(Mutex::new(Vec::new())),
         }
     }
@@ -46,7 +47,7 @@ where
         let sender = self.sender.clone();
         let voice_data = self.voice_data.clone();
         let vad = self.vad.clone();
-        let recognizer = self.recognizer.clone();
+        let asr = self.asr.clone();
         tokio::spawn(async move {
             //tracing::info!("voice len = {}", data.len());
             let sample_rate: u32 = 16000;
@@ -68,8 +69,8 @@ where
                         let start_sec = (segment.start as f32) / sample_rate as f32;
                         let duration_sec = (segment.samples.len() as f32) / sample_rate as f32;
                         tracing::info!("start={}s duration={}s", start_sec, duration_sec);
-                        let mut recognizer = recognizer.lock().await;
-                        let result = recognizer.transcribe(sample_rate, &segment.samples);
+                        let mut asr = asr.lock().await;
+                        let result = asr.transcribe(sample_rate, &segment.samples).await;
                         let data =
                             SttMessage::new(Some(session_id.clone()), Some(result.text.clone()));
                         let mut sender = sender.lock().await;

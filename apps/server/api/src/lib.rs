@@ -40,6 +40,7 @@ use utoipa_scalar::{Scalar, Servable as ScalarServable};
 
 use framework::auth::Jwt;
 
+use crate::ws::asr_cache::AsrCache;
 use crate::ws::tts_cache::TtsCache;
 use crate::ws::vad_cache::VadCache;
 
@@ -63,8 +64,15 @@ async fn start() -> anyhow::Result<()> {
     tracing::info!("Database connected successfully");
     // database schema init or upgrade
     migration::Migrator::up(&conn, None).await?;
+    tracing::info!("init tts cahce");
     TtsCache::init().await;
+    tracing::info!("init tts cahce successfully");
+    tracing::info!("init vad cahce");
     VadCache::init().await;
+    tracing::info!("init vad cahce successfully");
+    tracing::info!("init asr cahce");
+    AsrCache::init().await;
+    tracing::info!("init asr cahce successfully");
     // state
     let state = AppState { conn };
     // router
