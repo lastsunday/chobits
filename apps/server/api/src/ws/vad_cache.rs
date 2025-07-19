@@ -17,6 +17,15 @@ impl VadCache {
     }
 
     pub async fn init() -> &'static Self {
+        let vad = Self::create_vad();
+        VAD_INSTANCE.get_or_init(|| -> Self { Self::new(vad) })
+    }
+
+    pub fn global() -> &'static VadCache {
+        VAD_INSTANCE.get().unwrap()
+    }
+
+    pub fn create_vad() -> SherpaVad {
         let app_config = config::get();
         let vad_config = app_config.vad();
         let config = VadConfig {
@@ -31,11 +40,6 @@ impl VadCache {
             ..Default::default()
         };
         let vad_instance = sherpa_rs::vad::Vad::new(config, 8.0).unwrap();
-        let vad = SherpaVad::new(Arc::new(Mutex::new(vad_instance)));
-        VAD_INSTANCE.get_or_init(|| -> Self { Self::new(vad) })
-    }
-
-    pub fn global() -> &'static VadCache {
-        VAD_INSTANCE.get().unwrap()
+        SherpaVad::new(Arc::new(Mutex::new(vad_instance)))
     }
 }

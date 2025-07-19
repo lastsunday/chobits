@@ -77,7 +77,7 @@ where
     let tts = TtsCache::global().instance.clone();
     let sender = Sender::new(Box::new(write), tts);
     let sender = Arc::new(Mutex::new(sender));
-    let vad = VadCache::global().instance.clone();
+    let vad = VadCache::create_vad();
     let vad = Arc::new(Mutex::new(vad));
     let asr = AsrCache::global().instance.clone();
     let asr = Arc::new(Mutex::new(asr));

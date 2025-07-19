@@ -24,7 +24,7 @@ impl TtsCache {
             voices: tts_config.voices().into(),
             tokens: tts_config.tokens().into(),
             data_dir: tts_config.data_dir().into(),
-            dict_dir: tts_config.data_dir().into(),
+            dict_dir: tts_config.dict_dir().into(),
             lexicon: tts_config.lexicon().into(),
             length_scale: 1.0,
             onnx_config: OnnxConfig {
