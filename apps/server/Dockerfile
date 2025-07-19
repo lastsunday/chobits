@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM alpine:3.20.2
+FROM --platform=$BUILDPLATFORM cicirello/gnu-on-alpine:3.22.1
 WORKDIR /app
 ARG TARGETOS TARGETARCH
 COPY chobits-server-${TARGETOS}-${TARGETARCH} ./server
