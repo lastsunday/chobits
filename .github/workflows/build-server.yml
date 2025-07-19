@@ -223,7 +223,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           manifest-path: Cargo.toml
           # https://github.com/taiki-e/upload-rust-binary-action/issues/47#issuecomment-1981504973
-          # features: vendored-openssl
+          features: vendored-openssl
       - name: Rename bin file
         if: matrix.target != 'x86_64-pc-windows-msvc'
         run: |
