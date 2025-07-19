@@ -14,6 +14,7 @@ sea-orm = { version = "1.1.12", features = [
 anyhow = { version = "1.0.98" }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+git2 = "0.20.2"
 ssh-key = { version = "0.6.7", features = ["getrandom", "ed25519"] }
 chrono = "0.4.41"
 testcontainers = "0.24.0"
@@ -29,3 +30,4 @@ framework = { path = "../framework" }
 
 [features]
 default = []
+vendored-openssl = ["git2/vendored-openssl"]
