@@ -211,6 +211,11 @@ jobs:
           rm -rf ./web/dist
           mv ../server-ui/dist ./web/dist
 
+      - name: Install cross-compilation tools
+        uses: taiki-e/setup-cross-toolchain-action@0123528f956f923e7a476f4cc04882bc005e7c89
+        with:
+          target: ${{ matrix.target }}
+
       - uses: taiki-e/upload-rust-binary-action@3962470d6e7f1993108411bc3f75a135ec67fc8c
         with:
           # (required) Comma-separated list of binary names (non-extension portion of filename) to build and upload.
