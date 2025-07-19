@@ -141,22 +141,18 @@ jobs:
     strategy:
       matrix:
         include:
-          - target: aarch64-unknown-linux-musl
+          - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
             targetOSAndARCH: linux-arm64
           - target: aarch64-apple-darwin
             os: macos-latest
             targetOSAndARCH: macos-arm64
-          - target: x86_64-unknown-linux-musl
+          - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             targetOSAndARCH: linux-amd64
           - target: x86_64-apple-darwin
             os: macos-latest
             targetOSAndARCH: macos-amd64
-          # Universal macOS binary is supported as universal-apple-darwin.
-          - target: universal-apple-darwin
-            os: macos-latest
-            targetOSAndARCH: macos
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             targetOSAndARCH: window-amd64
