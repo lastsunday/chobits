@@ -1,9 +1,14 @@
-use std::sync::LazyLock;
+pub mod asr;
+pub mod tts;
+pub mod vad;
 
 use anyhow::Context;
 use config::{Config, FileFormat};
 use framework::config::{ServerConfig, auth::AuthConfig, database::DatabaseConfig};
 use serde::Deserialize;
+use std::sync::LazyLock;
+
+use crate::config::{asr::AsrConfig, tts::TtsConfig, vad::VadConfig};
 
 static CONFIG: LazyLock<AppConfig> =
     LazyLock::new(|| AppConfig::load().expect("Failed to initialize config"));
@@ -13,6 +18,9 @@ pub struct AppConfig {
     server: ServerConfig,
     database: DatabaseConfig,
     auth: AuthConfig,
+    vad: VadConfig,
+    tts: TtsConfig,
+    asr: AsrConfig,
 }
 
 impl AppConfig {
@@ -55,6 +63,9 @@ impl AppConfig {
             server: ServerConfig::new(),
             database: DatabaseConfig::new(),
             auth: AuthConfig::new(),
+            vad: VadConfig::new(),
+            tts: TtsConfig::new(),
+            asr: AsrConfig::new(),
         }
     }
 
@@ -68,6 +79,18 @@ impl AppConfig {
 
     pub fn auth(&self) -> &AuthConfig {
         &self.auth
+    }
+
+    pub fn vad(&self) -> &VadConfig {
+        &self.vad
+    }
+
+    pub fn tts(&self) -> &TtsConfig {
+        &self.tts
+    }
+
+    pub fn asr(&self) -> &AsrConfig {
+        &self.asr
     }
 }
 

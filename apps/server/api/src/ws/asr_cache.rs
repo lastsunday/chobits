@@ -1,3 +1,4 @@
+use crate::config;
 use sherpa_rs::sense_voice::{SenseVoiceConfig, SenseVoiceRecognizer};
 use std::sync::{Arc, OnceLock};
 use tokio::sync::Mutex;
@@ -16,11 +17,13 @@ impl AsrCache {
     }
 
     pub async fn init() -> &'static Self {
+        let app_config = config::get();
+        let asr_config = app_config.asr();
         let config = SenseVoiceConfig {
-            model: "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/model.onnx".into(),
-            tokens: "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/tokens.txt".into(),
-            language: String::from("auto"),
-            num_threads: Some(4),
+            model: asr_config.model().into(),
+            tokens: asr_config.tokens().into(),
+            language: asr_config.language().into(),
+            num_threads: Some(asr_config.num_threads()),
             provider: Some(String::from("cpu")),
             ..Default::default()
         };

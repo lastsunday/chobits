@@ -40,6 +40,18 @@
 </details>
 
 <details>
+<summary>Development</summary>
+
+1. apps/server
+
+```shell
+./apps/server/script/download_model.sh
+pnpm nx run chobits-server:run
+```
+
+</details>
+
+<details>
 <summary>Feature</summary>
 
 ### Server
@@ -54,9 +66,9 @@
       - [x] Ws Url
 2. Audio
    - [x] TTS(语音合成)
-   - [ ] VAD(语音活动检测)
-   - [ ] ASR(语音识别)
-   - [ ] 多语言识别
+   - [x] VAD(语音活动检测)
+   - [x] ASR(语音识别)
+   - [x] 多语言识别
    - [ ] 语音处理
    - [ ] 声纹
 3. Video
@@ -104,14 +116,14 @@
 
 ## Support Component
 
-| 模块名称         | 组件              |
-| ---------------- | ----------------- |
-| ASR(语音识别)    |                   |
-| LLM(大模型)      |                   |
-| VLLM(视觉大模型) |                   |
-| TTS(语音合成)    | sherpa-rs(Kokoro) |
-| Intent(意图识别) |                   |
-| Memory(记忆功能) |                   |
+| 模块名称         | 组件                  |
+| ---------------- | --------------------- |
+| ASR(语音识别)    | sherpa-rs(SenseVoice) |
+| LLM(大模型)      |                       |
+| VLLM(视觉大模型) |                       |
+| TTS(语音合成)    | sherpa-rs(Kokoro)     |
+| Intent(意图识别) |                       |
+| Memory(记忆功能) |                       |
 
 ## Thanks
 
