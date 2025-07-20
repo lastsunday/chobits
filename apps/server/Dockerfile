@@ -1,5 +1,4 @@
-FROM --platform=$BUILDPLATFORM alpine:3.22.1
-RUN apk --no-cache add make gcc g++ musl-dev binutils autoconf automake libtool pkgconfig check-dev file patch
+FROM --platform=$BUILDPLATFORM ubuntu:24.04
 WORKDIR /app
 ARG TARGETOS TARGETARCH
 COPY chobits-server-${TARGETOS}-${TARGETARCH} ./server
