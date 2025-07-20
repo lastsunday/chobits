@@ -141,25 +141,22 @@ jobs:
     strategy:
       matrix:
         include:
-          - target: aarch64-unknown-linux-musl
+          - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
             targetOSAndARCH: linux-arm64
           - target: aarch64-apple-darwin
             os: macos-latest
             targetOSAndARCH: macos-arm64
-          - target: x86_64-unknown-linux-musl
+          - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             targetOSAndARCH: linux-amd64
           - target: x86_64-apple-darwin
             os: macos-latest
             targetOSAndARCH: macos-amd64
-          # Universal macOS binary is supported as universal-apple-darwin.
-          - target: universal-apple-darwin
-            os: macos-latest
-            targetOSAndARCH: macos
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
-            targetOSAndARCH: window-amd64
+          # TODO sherpa-rs compile error
+          # - target: x86_64-pc-windows-msvc
+          #   os: windows-latest
+          #   targetOSAndARCH: window-amd64
     runs-on: ${{ matrix.os }}
     steps:
       - name: Setup Perl
@@ -210,6 +207,11 @@ jobs:
         run: |
           rm -rf ./web/dist
           mv ../server-ui/dist ./web/dist
+
+      - name: Install cross-compilation tools
+        uses: taiki-e/setup-cross-toolchain-action@0123528f956f923e7a476f4cc04882bc005e7c89
+        with:
+          target: ${{ matrix.target }}
 
       - uses: taiki-e/upload-rust-binary-action@3962470d6e7f1993108411bc3f75a135ec67fc8c
         with:

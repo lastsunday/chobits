@@ -1,4 +1,5 @@
-FROM --platform=$BUILDPLATFORM alpine:3.20.2
+FROM --platform=$BUILDPLATFORM ubuntu:24.04
+RUN apt update && apt install wget bzip2 -y
 WORKDIR /app
 ARG TARGETOS TARGETARCH
 COPY chobits-server-${TARGETOS}-${TARGETARCH} ./server
