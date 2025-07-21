@@ -1,4 +1,7 @@
-use crate::ws::{asr::Asr, sender::Sender, tts::Tts, vad::Vad};
+use crate::{
+    config,
+    ws::{asr::Asr, sender::Sender, tts::Tts, vad::Vad},
+};
 use axum::extract::ws::Message;
 use futures_util::Sink;
 use service::chobits::message::stt::SttMessage;
@@ -49,10 +52,14 @@ where
         let vad = self.vad.clone();
         let asr = self.asr.clone();
         tokio::spawn(async move {
+            let audio_config = config::get().audio();
             //tracing::info!("voice len = {}", data.len());
-            let sample_rate: u32 = 16000;
+            let sample_rate: u32 = audio_config.input_sample_rate();
+            let channel = audio_config.input_channel();
+            let frame_duration = audio_config.input_frame_duration();
             // 16000Hz * 1 channel * 60 ms / 1000 = 960 samples -> frameSize
-            let frame_size = (sample_rate * 60 / 1000) as usize;
+            let frame_size =
+                ((sample_rate as u64 * channel as u64 * frame_duration) / 1000) as usize;
             let mut samples = vec![0f32; frame_size];
             let mut decoder = opus::Decoder::new(sample_rate, opus::Channels::Mono).unwrap();
             decoder.decode_float(&data, &mut samples, false).unwrap();

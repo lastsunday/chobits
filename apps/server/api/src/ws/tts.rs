@@ -5,6 +5,8 @@ pub use sherpa_rs::tts::KokoroTts;
 use tokio::sync::{Mutex, mpsc::channel};
 use tokio_stream::wrappers::ReceiverStream;
 
+use crate::config;
+
 pub trait Tts {
     fn output(&self, text: String) -> impl Stream<Item = Vec<u8>> + Unpin + Send;
 }
@@ -31,6 +33,10 @@ impl Tts for TtsKokoro {
         let (tx, rx) = channel(1);
         let instance = self.instance.clone();
         tokio::spawn(async move {
+            let audio_config = config::get().audio();
+            let sample_rate = audio_config.output_sample_rate();
+            let channel = audio_config.output_channel();
+            let frame_duration = audio_config.output_frame_duration();
             let mut instance = instance.lock().await;
             //0->af_alloy, 1->af_aoede, 2->af_bella, 3->af_heart, 4->af_jessica,
             //5->af_kore, 6->af_nicole, 7->af_nova, 8->af_river, 9->af_sarah,
@@ -48,7 +54,7 @@ impl Tts for TtsKokoro {
             let audio = instance.create(&text, sid, 1.0).unwrap();
             let sample = audio.samples;
             let mut encoder = opus::Encoder::new(
-                SAMPLE_RATE,
+                sample_rate,
                 opus::Channels::Mono,
                 opus::Application::LowDelay,
             )
@@ -64,7 +70,7 @@ impl Tts for TtsKokoro {
                 encoder.get_lookahead()
             );
             let len = sample.len();
-            let size = calcalute_tts_packet_size(SAMPLE_RATE, DELAY_MILLIS);
+            let size = calcalute_tts_packet_size(sample_rate, channel, frame_duration);
             let count = len / size;
             for n in 1..count {
                 let start = (n - 1) * size;
@@ -84,14 +90,6 @@ impl Tts for TtsKokoro {
     }
 }
 
-//Sampling rate of input signal (Hz) This must be one of 8000, 12000, 16000, 24000, or 48000.
-//采样率
-pub static SAMPLE_RATE: u32 = 24000;
-//WebSocket 发送间隔 ≈ 帧长度
-//one frame (2.5, 5, 10, 20, 40 or 60 ms)
-pub static DELAY_MILLIS: u64 = 60;
-
-pub fn calcalute_tts_packet_size(sample_rate: u32, delay_millis: u64) -> usize {
-    // 16000Hz * 1 channel * 60 ms / 1000 = 960
-    sample_rate as usize * (delay_millis as usize) / 1000
+pub fn calcalute_tts_packet_size(sample_rate: u32, channel: u32, delay_millis: u64) -> usize {
+    sample_rate as usize * channel as usize * delay_millis as usize / 1000
 }

@@ -1,4 +1,5 @@
 pub mod asr;
+pub mod audio;
 pub mod tts;
 pub mod vad;
 
@@ -8,7 +9,7 @@ use framework::config::{ServerConfig, auth::AuthConfig, database::DatabaseConfig
 use serde::Deserialize;
 use std::sync::LazyLock;
 
-use crate::config::{asr::AsrConfig, tts::TtsConfig, vad::VadConfig};
+use crate::config::{asr::AsrConfig, audio::AudioConfig, tts::TtsConfig, vad::VadConfig};
 
 static CONFIG: LazyLock<AppConfig> =
     LazyLock::new(|| AppConfig::load().expect("Failed to initialize config"));
@@ -21,6 +22,7 @@ pub struct AppConfig {
     vad: VadConfig,
     tts: TtsConfig,
     asr: AsrConfig,
+    audio: AudioConfig,
 }
 
 impl AppConfig {
@@ -66,6 +68,7 @@ impl AppConfig {
             vad: VadConfig::new(),
             tts: TtsConfig::new(),
             asr: AsrConfig::new(),
+            audio: AudioConfig::new(),
         }
     }
 
@@ -91,6 +94,10 @@ impl AppConfig {
 
     pub fn asr(&self) -> &AsrConfig {
         &self.asr
+    }
+
+    pub fn audio(&self) -> &AudioConfig {
+        &self.audio
     }
 }
 

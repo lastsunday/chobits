@@ -7,7 +7,7 @@ use service::chobits::message::tts::{TtsMessage, TtsState};
 use tokio::time::{Instant, sleep};
 use tokio_stream::StreamExt;
 
-use crate::ws::tts::{DELAY_MILLIS, Tts};
+use crate::{config, ws::tts::Tts};
 
 pub struct Sender<W, T>
 where
@@ -46,7 +46,8 @@ where
     }
 
     pub async fn send_tts(&mut self, text: String) -> Result<(), SenderError> {
-        let delay = DELAY_MILLIS;
+        let audio_config = config::get().audio();
+        let delay = audio_config.output_frame_duration();
         let mut output = self.tts.output(text);
         let mut latest_time = Instant::now() + Duration::from_millis(delay);
         // pre buffer count

@@ -12,7 +12,10 @@ use service::chobits::message::{
 
 use tokio::sync::Mutex;
 
-use crate::ws::{asr::Asr, listener::Listener, sender::Sender, tts::Tts, vad::Vad};
+use crate::{
+    config,
+    ws::{asr::Asr, listener::Listener, sender::Sender, tts::Tts, vad::Vad},
+};
 use futures_util::Sink;
 
 pub struct Handler<W, T, V, A>
@@ -52,6 +55,7 @@ where
         let session_id = self.session_id.clone();
         let sender = self.sender.clone();
         tokio::spawn(async move {
+            let audio_config = config::get().audio();
             let data = HelloMessage {
                 message: service::chobits::message::Message {
                     mtype: service::chobits::message::Type::Hello,
@@ -59,9 +63,9 @@ where
                 transport: Some(Transport::Websocket),
                 audio_params: Some(AudioParam {
                     format: AudioFormat::Opus,
-                    sample_rate: 24000,
-                    channels: 1,
-                    frame_duration: 60,
+                    sample_rate: audio_config.output_sample_rate(),
+                    channels: audio_config.output_channel(),
+                    frame_duration: audio_config.output_frame_duration(),
                 }),
                 version: None,
                 features: None,

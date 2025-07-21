@@ -17,7 +17,7 @@ pub struct AudioParam {
     pub format: AudioFormat,
     pub sample_rate: u32,
     pub channels: u32,
-    pub frame_duration: u32,
+    pub frame_duration: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
