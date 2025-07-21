@@ -86,6 +86,20 @@ where
     while let Some(Ok(msg)) = read.next().await {
         let result = convert_to_frame(msg).await;
         if result.is_break() {
+            if let Some(item) = result.break_value() {
+                if let Some(frame) = item {
+                    match frame {
+                        Frame::Close(message) => {
+                            tracing::info!(
+                                "close code = {},reason = {}",
+                                message.code,
+                                message.reason
+                            );
+                        }
+                        _ => {}
+                    }
+                }
+            }
             return;
         }
         if result.is_continue() {
@@ -107,6 +121,7 @@ where
                         Frame::Abort(message) => {
                             handler.handle_abort(message);
                         }
+                        _ => {}
                     },
                     None => {
                         tracing::info!("unkonw message");

@@ -1,12 +1,12 @@
-use std::ops::ControlFlow;
-
+use crate::ws::frame::Frame;
 use axum::extract::ws::Message;
 use serde_json::Value;
-use service::chobits::message::{abort::AbortMessage, hello::HelloMessage, listen::ListenMessage};
+use service::chobits::message::{
+    abort::AbortMessage, close::CloseMessage, hello::HelloMessage, listen::ListenMessage,
+};
+use std::ops::ControlFlow;
 
-use crate::ws::frame::Frame;
-
-pub async fn convert_to_frame(msg: Message) -> ControlFlow<(), Option<Frame>> {
+pub async fn convert_to_frame(msg: Message) -> ControlFlow<Option<Frame>, Option<Frame>> {
     match msg {
         Message::Text(t) => match serde_json::from_slice::<Value>(t.as_bytes()) {
             Ok(json) => {
@@ -56,29 +56,32 @@ pub async fn convert_to_frame(msg: Message) -> ControlFlow<(), Option<Frame>> {
                 return ControlFlow::Continue(Some(Frame::UnknowText(t)));
             }
         },
+
         Message::Binary(d) => {
             return ControlFlow::Continue(Some(Frame::Voice(d)));
         }
-        Message::Close(c) => {
-            if let Some(cf) = c {
-                println!(
-                    ">>>  sent close with code {} and reason `{}`",
-                    cf.code, cf.reason
-                );
-            } else {
-                println!(">>>  somehow sent close message without CloseFrame");
+
+        Message::Close(c) => match c {
+            Some(cf) => {
+                return ControlFlow::Break(Some(Frame::Close(CloseMessage::new(
+                    cf.code,
+                    String::from(cf.reason.as_str()),
+                ))));
             }
-            return ControlFlow::Break(());
-        }
+            None => {
+                return ControlFlow::Break(None);
+            }
+        },
 
         Message::Pong(v) => {
-            println!(">>>  sent pong with {v:?}");
+            return ControlFlow::Continue(Some(Frame::Pong(v)));
         }
+
         // You should never need to manually handle Message::Ping, as axum's websocket library
         // will do so for you automagically by replying with Pong and copying the v according to
         // spec. But if you need the contents of the pings you can see them here.
         Message::Ping(v) => {
-            println!(">>>  sent ping with {v:?}");
+            return ControlFlow::Continue(Some(Frame::Ping(v)));
         }
     }
     ControlFlow::Continue(None)
