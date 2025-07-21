@@ -87,7 +87,8 @@ where
                 return Err(SenderError::SendError);
             }
             send_frame_count += 1;
-            let state = self.state.lock().await;
+            let mut state = self.state.lock().await;
+            state.update_last_activity_time();
             if !state.client_speaking {
                 break;
             }

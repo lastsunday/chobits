@@ -77,7 +77,7 @@ where
                 vad.accept_waveform(window.to_vec()).await;
                 if vad.is_speech().await {
                     let mut state = state.lock().await;
-                    state.last_activity_time = Some(Local::now().timestamp_millis());
+                    state.update_last_activity_time();
                     drop(state);
                     while !vad.is_empty().await {
                         let segment = vad.front().await;
