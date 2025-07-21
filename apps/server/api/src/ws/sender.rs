@@ -1,5 +1,11 @@
-use std::{f32::consts::E, time::Duration};
-
+use crate::{
+    config,
+    ws::{
+        state::State,
+        tts::Tts,
+        util::llm::{EMOJI_MAP, analyze_emotion},
+    },
+};
 use axum::extract::ws::Message;
 use futures_util::{Sink, SinkExt};
 use serde::Serialize;
@@ -7,16 +13,11 @@ use service::chobits::message::{
     llm::LlmMessage,
     tts::{TtsMessage, TtsState},
 };
+use std::sync::Arc;
+use std::{f32::consts::E, time::Duration};
+use tokio::sync::Mutex;
 use tokio::time::{Instant, sleep};
 use tokio_stream::StreamExt;
-
-use crate::{
-    config,
-    ws::{
-        tts::Tts,
-        util::llm::{EMOJI_MAP, analyze_emotion},
-    },
-};
 
 pub struct Sender<W, T>
 where
@@ -25,6 +26,7 @@ where
 {
     write: Box<W>,
     tts: Box<T>,
+    state: Arc<Mutex<State>>,
 }
 
 impl<W, T> Sender<W, T>
@@ -32,8 +34,8 @@ where
     W: Sink<Message> + Unpin,
     T: Tts,
 {
-    pub fn new(write: Box<W>, tts: Box<T>) -> Self {
-        Self { write, tts }
+    pub fn new(write: Box<W>, tts: Box<T>, state: Arc<Mutex<State>>) -> Self {
+        Self { write, tts, state }
     }
 
     pub async fn send_json_text<V>(&mut self, value: &V) -> Result<(), SenderError>
@@ -62,6 +64,9 @@ where
         // pre buffer count
         let pre_buffer_frame_count: u64 = 6;
         let mut send_frame_count: u64 = 0;
+        let mut state = self.state.lock().await;
+        state.client_speaking = true;
+        drop(state);
         while let Some(packet) = output.next().await {
             let now = Instant::now();
             let offset = (now - latest_time).as_millis() as u64;
@@ -82,7 +87,15 @@ where
                 return Err(SenderError::SendError);
             }
             send_frame_count += 1;
+            let state = self.state.lock().await;
+            if !state.client_speaking {
+                break;
+            }
+            drop(state);
         }
+        let mut state = self.state.lock().await;
+        state.client_speaking = false;
+        drop(state);
         Ok(())
     }
 

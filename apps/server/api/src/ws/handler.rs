@@ -1,6 +1,16 @@
-use std::{rc::Rc, sync::Arc};
-
+use crate::{
+    config,
+    ws::{
+        asr::Asr,
+        listener::{self, Listener},
+        sender::{Sender, SenderError},
+        state::State,
+        tts::Tts,
+        vad::Vad,
+    },
+};
 use axum::{body::Bytes, extract::ws::Message};
+use futures_util::Sink;
 use service::chobits::message::{
     AudioFormat, Transport,
     abort::AbortMessage,
@@ -9,14 +19,8 @@ use service::chobits::message::{
     stt::SttMessage,
     tts::{TtsMessage, TtsState},
 };
-
+use std::{rc::Rc, sync::Arc};
 use tokio::sync::Mutex;
-
-use crate::{
-    config,
-    ws::{asr::Asr, listener::Listener, sender::Sender, tts::Tts, vad::Vad},
-};
-use futures_util::Sink;
 
 pub struct Handler<W, T, V, A>
 where
@@ -28,7 +32,7 @@ where
     session_id: String,
     sender: Arc<Mutex<Sender<W, T>>>,
     state: Arc<Mutex<State>>,
-    listener: Listener<W, T, V, A>,
+    listener: Arc<Mutex<Listener<W, T, V, A>>>,
 }
 
 impl<W, T, V, A> Handler<W, T, V, A>
@@ -41,12 +45,13 @@ where
     pub fn new(
         session_id: String,
         sender: Arc<Mutex<Sender<W, T>>>,
-        listener: Listener<W, T, V, A>,
+        listener: Arc<Mutex<Listener<W, T, V, A>>>,
+        state: Arc<Mutex<State>>,
     ) -> Self {
         Self {
             session_id,
             sender,
-            state: Arc::new(Mutex::new(State::new())),
+            state,
             listener,
         }
     }
@@ -88,20 +93,17 @@ where
         let session_id = self.session_id.clone();
         tokio::spawn(async move {
             match message.state {
-                ListenState::Start => {
-                    let mut state = state.lock().await;
-                    state.listen_start = true;
-                }
-                ListenState::Stop => {
-                    let mut state = state.lock().await;
-                    state.listen_start = false;
-                }
+                ListenState::Start => {}
+                ListenState::Stop => {}
                 ListenState::Detect => {
                     // TODO: send stt from text,
                     // TODO: chatStreamBySentence
                     match message.text {
                         Some(text) => {
                             tracing::info!("listen detect text = {}", text);
+                            let mut state = state.lock().await;
+                            state.client_speaking = false;
+                            drop(state);
                             let data = SttMessage::new(Some(session_id), Some(text.clone()));
                             let mut sender = sender.lock().await;
                             match sender.send_json_text(&data).await {
@@ -160,22 +162,18 @@ where
         });
     }
 
-    pub fn handle_voice(&mut self, data: Bytes) {
-        self.listener.listen(Rc::new(&data));
-    }
-}
-
-#[derive(Debug, Default, Clone)]
-pub struct State {
-    pub listen_start: bool,
-    pub data: Vec<Bytes>,
-}
-
-impl State {
-    pub fn new() -> Self {
-        Self {
-            listen_start: false,
-            data: vec![],
-        }
+    pub fn handle_voice(&self, data: Bytes) {
+        let sender = self.sender.clone();
+        let state = self.state.clone();
+        let listener = self.listener.clone();
+        tokio::spawn(async move {
+            let state = state.lock().await;
+            let client_speaking = state.client_speaking;
+            drop(state);
+            if !client_speaking {
+                let mut listener = listener.lock().await;
+                listener.listen(Rc::new(&data));
+            }
+        });
     }
 }

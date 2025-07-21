@@ -5,6 +5,7 @@ pub mod handler;
 pub mod listener;
 pub mod message_converter;
 pub mod sender;
+pub mod state;
 pub mod tts;
 pub mod tts_cache;
 pub mod util;
@@ -16,7 +17,8 @@ use crate::{
     AppState,
     ws::{
         asr_cache::AsrCache, frame::Frame, handler::Handler, listener::Listener,
-        message_converter::convert_to_frame, tts_cache::TtsCache, vad_cache::VadCache,
+        message_converter::convert_to_frame, state::State, tts_cache::TtsCache,
+        vad_cache::VadCache,
     },
 };
 use axum::{
@@ -75,15 +77,17 @@ where
     R: Stream<Item = Result<Message, axum::Error>> + Unpin,
 {
     let session_id = gen_id();
+    let state = Arc::new(Mutex::new(State::new()));
     let tts = TtsCache::global().instance.clone();
-    let sender = Sender::new(Box::new(write), tts);
+    let sender = Sender::new(Box::new(write), tts, state.clone());
     let sender = Arc::new(Mutex::new(sender));
     let vad = VadCache::create_vad();
     let vad = Arc::new(Mutex::new(vad));
     let asr = AsrCache::global().instance.clone();
     let asr = Arc::new(Mutex::new(asr));
     let listener = Listener::new(session_id.clone(), sender.clone(), vad, asr.clone());
-    let mut handler = Handler::new(session_id, sender.clone(), listener);
+    let listener = Arc::new(Mutex::new(listener));
+    let mut handler = Handler::new(session_id, sender.clone(), listener.clone(), state.clone());
     while let Some(Ok(msg)) = read.next().await {
         let result = convert_to_frame(msg).await;
         if result.is_break() {
