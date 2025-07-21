@@ -191,7 +191,6 @@ where
                     }
                     None => (),
                 }
-                tracing::info!("last_activity_time {:?}", last_activity_time);
                 let mut listener = listener.lock().await;
                 listener.listen(Rc::new(&data));
             }
