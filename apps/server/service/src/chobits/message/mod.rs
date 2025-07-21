@@ -4,6 +4,7 @@ pub mod abort;
 pub mod close;
 pub mod hello;
 pub mod listen;
+pub mod llm;
 pub mod stt;
 pub mod tts;
 
@@ -19,6 +20,7 @@ pub enum Type {
     Listen,
     Tts,
     Stt,
+    Llm,
     Abort,
 }
 
@@ -36,6 +38,8 @@ impl<'de> Deserialize<'de> for Type {
             Ok(Self::Tts)
         } else if value == r#"stt"# {
             Ok(Self::Stt)
+        } else if value == r#"llm"# {
+            Ok(Self::Llm)
         } else if value == r#"abort"# {
             Ok(Self::Abort)
         } else {
@@ -56,6 +60,7 @@ impl Serialize for Type {
             Type::Listen => r#"listen"#,
             Type::Tts => r#"tts"#,
             Type::Stt => r#"stt"#,
+            Type::Llm => r#"llm"#,
             Type::Abort => r#"abort"#,
         })
     }

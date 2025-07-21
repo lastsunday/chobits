@@ -1,13 +1,22 @@
-use std::time::Duration;
+use std::{f32::consts::E, time::Duration};
 
 use axum::extract::ws::Message;
 use futures_util::{Sink, SinkExt};
 use serde::Serialize;
-use service::chobits::message::tts::{TtsMessage, TtsState};
+use service::chobits::message::{
+    llm::LlmMessage,
+    tts::{TtsMessage, TtsState},
+};
 use tokio::time::{Instant, sleep};
 use tokio_stream::StreamExt;
 
-use crate::{config, ws::tts::Tts};
+use crate::{
+    config,
+    ws::{
+        tts::Tts,
+        util::llm::{EMOJI_MAP, analyze_emotion},
+    },
+};
 
 pub struct Sender<W, T>
 where
@@ -78,6 +87,10 @@ where
     }
 
     pub async fn send_tts_with_text(&mut self, text: String) -> Result<(), SenderError> {
+        let emotion = analyze_emotion(&text);
+        if self.send_llm(emotion.to_string()).await.is_err() {
+            return Err(SenderError::SendError);
+        }
         if self
             .send_json_text(&TtsMessage::new(
                 Some(TtsState::SentenceStart),
@@ -107,6 +120,29 @@ where
         }
         if self
             .send_json_text(&TtsMessage::new(Some(TtsState::Stop), None))
+            .await
+            .is_err()
+        {
+            return Err(SenderError::SendError);
+        }
+        Ok(())
+    }
+
+    pub async fn send_llm(&mut self, emotion: String) -> Result<(), SenderError> {
+        let emoji = EMOJI_MAP.get(emotion.as_str());
+        let mut emoji_text = "🙂";
+        match emoji {
+            Some(item) => {
+                emoji_text = item;
+            }
+            None => {}
+        }
+        if self
+            .send_json_text(&LlmMessage::new(
+                None,
+                Some(emotion),
+                Some(emoji_text.to_string()),
+            ))
             .await
             .is_err()
         {

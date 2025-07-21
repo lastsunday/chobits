@@ -7,6 +7,7 @@ pub mod message_converter;
 pub mod sender;
 pub mod tts;
 pub mod tts_cache;
+pub mod util;
 pub mod vad;
 pub mod vad_cache;
 
