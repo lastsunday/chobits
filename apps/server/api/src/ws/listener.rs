@@ -1,8 +1,9 @@
 use crate::{
     config,
-    ws::{asr::Asr, sender::Sender, tts::Tts, vad::Vad},
+    ws::{asr::Asr, sender::Sender, state::State, tts::Tts, vad::Vad},
 };
 use axum::extract::ws::Message;
+use chrono::Local;
 use futures_util::Sink;
 use service::chobits::message::stt::SttMessage;
 use std::{rc::Rc, sync::Arc};
@@ -20,6 +21,7 @@ where
     voice_data: Arc<Mutex<Vec<f32>>>,
     vad: Arc<Mutex<V>>,
     asr: Arc<Mutex<A>>,
+    state: Arc<Mutex<State>>,
 }
 
 impl<W, T, V, A> Listener<W, T, V, A>
@@ -34,6 +36,7 @@ where
         sender: Arc<Mutex<Sender<W, T>>>,
         vad: Arc<Mutex<V>>,
         asr: Arc<Mutex<A>>,
+        state: Arc<Mutex<State>>,
     ) -> Self {
         Self {
             session_id,
@@ -41,6 +44,7 @@ where
             vad,
             asr,
             voice_data: Arc::new(Mutex::new(Vec::new())),
+            state,
         }
     }
 
@@ -51,6 +55,7 @@ where
         let voice_data = self.voice_data.clone();
         let vad = self.vad.clone();
         let asr = self.asr.clone();
+        let state = self.state.clone();
         tokio::spawn(async move {
             let audio_config = config::get().audio();
             //tracing::info!("voice len = {}", data.len());
@@ -71,6 +76,9 @@ where
                 let window: Vec<f32> = voice_data.drain(..window_size).collect();
                 vad.accept_waveform(window.to_vec()).await;
                 if vad.is_speech().await {
+                    let mut state = state.lock().await;
+                    state.last_activity_time = Some(Local::now().timestamp_millis());
+                    drop(state);
                     while !vad.is_empty().await {
                         let segment = vad.front().await;
                         let start_sec = (segment.start as f32) / sample_rate as f32;

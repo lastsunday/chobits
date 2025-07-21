@@ -10,6 +10,7 @@ use crate::{
     },
 };
 use axum::{body::Bytes, extract::ws::Message};
+use chrono::Local;
 use futures_util::Sink;
 use service::chobits::message::{
     AudioFormat, Transport,
@@ -169,8 +170,28 @@ where
         tokio::spawn(async move {
             let state = state.lock().await;
             let client_speaking = state.client_speaking;
+            let last_activity_time = state.last_activity_time;
             drop(state);
             if !client_speaking {
+                match last_activity_time {
+                    Some(last_activity_time) => {
+                        let logic_config = config::get().logic();
+                        let close_connection_no_voice_time =
+                            logic_config.close_connection_no_voice_time();
+                        let offset_time = Local::now().timestamp_millis() - last_activity_time;
+                        if (offset_time >= close_connection_no_voice_time) {
+                            tracing::info!(
+                                "close connection no voice time, offset_time = {}",
+                                offset_time
+                            );
+                            let mut sender = sender.lock().await;
+                            sender.close().await;
+                            return;
+                        }
+                    }
+                    None => (),
+                }
+                tracing::info!("last_activity_time {:?}", last_activity_time);
                 let mut listener = listener.lock().await;
                 listener.listen(Rc::new(&data));
             }

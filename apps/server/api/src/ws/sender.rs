@@ -163,6 +163,10 @@ where
         }
         Ok(())
     }
+
+    pub async fn close(&mut self) {
+        self.write.close().await;
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
