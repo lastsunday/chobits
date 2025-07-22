@@ -1,3 +1,4 @@
+use core::f32;
 use sherpa_rs::vad::VadConfig;
 use std::sync::{Arc, OnceLock};
 use tokio::sync::Mutex;
@@ -31,10 +32,10 @@ impl VadCache {
         let config = VadConfig {
             //wget https://huggingface.co/deepghs/silero-vad-onnx/resolve/main/silero_vad.onnx
             model: vad_config.model().into(),
-            min_silence_duration: 0.1,
-            min_speech_duration: 0.25,
-            max_speech_duration: 8.0,
-            threshold: 0.5,
+            min_silence_duration: 1.0,
+            min_speech_duration: 0.001,
+            max_speech_duration: f32::INFINITY,
+            threshold: 0.1,
             window_size: 512_i32,
             num_threads: Some(vad_config.num_threads()),
             ..Default::default()

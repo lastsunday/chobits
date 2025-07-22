@@ -16,7 +16,7 @@ use service::chobits::message::{
     AudioFormat, Transport,
     abort::AbortMessage,
     hello::{AudioParam, HelloMessage},
-    listen::{ListenMessage, ListenState},
+    listen::{ListenMessage, ListenMode, ListenState},
     stt::SttMessage,
     tts::{TtsMessage, TtsState},
 };
@@ -92,10 +92,35 @@ where
         let sender = self.sender.clone();
         let state = self.state.clone();
         let session_id = self.session_id.clone();
+        let listener = self.listener.clone();
+
         tokio::spawn(async move {
             match message.state {
-                ListenState::Start => {}
-                ListenState::Stop => {}
+                ListenState::Start => {
+                    let mut listener = listener.lock().await;
+                    listener.reset(message.mmod).await;
+                }
+                ListenState::Stop => {
+                    let mut listener = listener.lock().await;
+                    let result = listener.get_result().await;
+                    match result {
+                        Some(text) => {
+                            tracing::info!("listen result = {}", text);
+                            let data = SttMessage::new(Some(session_id), Some(text.clone()));
+                            let mut sender = sender.lock().await;
+                            match sender.send_json_text(&data).await {
+                                Ok(_) => (),
+                                Err(error) => {
+                                    tracing::info!("send tts message error {}", error);
+                                }
+                            }
+                        }
+                        None => {
+                            tracing::info!("listen result is none");
+                        }
+                    }
+                    listener.clear().await;
+                }
                 ListenState::Detect => {
                     // TODO: send stt from text,
                     // TODO: chatStreamBySentence
@@ -164,35 +189,85 @@ where
     }
 
     pub fn handle_voice(&self, data: Bytes) {
+        let session_id = self.session_id.clone();
         let sender = self.sender.clone();
         let state = self.state.clone();
         let listener = self.listener.clone();
         tokio::spawn(async move {
+            let mut listener = listener.lock().await;
+            listener.listen(Rc::new(&data));
             let state = state.lock().await;
             let client_speaking = state.client_speaking;
             let last_activity_time = state.last_activity_time;
+            let last_speaking_time = state.last_speaking_time;
             drop(state);
             if !client_speaking {
-                match last_activity_time {
-                    Some(last_activity_time) => {
-                        let logic_config = config::get().logic();
-                        let close_connection_no_voice_time =
-                            logic_config.close_connection_no_voice_time();
-                        let offset_time = Local::now().timestamp_millis() - last_activity_time;
-                        if (offset_time >= close_connection_no_voice_time) {
-                            tracing::info!(
-                                "close connection no voice time, offset_time = {}",
-                                offset_time
-                            );
-                            let mut sender = sender.lock().await;
-                            sender.close().await;
-                            return;
-                        }
+                if let Some(listen_mode) = listener.get_listen_mode() {
+                    match listen_mode {
+                        ListenMode::Auto | ListenMode::RealTime => match last_speaking_time {
+                            Some(last_speaking_time) => {
+                                let logic_config = config::get().logic();
+                                let close_connection_no_voice_time =
+                                    logic_config.close_connection_no_voice_time();
+                                let offset_time =
+                                    Local::now().timestamp_millis() - last_speaking_time;
+                                let silence_voice_timeout = logic_config.silence_voice_timeout();
+                                if (offset_time >= silence_voice_timeout) {
+                                    tracing::info!(
+                                        "offset_time = {} >= silence voice timeout = {}",
+                                        offset_time,
+                                        silence_voice_timeout,
+                                    );
+                                    let result = listener.get_result().await;
+                                    match result {
+                                        Some(text) => {
+                                            tracing::info!("listen result = {}", text);
+                                            let data = SttMessage::new(
+                                                Some(session_id),
+                                                Some(text.clone()),
+                                            );
+                                            let mut sender = sender.lock().await;
+                                            match sender.send_json_text(&data).await {
+                                                Ok(_) => (),
+                                                Err(error) => {
+                                                    tracing::info!(
+                                                        "send tts message error {}",
+                                                        error
+                                                    );
+                                                }
+                                            }
+                                        }
+                                        None => {
+                                            tracing::info!("listen result is none");
+                                        }
+                                    }
+                                    listener.clear().await;
+                                }
+                            }
+                            None => (),
+                        },
+                        ListenMode::Manual => {}
                     }
-                    None => (),
                 }
-                let mut listener = listener.lock().await;
-                listener.listen(Rc::new(&data));
+            }
+            match last_activity_time {
+                Some(last_activity_time) => {
+                    let logic_config = config::get().logic();
+                    let close_connection_no_voice_time =
+                        logic_config.close_connection_no_voice_time();
+                    let offset_time = Local::now().timestamp_millis() - last_activity_time;
+                    //tracing::info!("last_activity_time offset_time = {}", offset_time);
+                    if (offset_time >= close_connection_no_voice_time) {
+                        tracing::info!(
+                            "close connection no voice time, offset_time = {}",
+                            offset_time
+                        );
+                        let mut sender = sender.lock().await;
+                        sender.close().await;
+                        return;
+                    }
+                }
+                None => (),
             }
         });
     }

@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use idgenerator::instance;
 use tokio::sync::Mutex;
 
 pub trait Vad: Send + Sync {
@@ -8,6 +9,8 @@ pub trait Vad: Send + Sync {
     fn is_empty(&mut self) -> impl Future<Output = bool> + Send;
     fn is_speech(&mut self) -> impl Future<Output = bool> + Send;
     fn pop(&mut self) -> impl Future<Output = ()> + Send;
+    fn flush(&mut self) -> impl Future<Output = ()> + Send;
+    fn clear(&mut self) -> impl Future<Output = ()> + Send;
 }
 
 #[derive(Debug)]
@@ -55,5 +58,15 @@ impl Vad for SherpaVad {
     async fn pop(&mut self) {
         let mut instance = self.instance.lock().await;
         instance.pop()
+    }
+
+    async fn flush(&mut self) {
+        let mut instance = self.instance.lock().await;
+        instance.flush();
+    }
+
+    async fn clear(&mut self) {
+        let mut instance = self.instance.lock().await;
+        instance.clear()
     }
 }

@@ -17,7 +17,7 @@ impl AsrConfig {
             tokens: Some(String::from(
                 "data/asr/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/tokens.txt",
             )),
-            language: Some(String::from("auto")),
+            language: Some(String::from("zh")),
             num_threads: Some(4),
         }
     }
@@ -35,7 +35,7 @@ impl AsrConfig {
     }
 
     pub fn language(&self) -> &str {
-        self.language.as_deref().unwrap_or("auto")
+        self.language.as_deref().unwrap_or("zh")
     }
 
     pub fn num_threads(&self) -> i32 {
