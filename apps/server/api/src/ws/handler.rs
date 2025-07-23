@@ -1,13 +1,6 @@
 use crate::{
     config,
-    ws::{
-        asr::Asr,
-        listener::{self, Listener},
-        sender::{Sender, SenderError},
-        state::State,
-        tts::Tts,
-        vad::Vad,
-    },
+    ws::{asr::Asr, listener::Listener, sender::Sender, state::State, tts::Tts, vad::Vad},
 };
 use axum::{body::Bytes, extract::ws::Message};
 use chrono::Local;
@@ -33,7 +26,7 @@ where
     session_id: String,
     sender: Arc<Mutex<Sender<W, T>>>,
     state: Arc<Mutex<State>>,
-    listener: Arc<Mutex<Listener<W, T, V, A>>>,
+    listener: Arc<Mutex<Listener<V, A>>>,
 }
 
 impl<W, T, V, A> Handler<W, T, V, A>
@@ -46,7 +39,7 @@ where
     pub fn new(
         session_id: String,
         sender: Arc<Mutex<Sender<W, T>>>,
-        listener: Arc<Mutex<Listener<W, T, V, A>>>,
+        listener: Arc<Mutex<Listener<V, A>>>,
         state: Arc<Mutex<State>>,
     ) -> Self {
         Self {
@@ -103,22 +96,7 @@ where
                 ListenState::Stop => {
                     let mut listener = listener.lock().await;
                     let result = listener.get_result().await;
-                    match result {
-                        Some(text) => {
-                            tracing::info!("listen result = {}", text);
-                            let data = SttMessage::new(Some(session_id), Some(text.clone()));
-                            let mut sender = sender.lock().await;
-                            match sender.send_json_text(&data).await {
-                                Ok(_) => (),
-                                Err(error) => {
-                                    tracing::info!("send tts message error {}", error);
-                                }
-                            }
-                        }
-                        None => {
-                            tracing::info!("listen result is none");
-                        }
-                    }
+                    Self::handle_listener_result(result, session_id, sender).await;
                     listener.clear().await;
                 }
                 ListenState::Detect => {
@@ -190,9 +168,9 @@ where
 
     pub fn handle_voice(&self, data: Bytes) {
         let session_id = self.session_id.clone();
-        let sender = self.sender.clone();
         let state = self.state.clone();
         let listener = self.listener.clone();
+        let sender = self.sender.clone();
         tokio::spawn(async move {
             let mut listener = listener.lock().await;
             listener.listen(Rc::new(&data));
@@ -207,40 +185,22 @@ where
                         ListenMode::Auto | ListenMode::RealTime => match last_speaking_time {
                             Some(last_speaking_time) => {
                                 let logic_config = config::get().logic();
-                                let close_connection_no_voice_time =
-                                    logic_config.close_connection_no_voice_time();
                                 let offset_time =
                                     Local::now().timestamp_millis() - last_speaking_time;
                                 let silence_voice_timeout = logic_config.silence_voice_timeout();
-                                if (offset_time >= silence_voice_timeout) {
+                                if offset_time >= silence_voice_timeout {
                                     tracing::info!(
                                         "offset_time = {} >= silence voice timeout = {}",
                                         offset_time,
                                         silence_voice_timeout,
                                     );
                                     let result = listener.get_result().await;
-                                    match result {
-                                        Some(text) => {
-                                            tracing::info!("listen result = {}", text);
-                                            let data = SttMessage::new(
-                                                Some(session_id),
-                                                Some(text.clone()),
-                                            );
-                                            let mut sender = sender.lock().await;
-                                            match sender.send_json_text(&data).await {
-                                                Ok(_) => (),
-                                                Err(error) => {
-                                                    tracing::info!(
-                                                        "send tts message error {}",
-                                                        error
-                                                    );
-                                                }
-                                            }
-                                        }
-                                        None => {
-                                            tracing::info!("listen result is none");
-                                        }
-                                    }
+                                    Self::handle_listener_result(
+                                        result,
+                                        session_id,
+                                        sender.clone(),
+                                    )
+                                    .await;
                                     listener.clear().await;
                                 }
                             }
@@ -257,11 +217,12 @@ where
                         logic_config.close_connection_no_voice_time();
                     let offset_time = Local::now().timestamp_millis() - last_activity_time;
                     //tracing::info!("last_activity_time offset_time = {}", offset_time);
-                    if (offset_time >= close_connection_no_voice_time) {
+                    if offset_time >= close_connection_no_voice_time {
                         tracing::info!(
                             "close connection no voice time, offset_time = {}",
                             offset_time
                         );
+                        let sender = sender.clone();
                         let mut sender = sender.lock().await;
                         sender.close().await;
                         return;
@@ -270,5 +231,28 @@ where
                 None => (),
             }
         });
+    }
+
+    async fn handle_listener_result(
+        result: Option<String>,
+        session_id: String,
+        sender: Arc<Mutex<Sender<W, T>>>,
+    ) {
+        match result {
+            Some(text) => {
+                tracing::info!("listen result = {}", text);
+                let data = SttMessage::new(Some(session_id), Some(text.clone()));
+                let mut sender = sender.lock().await;
+                match sender.send_json_text(&data).await {
+                    Ok(_) => (),
+                    Err(error) => {
+                        tracing::info!("send tts message error {}", error);
+                    }
+                }
+            }
+            None => {
+                tracing::info!("listen result is none");
+            }
+        }
     }
 }

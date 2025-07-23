@@ -85,15 +85,9 @@ where
     let vad = Arc::new(Mutex::new(vad));
     let asr = AsrCache::global().instance.clone();
     let asr = Arc::new(Mutex::new(asr));
-    let listener = Listener::new(
-        session_id.clone(),
-        sender.clone(),
-        vad,
-        asr.clone(),
-        state.clone(),
-    );
+    let listener = Listener::new(session_id.clone(), vad, asr.clone(), state.clone());
     let listener = Arc::new(Mutex::new(listener));
-    let mut handler = Handler::new(session_id, sender.clone(), listener.clone(), state.clone());
+    let handler = Handler::new(session_id, sender.clone(), listener.clone(), state.clone());
     while let Some(Ok(msg)) = read.next().await {
         let result = convert_to_frame(msg).await;
         if result.is_break() {

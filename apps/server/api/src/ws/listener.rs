@@ -1,23 +1,17 @@
 use crate::{
     config,
-    ws::{asr::Asr, sender::Sender, state::State, tts::Tts, vad::Vad},
+    ws::{asr::Asr, state::State, vad::Vad},
 };
-use axum::extract::ws::Message;
-use chrono::Local;
-use futures_util::Sink;
-use service::chobits::message::{listen::ListenMode, stt::SttMessage};
+use service::chobits::message::listen::ListenMode;
 use std::{rc::Rc, sync::Arc};
 use tokio::sync::Mutex;
 
-pub struct Listener<W, T, V, A>
+pub struct Listener<V, A>
 where
-    W: Sink<Message> + Unpin + 'static,
-    T: Tts + 'static,
     V: Vad + 'static,
     A: Asr + 'static,
 {
     session_id: String,
-    sender: Arc<Mutex<Sender<W, T>>>,
     temp_voice_data: Arc<Mutex<Vec<f32>>>,
     voice_data: Arc<Mutex<Vec<f32>>>,
     vad: Arc<Mutex<V>>,
@@ -26,23 +20,19 @@ where
     listen_mode: Option<ListenMode>,
 }
 
-impl<W, T, V, A> Listener<W, T, V, A>
+impl<V, A> Listener<V, A>
 where
-    W: Sink<Message> + Unpin + Send,
-    T: Tts + Send,
     V: Vad + Send,
     A: Asr + Send,
 {
     pub fn new(
         session_id: String,
-        sender: Arc<Mutex<Sender<W, T>>>,
         vad: Arc<Mutex<V>>,
         asr: Arc<Mutex<A>>,
         state: Arc<Mutex<State>>,
     ) -> Self {
         Self {
             session_id,
-            sender,
             vad,
             asr,
             temp_voice_data: Arc::new(Mutex::new(Vec::new())),
@@ -55,7 +45,6 @@ where
     pub fn listen(&mut self, data: Rc<&[u8]>) {
         let session_id = self.session_id.clone();
         let data = data.to_vec();
-        let sender = self.sender.clone();
         let temp_voice_data = self.temp_voice_data.clone();
         let voice_data = self.voice_data.clone();
         let vad = self.vad.clone();
@@ -77,7 +66,7 @@ where
             let mut vad = vad.lock().await;
             let window_size = 512;
             while temp_voice_data.len() > window_size {
-                let mut window: Vec<f32> = temp_voice_data.drain(..window_size).collect();
+                let window: Vec<f32> = temp_voice_data.drain(..window_size).collect();
                 vad.accept_waveform(window.to_vec()).await;
                 if vad.is_speech().await {
                     let mut state = state.lock().await;
@@ -134,7 +123,7 @@ where
         let mut voice_data = voice_data.lock().await;
         let state = self.state.clone();
         let mut state = state.lock().await;
-        vad.clear();
+        vad.clear().await;
         voice_data.clear();
         state.last_speaking_time = None;
     }
@@ -142,7 +131,7 @@ where
     pub async fn get_result(&mut self) -> Option<String> {
         let session_id = self.session_id.clone();
         let voice_data = self.voice_data.clone();
-        let mut voice_data = voice_data.lock().await;
+        let voice_data = voice_data.lock().await;
         let audio_config = config::get().audio();
         let sample_rate: u32 = audio_config.input_sample_rate();
         let asr = self.asr.clone();

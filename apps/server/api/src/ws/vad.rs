@@ -1,6 +1,4 @@
 use std::sync::Arc;
-
-use idgenerator::instance;
 use tokio::sync::Mutex;
 
 pub trait Vad: Send + Sync {

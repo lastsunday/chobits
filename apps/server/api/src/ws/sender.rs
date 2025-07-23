@@ -14,7 +14,7 @@ use service::chobits::message::{
     tts::{TtsMessage, TtsState},
 };
 use std::sync::Arc;
-use std::{f32::consts::E, time::Duration};
+use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio::time::{Instant, sleep};
 use tokio_stream::StreamExt;
@@ -166,7 +166,13 @@ where
     }
 
     pub async fn close(&mut self) {
-        self.write.close().await;
+        let result = self.write.close().await;
+        match result {
+            Ok(_) => (),
+            Err(_) => {
+                tracing::error!("sender close error");
+            }
+        }
     }
 }
 
