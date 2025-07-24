@@ -42,9 +42,16 @@
 <details>
 <summary>Development</summary>
 
+1. apps/server-ui
+
+```shell
+pnpm exec nx run @chobits/server-ui:dev
+```
+
 1. apps/server
 
 ```shell
+pnpm exec nx run @chobits/server-ui:build
 ./apps/server/script/download_model.sh
 pnpm nx run chobits-server:run
 ```
