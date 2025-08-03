@@ -17,4 +17,8 @@ mkdir -p vad
 cd vad || exit
 wget https://github.com/snakers4/silero-vad/raw/refs/tags/v5.1.2/src/silero_vad/data/silero_vad.onnx
 cd ..
+mkdir -p llm || exit
+wget https://huggingface.co/Qwen/Qwen3-0.6B/resolve/167b8104f88905a951069f5f95f9776908da5f68/tokenizer.json -O llm/tokenizer.json
+wget https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/058b74ede71731e4a323a88d68da1386519ec6fc/Qwen3-0.6B-Q4_K_M.gguf -O llm/model.gguf
+cd ..
 cd ..

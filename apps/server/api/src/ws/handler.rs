@@ -1,6 +1,14 @@
 use crate::{
     config,
-    ws::{asr::Asr, listener::Listener, sender::Sender, state::State, tts::Tts, vad::Vad},
+    ws::{
+        asr::Asr,
+        listener::Listener,
+        llm::{Llm, LlmQwen},
+        sender::Sender,
+        state::State,
+        tts::Tts,
+        vad::Vad,
+    },
 };
 use axum::{body::Bytes, extract::ws::Message};
 use chrono::Local;
@@ -15,6 +23,7 @@ use service::chobits::message::{
 };
 use std::{rc::Rc, sync::Arc};
 use tokio::sync::Mutex;
+use tokio_stream::StreamExt;
 
 pub struct Handler<W, T, V, A>
 where
@@ -27,6 +36,7 @@ where
     sender: Arc<Mutex<Sender<W, T>>>,
     state: Arc<Mutex<State>>,
     listener: Arc<Mutex<Listener<V, A>>>,
+    llm: Arc<Mutex<Box<LlmQwen>>>,
 }
 
 impl<W, T, V, A> Handler<W, T, V, A>
@@ -41,12 +51,14 @@ where
         sender: Arc<Mutex<Sender<W, T>>>,
         listener: Arc<Mutex<Listener<V, A>>>,
         state: Arc<Mutex<State>>,
+        llm: Arc<Mutex<Box<LlmQwen>>>,
     ) -> Self {
         Self {
             session_id,
             sender,
             state,
             listener,
+            llm,
         }
     }
 
@@ -86,6 +98,7 @@ where
         let state = self.state.clone();
         let session_id = self.session_id.clone();
         let listener = self.listener.clone();
+        let llm = self.llm.clone();
 
         tokio::spawn(async move {
             match message.state {
@@ -96,7 +109,7 @@ where
                 ListenState::Stop => {
                     let mut listener = listener.lock().await;
                     let result = listener.get_result().await;
-                    Self::handle_listener_result(result, session_id, sender).await;
+                    Self::handle_listener_result(result, session_id, sender, llm).await;
                     listener.clear().await;
                 }
                 ListenState::Detect => {
@@ -116,6 +129,13 @@ where
                                     tracing::info!("send tts message error {}", error);
                                 }
                             }
+                            let llm = llm.lock().await;
+                            let mut output = llm.chat(text);
+                            let mut chat_result = Vec::new();
+                            while let Some(text) = output.next().await {
+                                chat_result.push(text);
+                            }
+                            let text = chat_result.join("");
                             match sender.send_tts_with_text(text.clone()).await {
                                 Ok(_) => {}
                                 Err(error) => {
@@ -171,6 +191,7 @@ where
         let state = self.state.clone();
         let listener = self.listener.clone();
         let sender = self.sender.clone();
+        let llm = self.llm.clone();
         tokio::spawn(async move {
             let mut listener = listener.lock().await;
             listener.listen(Rc::new(&data));
@@ -199,6 +220,7 @@ where
                                         result,
                                         session_id,
                                         sender.clone(),
+                                        llm,
                                     )
                                     .await;
                                     listener.clear().await;
@@ -237,6 +259,7 @@ where
         result: Option<String>,
         session_id: String,
         sender: Arc<Mutex<Sender<W, T>>>,
+        llm: Arc<Mutex<Box<LlmQwen>>>,
     ) {
         match result {
             Some(text) => {
@@ -244,6 +267,19 @@ where
                 let data = SttMessage::new(Some(session_id), Some(text.clone()));
                 let mut sender = sender.lock().await;
                 match sender.send_json_text(&data).await {
+                    Ok(_) => (),
+                    Err(error) => {
+                        tracing::info!("send tts message error {}", error);
+                    }
+                }
+                let llm = llm.lock().await;
+                let mut output = llm.chat(text);
+                let mut chat_result = Vec::new();
+                while let Some(text) = output.next().await {
+                    chat_result.push(text);
+                }
+                let text = chat_result.join("");
+                match sender.send_tts_with_text(text).await {
                     Ok(_) => (),
                     Err(error) => {
                         tracing::info!("send tts message error {}", error);

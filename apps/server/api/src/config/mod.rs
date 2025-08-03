@@ -1,5 +1,6 @@
 pub mod asr;
 pub mod audio;
+pub mod llm;
 pub mod logic;
 pub mod tts;
 pub mod vad;
@@ -11,7 +12,8 @@ use serde::Deserialize;
 use std::sync::LazyLock;
 
 use crate::config::{
-    asr::AsrConfig, audio::AudioConfig, logic::LogicConfig, tts::TtsConfig, vad::VadConfig,
+    asr::AsrConfig, audio::AudioConfig, llm::LlmConfig, logic::LogicConfig, tts::TtsConfig,
+    vad::VadConfig,
 };
 
 static CONFIG: LazyLock<AppConfig> =
@@ -25,6 +27,7 @@ pub struct AppConfig {
     vad: VadConfig,
     tts: TtsConfig,
     asr: AsrConfig,
+    llm: LlmConfig,
     audio: AudioConfig,
     logic: LogicConfig,
 }
@@ -72,6 +75,7 @@ impl AppConfig {
             vad: VadConfig::new(),
             tts: TtsConfig::new(),
             asr: AsrConfig::new(),
+            llm: LlmConfig::new(),
             audio: AudioConfig::new(),
             logic: LogicConfig::new(),
         }
@@ -99,6 +103,10 @@ impl AppConfig {
 
     pub fn asr(&self) -> &AsrConfig {
         &self.asr
+    }
+
+    pub fn llm(&self) -> &LlmConfig {
+        &self.llm
     }
 
     pub fn audio(&self) -> &AudioConfig {

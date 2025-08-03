@@ -3,6 +3,7 @@ pub mod asr_cache;
 pub mod frame;
 pub mod handler;
 pub mod listener;
+pub mod llm;
 pub mod message_converter;
 pub mod sender;
 pub mod state;
@@ -17,8 +18,8 @@ use crate::{
     AppState,
     ws::{
         asr_cache::AsrCache, frame::Frame, handler::Handler, listener::Listener,
-        message_converter::convert_to_frame, state::State, tts_cache::TtsCache,
-        vad_cache::VadCache,
+        llm::llm_cache::LlmCache, message_converter::convert_to_frame, state::State,
+        tts_cache::TtsCache, vad_cache::VadCache,
     },
 };
 use axum::{
@@ -87,7 +88,15 @@ where
     let asr = Arc::new(Mutex::new(asr));
     let listener = Listener::new(session_id.clone(), vad, asr.clone(), state.clone());
     let listener = Arc::new(Mutex::new(listener));
-    let handler = Handler::new(session_id, sender.clone(), listener.clone(), state.clone());
+    let llm = LlmCache::global().instance.clone();
+    let llm = Arc::new(Mutex::new(llm));
+    let handler = Handler::new(
+        session_id,
+        sender.clone(),
+        listener.clone(),
+        state.clone(),
+        llm.clone(),
+    );
     while let Some(Ok(msg)) = read.next().await {
         let result = convert_to_frame(msg).await;
         if result.is_break() {

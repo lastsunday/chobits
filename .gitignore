@@ -57,3 +57,4 @@ lua
 *.sqlite
 application.yaml
 /data
+target
