@@ -30,7 +30,7 @@ rm kokoro-multi-lang-v1_1.tar.bz2
 impl Tts for TtsKokoro {
     fn output(&self, text: String) -> impl Stream<Item = Vec<u8>> + Unpin + Send {
         let text = text.clone();
-        let (tx, rx) = channel(1);
+        let (tx, rx) = channel(10);
         let instance = self.instance.clone();
         tokio::spawn(async move {
             let audio_config = config::get().audio();

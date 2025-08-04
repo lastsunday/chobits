@@ -32,10 +32,16 @@ pub fn analyze_emotion(text: &str) -> &str {
     return r#"happy"#;
 }
 
-pub fn filter(text: &str) -> Option<&str> {
+pub fn filter_think(text: &str) -> Option<String> {
     let regex = Regex::new(r"(<think>[\s\S]*</think>[\s]*)([\s\S]*)").unwrap();
     let Some((_full, [_think, content])) = regex.captures(text).map(|caps| caps.extract()) else {
         return None;
     };
-    Some(content)
+    Some(content.to_string())
+}
+
+pub fn filter(text: &str) -> Option<String> {
+    let regex = Regex::new(r"\n").unwrap();
+    let content = regex.replace_all(text, "");
+    Some(content.trim().to_string())
 }

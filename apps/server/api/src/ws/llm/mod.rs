@@ -21,7 +21,7 @@ use token_output_stream::TokenOutputStream;
 use tokio::sync::mpsc::channel;
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::ws::util::llm::filter;
+use crate::ws::util::llm::{filter, filter_think};
 
 pub trait Llm {
     fn chat(
@@ -155,7 +155,7 @@ async fn handle_chat(
     let start_post_prompt = std::time::Instant::now();
 
     let mut sampled = 0;
-    let mut sentence_list = Vec::new();
+    let mut sentence_list: Vec<String> = Vec::new();
     let mut sentence: Vec<char> = Vec::new();
     for index in 0..to_sample {
         let input = Tensor::new(&[next_token], &device)
@@ -196,10 +196,8 @@ async fn handle_chat(
             let text: String = text_result.clone().into_iter().collect();
             if !skip_think {
                 if text.contains("</think>") {
-                    let filter_text = filter(&text);
-                    if let Some(text) = filter_text {
+                    if let Some(text) = filter_think(&text) {
                         text_result.clear();
-                        text_result.push(text.to_string());
                         for c in text.chars() {
                             sentence.push(c);
                         }
@@ -209,10 +207,12 @@ async fn handle_chat(
             } else {
                 for c in text.chars() {
                     sentence.push(c);
-                    if c == '，' || c == '。' || c == '；' || c == '？' {
+                    if c == '。' || c == '；' || c == '？' {
                         let text: String = sentence.clone().into_iter().collect();
                         sentence.clear();
-                        sentence_list.push(text);
+                        if let Some(text) = filter(&text) {
+                            sentence_list.push(text);
+                        }
                     }
                 }
                 text_result.clear();
@@ -238,8 +238,10 @@ async fn handle_chat(
     {
         let text: String = sentence.clone().into_iter().collect();
         let text = format!("{text}{rest}");
-        if let Err(e) = tx.send(Ok(text)).await {
-            tracing::error!("chat send text error = {}", e);
+        if let Some(text) = filter(&text) {
+            if let Err(e) = tx.send(Ok(text)).await {
+                tracing::error!("chat send text error = {}", e);
+            }
         }
         text_result.clear();
     }
@@ -267,7 +269,7 @@ impl Llm for LlmQwen {
         let tokenizer = self.tokenizer.clone();
         let model = self.model.clone();
         let device = self.device.clone();
-        let (tx, rx) = channel::<core::result::Result<String, LlmError>>(1);
+        let (tx, rx) = channel::<core::result::Result<String, LlmError>>(10);
         tokio::spawn(async move {
             if let Err(e) =
                 handle_chat(system_prompt, text, tokenizer, model, device, tx.clone()).await
