@@ -6,7 +6,10 @@
 
 ```shell
 cargo test --workspace
+```
 
+```shell
+cargo test --test llm_test --features cuda -- tests::test_llm_chat --ignored --show-output
 ```
 
 ## Framework

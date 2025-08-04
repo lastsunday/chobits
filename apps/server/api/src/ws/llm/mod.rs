@@ -10,7 +10,7 @@ pub mod token_output_stream;
 
 use candle_core::{Device, Result, Tensor, quantized::gguf_file};
 use futures::Stream;
-use tokenizers::{Tokenizer, tokenizer};
+use tokenizers::Tokenizer;
 
 use candle_transformers::generation::{LogitsProcessor, Sampling};
 
@@ -18,11 +18,17 @@ use candle_core::utils::{cuda_is_available, metal_is_available};
 use models::quantized_qwen3::ModelWeights as Qwen3;
 use token_output_stream::TokenOutputStream;
 
-use tokio::sync::{Mutex, mpsc::channel};
+use tokio::sync::mpsc::channel;
 use tokio_stream::wrappers::ReceiverStream;
 
+use crate::ws::util::llm::filter;
+
 pub trait Llm {
-    fn chat(&self, text: String) -> impl Stream<Item = String> + Unpin + Send;
+    fn chat(
+        &self,
+        system_prompt: String,
+        text: String,
+    ) -> impl Stream<Item = core::result::Result<String, LlmError>> + Unpin + Send;
 }
 
 #[derive(Clone)]
@@ -42,6 +48,8 @@ pub enum LlmError {
     ModelInitFailure(String),
     #[error("token init failure path = {0}")]
     TokenInitFailure(String),
+    #[error("chat failure msg = {0}")]
+    Chat(String),
 }
 
 impl LlmQwen {
@@ -50,7 +58,6 @@ impl LlmQwen {
             .map_err(|_e| LlmError::ModelFileNotFound(model_path.clone()))?;
         let start = std::time::Instant::now();
         let device = device(false).unwrap();
-
         let model = {
             let model = gguf_file::Content::read(&mut file)
                 .map_err(|_e| LlmError::ModelInitFailure(model_path.clone()))?;
@@ -80,117 +87,195 @@ impl LlmQwen {
     }
 }
 
-impl Llm for LlmQwen {
-    fn chat(&self, text: String) -> impl Stream<Item = String> + Unpin + Send {
-        let tokenizer = self.tokenizer.clone();
-        let mut model = self.model.clone();
-        let device = self.device.clone();
-        let (tx, rx) = channel(1);
-        tokio::spawn(async move {
-            let mut tos = TokenOutputStream::new(tokenizer);
-            let prompt_str =
-                format!("<|im_start|>user\n{text} /no_think<|im_end|>\n<|im_start|>assistant\n");
-            tracing::info!("formatted prompt: {}", &prompt_str);
+async fn handle_chat(
+    system_prompt: String,
+    text: String,
+    tokenizer: Tokenizer,
+    mut model: Qwen3,
+    device: Device,
+    tx: tokio::sync::mpsc::Sender<core::result::Result<String, LlmError>>,
+) -> core::result::Result<(), LlmError> {
+    let mut tos = TokenOutputStream::new(tokenizer);
+    let prompt_str = format!(
+        "<|im_start|>system\n{system_prompt} /no_think<|im_end|>\n<|im_start|>user\n{text}<|im_end|>\n<|im_start|>assistant\n"
+    );
+    tracing::info!("formatted prompt: {}", &prompt_str);
 
-            let tokens = tos
-                .tokenizer()
-                .encode(prompt_str, true)
-                .map_err(anyhow::Error::msg)
-                .unwrap();
+    let tokens = tos
+        .tokenizer()
+        .encode(prompt_str, true)
+        .map_err(|e| LlmError::Chat(format!("tokenizer encode error {}", e.to_string())))?;
+    let tokens = tokens.get_ids();
 
-            let tokens = tokens.get_ids();
+    // TODO:setting
+    let to_sample = 999;
+    let temperature = 0.8;
+    let seed = 299792458;
+    let repeat_last_n = 64;
+    let repeat_penalty = 1.1;
 
-            // TODO:setting
-            let to_sample = 999;
+    let mut all_tokens = vec![];
+    let mut text_result = Vec::new();
+    let mut skip_think = false;
 
-            let mut all_tokens = vec![];
+    let mut logits_processor = LogitsProcessor::from_sampling(seed, Sampling::All { temperature });
 
-            let mut logits_processor = {
-                // TODO: setting
-                let sampling = Sampling::All { temperature: 0.8 };
-                LogitsProcessor::from_sampling(299792458, sampling)
-            };
+    let start_prompt_processing = std::time::Instant::now();
 
-            let start_prompt_processing = std::time::Instant::now();
+    let input = Tensor::new(tokens, &device)
+        .map_err(|e| LlmError::Chat(format!("tensor create error {}", e.to_string())))?
+        .unsqueeze(0)
+        .map_err(|e| LlmError::Chat(format!("tensor create unsqueeze error {}", e.to_string())))?;
+    let logits = model
+        .forward(&input, 0)
+        .map_err(|e| LlmError::Chat(format!("model forward error {}", e.to_string())))?;
+    let logits = logits
+        .squeeze(0)
+        .map_err(|e| LlmError::Chat(format!("tensor squeeze error {}", e.to_string())))?;
+    let mut next_token = logits_processor
+        .sample(&logits)
+        .map_err(|e| LlmError::Chat(format!("tensor processor sample error {}", e.to_string())))?;
 
-            let input = Tensor::new(tokens, &device).unwrap().unsqueeze(0).unwrap();
-            let logits = model.forward(&input, 0).unwrap();
-            let logits = logits.squeeze(0).unwrap();
-            let mut next_token = logits_processor.sample(&logits).unwrap();
+    let prompt_dt = start_prompt_processing.elapsed();
 
-            let prompt_dt = start_prompt_processing.elapsed();
+    all_tokens.push(next_token);
+    if let Some(t) = tos
+        .next_token(next_token)
+        .map_err(|e| LlmError::Chat(format!("tensor encoding error {}", e.to_string())))?
+    {
+        text_result.push(t);
+    }
 
-            all_tokens.push(next_token);
+    let eos_token = *tos
+        .tokenizer()
+        .get_vocab(true)
+        .get("<|im_end|>")
+        .ok_or_else(|| LlmError::Chat(format!("tensor can't get eos_token error ")))?;
 
-            if let Some(t) = tos.next_token(next_token).unwrap() {
-                match tx.send(t).await {
-                    Ok(_) => (),
-                    Err(error) => {
-                        tracing::info!("output text error = {}", error);
-                    }
-                }
-            }
+    let start_post_prompt = std::time::Instant::now();
 
-            let eos_token = *tos.tokenizer().get_vocab(true).get("<|im_end|>").unwrap();
-
-            let start_post_prompt = std::time::Instant::now();
-
-            let mut sampled = 0;
-            for index in 0..to_sample {
-                let input = Tensor::new(&[next_token], &device)
-                    .unwrap()
-                    .unsqueeze(0)
-                    .unwrap();
-                let logits = model.forward(&input, tokens.len() + index).unwrap();
-                let logits = logits.squeeze(0).unwrap();
-                // TODO: setting
-                let logits = {
-                    // TODO: setting
-                    let start_at = all_tokens.len().saturating_sub(64);
-                    // TODO: setting
-                    candle_transformers::utils::apply_repeat_penalty(
-                        &logits,
-                        1.1,
-                        &all_tokens[start_at..],
-                    )
-                    .unwrap()
-                };
-                next_token = logits_processor.sample(&logits).unwrap();
-                all_tokens.push(next_token);
-                if let Some(t) = tos.next_token(next_token).unwrap() {
-                    match tx.send(t).await {
-                        Ok(_) => (),
-                        Err(error) => {
-                            tracing::info!("output text error = {}", error);
-                            break;
+    let mut sampled = 0;
+    let mut sentence_list = Vec::new();
+    let mut sentence: Vec<char> = Vec::new();
+    for index in 0..to_sample {
+        let input = Tensor::new(&[next_token], &device)
+            .map_err(|e| LlmError::Chat(format!("tensor create error {}", e.to_string())))?
+            .unsqueeze(0)
+            .map_err(|e| {
+                LlmError::Chat(format!("tensor create unsqueeze error {}", e.to_string()))
+            })?;
+        let logits = model
+            .forward(&input, tokens.len() + index)
+            .map_err(|e| LlmError::Chat(format!("model forward error {}", e.to_string())))?;
+        let logits = logits
+            .squeeze(0)
+            .map_err(|e| LlmError::Chat(format!("tensor squeeze error {}", e.to_string())))?;
+        let logits = {
+            let start_at = all_tokens.len().saturating_sub(repeat_last_n);
+            candle_transformers::utils::apply_repeat_penalty(
+                &logits,
+                repeat_penalty,
+                &all_tokens[start_at..],
+            )
+            .map_err(|e| {
+                LlmError::Chat(format!(
+                    "tensor apply repeat penalty error {}",
+                    e.to_string()
+                ))
+            })?
+        };
+        next_token = logits_processor.sample(&logits).map_err(|e| {
+            LlmError::Chat(format!("tensor processor sample error {}", e.to_string()))
+        })?;
+        all_tokens.push(next_token);
+        if let Some(t) = tos
+            .next_token(next_token)
+            .map_err(|e| LlmError::Chat(format!("tensor encoding error {}", e.to_string())))?
+        {
+            text_result.push(t);
+            let text: String = text_result.clone().into_iter().collect();
+            if !skip_think {
+                if text.contains("</think>") {
+                    let filter_text = filter(&text);
+                    if let Some(text) = filter_text {
+                        text_result.clear();
+                        text_result.push(text.to_string());
+                        for c in text.chars() {
+                            sentence.push(c);
                         }
                     }
+                    skip_think = true;
                 }
-                sampled += 1;
-                if next_token == eos_token {
-                    break;
-                };
-            }
-
-            if let Some(rest) = tos.decode_rest().map_err(candle_core::Error::msg).unwrap() {
-                match tx.send(rest).await {
-                    Ok(_) => (),
-                    Err(error) => {
-                        tracing::info!("output text error = {}", error);
+            } else {
+                for c in text.chars() {
+                    sentence.push(c);
+                    if c == '，' || c == '。' || c == '；' || c == '？' {
+                        let text: String = sentence.clone().into_iter().collect();
+                        sentence.clear();
+                        sentence_list.push(text);
                     }
                 }
+                text_result.clear();
             }
+        }
+        for text in sentence_list.clone() {
+            if let Err(e) = tx.send(Ok(text)).await {
+                tracing::error!("chat send text error = {}", e);
+                break;
+            }
+        }
+        sentence_list.clear();
+        text_result.clear();
+        sampled += 1;
+        if next_token == eos_token {
+            break;
+        };
+    }
 
-            let dt = start_post_prompt.elapsed();
-            tracing::info!(
-                "\n\n{:4} prompt tokens processed: {:.2} token/s",
-                tokens.len(),
-                tokens.len() as f64 / prompt_dt.as_secs_f64(),
-            );
-            tracing::info!(
-                "{sampled:4} tokens generated: {:.2} token/s",
-                sampled as f64 / dt.as_secs_f64(),
-            );
+    if let Some(rest) = tos
+        .decode_rest()
+        .map_err(|e| LlmError::Chat(format!("tensor decode rest error {}", e.to_string())))?
+    {
+        let text: String = sentence.clone().into_iter().collect();
+        let text = format!("{text}{rest}");
+        if let Err(e) = tx.send(Ok(text)).await {
+            tracing::error!("chat send text error = {}", e);
+        }
+        text_result.clear();
+    }
+
+    let dt = start_post_prompt.elapsed();
+    tracing::info!(
+        "\n\n{:4} prompt tokens processed: {:.2} token/s",
+        tokens.len(),
+        tokens.len() as f64 / prompt_dt.as_secs_f64(),
+    );
+    tracing::info!(
+        "{sampled:4} tokens generated: {:.2} token/s",
+        sampled as f64 / dt.as_secs_f64(),
+    );
+    drop(tx);
+    Ok(())
+}
+
+impl Llm for LlmQwen {
+    fn chat(
+        &self,
+        system_prompt: String,
+        text: String,
+    ) -> impl Stream<Item = core::result::Result<String, LlmError>> + Unpin + Send {
+        let tokenizer = self.tokenizer.clone();
+        let model = self.model.clone();
+        let device = self.device.clone();
+        let (tx, rx) = channel::<core::result::Result<String, LlmError>>(1);
+        tokio::spawn(async move {
+            if let Err(e) =
+                handle_chat(system_prompt, text, tokenizer, model, device, tx.clone()).await
+            {
+                if let Err(e) = tx.send(Err(e)).await {
+                    tracing::error!("chat llmError send error = {}", e);
+                };
+            };
             drop(tx);
         });
         ReceiverStream::new(rx)

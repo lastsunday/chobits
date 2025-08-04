@@ -1,3 +1,4 @@
+use regex::Regex;
 use std::{collections::HashMap, sync::LazyLock};
 
 pub static EMOJI_MAP: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
@@ -29,4 +30,12 @@ pub static EMOJI_MAP: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
 pub fn analyze_emotion(text: &str) -> &str {
     // TODO: use llm to analyze emotion
     return r#"happy"#;
+}
+
+pub fn filter(text: &str) -> Option<&str> {
+    let regex = Regex::new(r"(<think>[\s\S]*</think>[\s]*)([\s\S]*)").unwrap();
+    let Some((_full, [_think, content])) = regex.captures(text).map(|caps| caps.extract()) else {
+        return None;
+    };
+    Some(content)
 }

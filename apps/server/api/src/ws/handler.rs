@@ -121,27 +121,13 @@ where
                             let mut state = state.lock().await;
                             state.client_speaking = false;
                             drop(state);
-                            let data = SttMessage::new(Some(session_id), Some(text.clone()));
-                            let mut sender = sender.lock().await;
-                            match sender.send_json_text(&data).await {
-                                Ok(_) => (),
-                                Err(error) => {
-                                    tracing::info!("send tts message error {}", error);
-                                }
-                            }
-                            let llm = llm.lock().await;
-                            let mut output = llm.chat(text);
-                            let mut chat_result = Vec::new();
-                            while let Some(text) = output.next().await {
-                                chat_result.push(text);
-                            }
-                            let text = chat_result.join("");
-                            match sender.send_tts_with_text(text.clone()).await {
-                                Ok(_) => {}
-                                Err(error) => {
-                                    tracing::info!("send stt error {}", error);
-                                }
-                            };
+                            Self::handle_listener_result(
+                                Some(text.clone()),
+                                session_id,
+                                sender,
+                                llm,
+                            )
+                            .await;
                         }
                         None => {
                             tracing::info!("listen detect text not exists");
@@ -272,17 +258,20 @@ where
                         tracing::info!("send tts message error {}", error);
                     }
                 }
+                let logic_config = config::get().logic();
                 let llm = llm.lock().await;
-                let mut output = llm.chat(text);
-                let mut chat_result = Vec::new();
+                let mut output = llm.chat(logic_config.system_prompt().to_string(), text);
                 while let Some(text) = output.next().await {
-                    chat_result.push(text);
-                }
-                let text = chat_result.join("");
-                match sender.send_tts_with_text(text).await {
-                    Ok(_) => (),
-                    Err(error) => {
-                        tracing::info!("send tts message error {}", error);
+                    match text {
+                        Ok(text) => match sender.send_tts_with_text(text).await {
+                            Ok(_) => (),
+                            Err(error) => {
+                                tracing::info!("send tts message error {}", error);
+                            }
+                        },
+                        Err(e) => {
+                            tracing::error!("{}", e.to_string());
+                        }
                     }
                 }
             }

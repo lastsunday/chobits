@@ -1,6 +1,5 @@
 use crate::{config, ws::llm::LlmQwen};
-use std::sync::{Arc, OnceLock};
-use tokio::sync::Mutex;
+use std::sync::OnceLock;
 
 static INSTANCE: OnceLock<LlmCache> = OnceLock::new();
 
