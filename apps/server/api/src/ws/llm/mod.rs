@@ -28,7 +28,7 @@ pub trait Llm {
         &self,
         system_prompt: String,
         text: String,
-    ) -> impl Stream<Item = core::result::Result<String, LlmError>> + Unpin + Send;
+    ) -> impl Stream<Item = core::result::Result<String, LlmError>> + Unpin + Send + 'static;
 }
 
 #[derive(Clone)]
@@ -219,9 +219,11 @@ async fn handle_chat(
             }
         }
         for text in sentence_list.clone() {
-            if let Err(e) = tx.send(Ok(text)).await {
+            if let Err(e) = tx.send(Ok(text.clone())).await {
                 tracing::error!("chat send text error = {}", e);
                 break;
+            } else {
+                tracing::info!("llm send text success, text = {}", text);
             }
         }
         sentence_list.clear();
@@ -239,8 +241,10 @@ async fn handle_chat(
         let text: String = sentence.clone().into_iter().collect();
         let text = format!("{text}{rest}");
         if let Some(text) = filter(&text) {
-            if let Err(e) = tx.send(Ok(text)).await {
+            if let Err(e) = tx.send(Ok(text.clone())).await {
                 tracing::error!("chat send text error = {}", e);
+            } else {
+                tracing::info!("llm send text success, text = {}", text);
             }
         }
         text_result.clear();
@@ -265,7 +269,7 @@ impl Llm for LlmQwen {
         &self,
         system_prompt: String,
         text: String,
-    ) -> impl Stream<Item = core::result::Result<String, LlmError>> + Unpin + Send {
+    ) -> impl Stream<Item = core::result::Result<String, LlmError>> + Unpin + Send + 'static {
         let tokenizer = self.tokenizer.clone();
         let model = self.model.clone();
         let device = self.device.clone();

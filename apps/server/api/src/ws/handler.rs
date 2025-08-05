@@ -260,19 +260,9 @@ where
                 }
                 let logic_config = config::get().logic();
                 let llm = llm.lock().await;
-                let mut output = llm.chat(logic_config.system_prompt().to_string(), text);
-                while let Some(text) = output.next().await {
-                    match text {
-                        Ok(text) => match sender.send_tts_with_text(text).await {
-                            Ok(_) => (),
-                            Err(error) => {
-                                tracing::info!("send tts message error {}", error);
-                            }
-                        },
-                        Err(e) => {
-                            tracing::error!("{}", e.to_string());
-                        }
-                    }
+                let output = llm.chat(logic_config.system_prompt().to_string(), text);
+                if let Err(e) = sender.send_tts_with_text_stream(output).await {
+                    tracing::info!("send tts message error {}", e);
                 }
             }
             None => {
