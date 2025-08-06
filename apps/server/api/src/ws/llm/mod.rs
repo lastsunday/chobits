@@ -8,8 +8,11 @@ pub mod llm_cache;
 pub mod models;
 pub mod token_output_stream;
 
+use std::thread;
+
 use candle_core::{Device, Result, Tensor, quantized::gguf_file};
-use futures::Stream;
+use futures::{Stream, executor::block_on};
+use regex::Regex;
 use tokenizers::Tokenizer;
 
 use candle_transformers::generation::{LogitsProcessor, Sampling};
@@ -207,7 +210,9 @@ async fn handle_chat(
             } else {
                 for c in text.chars() {
                     sentence.push(c);
-                    if c == '。' || c == '；' || c == '？' {
+                    let regex = Regex::new(r"[。！？!?，、；,;]").unwrap();
+                    // Break a sentence
+                    if regex.is_match(&c.to_string()) {
                         let text: String = sentence.clone().into_iter().collect();
                         sentence.clear();
                         if let Some(text) = filter(&text) {
@@ -274,15 +279,17 @@ impl Llm for LlmQwen {
         let model = self.model.clone();
         let device = self.device.clone();
         let (tx, rx) = channel::<core::result::Result<String, LlmError>>(10);
-        tokio::spawn(async move {
-            if let Err(e) =
-                handle_chat(system_prompt, text, tokenizer, model, device, tx.clone()).await
-            {
-                if let Err(e) = tx.send(Err(e)).await {
-                    tracing::error!("chat llmError send error = {}", e);
+        thread::spawn(move || {
+            block_on(async move {
+                if let Err(e) =
+                    handle_chat(system_prompt, text, tokenizer, model, device, tx.clone()).await
+                {
+                    if let Err(e) = tx.send(Err(e)).await {
+                        tracing::error!("chat llmError send error = {}", e);
+                    };
                 };
-            };
-            drop(tx);
+                drop(tx);
+            })
         });
         ReceiverStream::new(rx)
     }

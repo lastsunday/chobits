@@ -43,5 +43,7 @@ pub fn filter_think(text: &str) -> Option<String> {
 pub fn filter(text: &str) -> Option<String> {
     let regex = Regex::new(r"\n").unwrap();
     let content = regex.replace_all(text, "");
+    let regex = Regex::new(r"\*\*").unwrap();
+    let content = regex.replace_all(&content, "");
     Some(content.trim().to_string())
 }
