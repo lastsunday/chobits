@@ -21,11 +21,11 @@ impl LogicConfig {
     }
 
     pub fn close_connection_no_voice_time(&self) -> i64 {
-        self.close_connection_no_voice_time.unwrap_or(30000)
+        self.close_connection_no_voice_time.unwrap()
     }
 
     pub fn silence_voice_timeout(&self) -> i64 {
-        self.silence_voice_timeout.unwrap_or(1200)
+        self.silence_voice_timeout.unwrap()
     }
 
     pub fn system_prompt(&self) -> &str {

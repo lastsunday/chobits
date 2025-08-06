@@ -15,10 +15,10 @@ impl LlmConfig {
     }
 
     pub fn model(&self) -> &str {
-        self.model.as_deref().unwrap_or("data/llm/model.gguf")
+        self.model.as_deref().unwrap_or_default()
     }
 
     pub fn tokens(&self) -> &str {
-        self.tokens.as_deref().unwrap_or("data/llm/tokenizer.json")
+        self.tokens.as_deref().unwrap_or_default()
     }
 }

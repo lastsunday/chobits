@@ -15,10 +15,10 @@ impl VadConfig {
     }
 
     pub fn model(&self) -> &str {
-        self.model.as_deref().unwrap_or("data/vad/silero_vad.onnx")
+        self.model.as_deref().unwrap_or_default()
     }
 
     pub fn num_threads(&self) -> i32 {
-        self.num_threads.unwrap_or(4_i32)
+        self.num_threads.unwrap_or_default()
     }
 }

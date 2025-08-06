@@ -25,26 +25,26 @@ impl AudioConfig {
     }
 
     pub fn input_sample_rate(&self) -> u32 {
-        self.input_sample_rate.unwrap_or(16000)
+        self.input_sample_rate.unwrap_or_default()
     }
 
     pub fn input_channel(&self) -> u32 {
-        self.input_channel.unwrap_or(1)
+        self.input_channel.unwrap_or_default()
     }
 
     pub fn input_frame_duration(&self) -> u64 {
-        self.input_frame_duration.unwrap_or(60)
+        self.input_frame_duration.unwrap_or_default()
     }
 
     pub fn output_sample_rate(&self) -> u32 {
-        self.output_sample_rate.unwrap_or(24000)
+        self.output_sample_rate.unwrap_or_default()
     }
 
     pub fn output_channel(&self) -> u32 {
-        self.output_channel.unwrap_or(1)
+        self.output_channel.unwrap_or_default()
     }
 
     pub fn output_frame_duration(&self) -> u64 {
-        self.output_frame_duration.unwrap_or(60)
+        self.output_frame_duration.unwrap_or_default()
     }
 }

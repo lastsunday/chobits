@@ -29,38 +29,26 @@ impl TtsConfig {
     }
 
     pub fn model(&self) -> &str {
-        self.model
-            .as_deref()
-            .unwrap_or("data/tts/kokoro-multi-lang-v1_1/model.onnx")
+        self.model.as_deref().unwrap_or_default()
     }
 
     pub fn voices(&self) -> &str {
-        self.voices
-            .as_deref()
-            .unwrap_or("data/tts/kokoro-multi-lang-v1_1/voices.bin")
+        self.voices.as_deref().unwrap_or_default()
     }
 
     pub fn tokens(&self) -> &str {
-        self.tokens
-            .as_deref()
-            .unwrap_or("data/tts/kokoro-multi-lang-v1_1/tokens.txt")
+        self.tokens.as_deref().unwrap_or_default()
     }
     pub fn data_dir(&self) -> &str {
-        self.data_dir
-            .as_deref()
-            .unwrap_or("data/tts/kokoro-multi-lang-v1_1/espeak-ng-data")
+        self.data_dir.as_deref().unwrap_or_default()
     }
     pub fn dict_dir(&self) -> &str {
-        self.dict_dir
-            .as_deref()
-            .unwrap_or("data/tts/kokoro-multi-lang-v1_1/dict")
+        self.dict_dir.as_deref().unwrap_or_default()
     }
     pub fn lexicon(&self) -> &str {
-        self.lexicon
-            .as_deref()
-            .unwrap_or("data/tts/kokoro-multi-lang-v1_1/lexicon-us-en.txt,data/kokoro-multi-lang-v1_1/lexicon-zh.txt")
+        self.lexicon.as_deref().unwrap_or_default()
     }
     pub fn num_threads(&self) -> i32 {
-        self.num_threads.unwrap_or(4_i32)
+        self.num_threads.unwrap_or_default()
     }
 }
