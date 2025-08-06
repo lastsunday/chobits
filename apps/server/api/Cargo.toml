@@ -62,7 +62,6 @@ futures-util = { version = "0.3.31", default-features = false, features = [
 futures-channel = { version = "0.3.31" }
 jiff = { version = "0.2.15" }
 opus = { version = "0.3.0" }
-voice_activity_detector_silero_v5 = { version = "0.2.0-silero-v5" }
 sherpa-rs = { version = "0.7.0", features = [
   "static",
   "tts",
