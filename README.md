@@ -80,7 +80,7 @@ pnpm nx run chobits-server:run
    - [ ] 声纹
 3. Video
 4. 大模型
-   - [ ] 智能对话
+   - [x] 智能对话
    - [ ] 视觉感知
    - [ ] 意图识别
      - [ ] Function Call 函数调用
@@ -126,7 +126,7 @@ pnpm nx run chobits-server:run
 | 模块名称         | 组件                  |
 | ---------------- | --------------------- |
 | ASR(语音识别)    | sherpa-rs(SenseVoice) |
-| LLM(大模型)      |                       |
+| LLM(大模型)      | candle(Qwen3)         |
 | VLLM(视觉大模型) |                       |
 | TTS(语音合成)    | sherpa-rs(Kokoro)     |
 | Intent(意图识别) |                       |
