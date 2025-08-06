@@ -77,7 +77,7 @@ tokenizers = { version = "0.21.4", default-features = false, features = [
 ] }
 candle-transformers = { version = "0.9.1" }
 candle-nn = { version = "0.9.1" }
-fancy-regex = { version = "0.16.0" }
+fancy-regex = { version = "0.16.1" }
 intel-mkl-src = { version = "0.8.1", features = [
   "mkl-static-lp64-iomp",
 ], optional = true }

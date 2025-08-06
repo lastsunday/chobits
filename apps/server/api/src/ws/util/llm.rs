@@ -1,5 +1,27 @@
-use regex::Regex;
+use fancy_regex::Regex;
+use sea_orm::ColIdx;
 use std::{collections::HashMap, sync::LazyLock};
+
+use std::sync::OnceLock;
+
+fn regex() -> &'static Vec<Regex> {
+    static REGEX: OnceLock<Vec<Regex>> = OnceLock::new();
+    REGEX.get_or_init(|| {
+        let mut v = Vec::new();
+        v.push(Regex::new(r"\n").unwrap());
+        v.push(Regex::new(r"\*\*").unwrap());
+        v.push(Regex::new(r"```.*?```").unwrap());
+        v.push(Regex::new(r"^#+\s*").unwrap());
+        v.push(Regex::new(r"(\*\*|__)(.*?)\1").unwrap());
+        v.push(Regex::new(r"(\*|_)(?=\S)(.*?)(?<=\S)\1").unwrap());
+        v.push(Regex::new(r"!\[.*?\]\(.*?\)").unwrap());
+        v.push(Regex::new(r"\[(.*?)\]\(.*?\)").unwrap());
+        v.push(Regex::new(r"^\s*>+\s*").unwrap());
+        v.push(Regex::new(r"^\s*[*+-]\s*").unwrap());
+        v.push(Regex::new(r"\$\$.*?\$\$").unwrap());
+        v
+    })
+}
 
 pub static EMOJI_MAP: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
     let mut map: HashMap<&str, &str> = HashMap::new();
@@ -33,7 +55,7 @@ pub fn analyze_emotion(text: &str) -> &str {
 }
 
 pub fn filter_think(text: &str) -> Option<String> {
-    let regex = Regex::new(r"(<think>[\s\S]*</think>[\s]*)([\s\S]*)").unwrap();
+    let regex = regex::Regex::new(r"(<think>[\s\S]*</think>[\s]*)([\s\S]*)").unwrap();
     let Some((_full, [_think, content])) = regex.captures(text).map(|caps| caps.extract()) else {
         return None;
     };
@@ -41,9 +63,10 @@ pub fn filter_think(text: &str) -> Option<String> {
 }
 
 pub fn filter(text: &str) -> Option<String> {
-    let regex = Regex::new(r"\n").unwrap();
-    let content = regex.replace_all(text, "");
-    let regex = Regex::new(r"\*\*").unwrap();
-    let content = regex.replace_all(&content, "");
+    let mut content = String::from(text);
+    let regex = regex().into_iter();
+    for r in regex {
+        content = String::from(r.replace_all(&content, ""));
+    }
     Some(content.trim().to_string())
 }
