@@ -12,7 +12,6 @@ pub mod tts;
 pub mod tts_cache;
 pub mod util;
 pub mod vad;
-pub mod vad_cache;
 
 use super::ws::sender::Sender;
 use crate::{
@@ -20,7 +19,7 @@ use crate::{
     ws::{
         asr_cache::AsrCache, frame::Frame, handler::Handler, listener::Listener,
         llm::llm_cache::LlmCache, message_converter::convert_to_frame, state::State,
-        tts_cache::TtsCache, vad_cache::VadCache,
+        tts_cache::TtsCache, vad::vad_cache::VadCache,
     },
 };
 use axum::{

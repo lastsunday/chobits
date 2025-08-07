@@ -4,6 +4,8 @@ extern crate intel_mkl_src;
 #[cfg(feature = "accelerate")]
 extern crate accelerate_src;
 
+pub mod vad_cache;
+
 use candle_core::{DType, Device, Tensor};
 use candle_onnx::onnx::ModelProto;
 

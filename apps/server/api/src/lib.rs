@@ -43,7 +43,7 @@ use framework::auth::Jwt;
 use crate::ws::asr_cache::AsrCache;
 use crate::ws::llm::llm_cache::LlmCache;
 use crate::ws::tts_cache::TtsCache;
-use crate::ws::vad_cache::VadCache;
+use crate::ws::vad::vad_cache::VadCache;
 
 #[macro_use]
 extern crate rust_i18n;
