@@ -9,7 +9,7 @@ pub struct VadConfig {
 impl VadConfig {
     pub fn new() -> Self {
         Self {
-            model: Some(String::from("data/vad/silero_vad.onnx")),
+            model: Some(String::from("data/vad/model.onnx")),
             num_threads: Some(4),
         }
     }

@@ -171,11 +171,13 @@ pub fn create_routes(state: AppState) -> OpenApiRouter {
      ))
 ))]
 async fn ota(
-    State(AppState { conn }): State<AppState>,
+    //TODO: conn not use
+    State(AppState { conn: _conn }): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Host(hostname): Host,
     headers: HeaderMap,
-    ValidJson(param): ValidJson<OtaParam>,
+    //TODO: param not use
+    ValidJson(_param): ValidJson<OtaParam>,
 ) -> ApiResult<Json<OtaResult>> {
     tracing::info!("{:?}", hostname);
     if headers.get(KEY_DEVICE_ID).is_none() {
@@ -188,9 +190,9 @@ async fn ota(
         return Err(ERROR_OTA_LACK_USER_AGENT.gen_api_error(&headers));
     }
     // TODO: save device info to database
-    let device_id = headers.get(KEY_DEVICE_ID).unwrap().to_str().unwrap();
+    let _device_id = headers.get(KEY_DEVICE_ID).unwrap().to_str().unwrap();
     // TODO: save to database and fill logic
-    let activation_code = gen_id();
+    let _activation_code = gen_id();
     let now = Local::now();
     let tz = TimeZone::system();
     let iana_identifier = tz.iana_name().context("get iana name failure")?;
@@ -233,7 +235,8 @@ async fn ota(
     ),
 )]
 async fn activate(
-    State(AppState { conn }): State<AppState>,
+    //TODO: conn not use
+    State(AppState { conn: _conn }): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Host(hostname): Host,
     headers: HeaderMap,

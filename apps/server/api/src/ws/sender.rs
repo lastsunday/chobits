@@ -1,7 +1,7 @@
 use crate::{
     config,
     ws::{
-        llm::LlmError,
+        common::ModelError,
         state::State,
         tts::Tts,
         util::llm::{EMOJI_MAP, analyze_emotion},
@@ -15,8 +15,8 @@ use service::chobits::message::{
     llm::LlmMessage,
     tts::{TtsMessage, TtsState},
 };
-use std::{borrow::BorrowMut, sync::Arc};
-use std::{ops::DerefMut, time::Duration};
+use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio::time::{Instant, sleep};
 use tokio_stream::StreamExt;
@@ -190,7 +190,10 @@ where
 
     pub async fn send_tts_with_text_stream(
         &mut self,
-        text_stream: impl Stream<Item = core::result::Result<String, LlmError>> + Unpin + Send + 'static,
+        text_stream: impl Stream<Item = core::result::Result<String, ModelError>>
+        + Unpin
+        + Send
+        + 'static,
     ) -> Result<(), SenderError> {
         let tts = &self.tts;
         let mut text_stream = tts.output_stream(text_stream);

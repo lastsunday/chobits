@@ -15,7 +15,7 @@ rm -rf kokoro-multi-lang-v1_1.tar.bz2
 cd ..
 mkdir -p vad
 cd vad || exit
-wget https://github.com/snakers4/silero-vad/raw/refs/tags/v5.1.2/src/silero_vad/data/silero_vad.onnx
+wget https://huggingface.co/onnx-community/silero-vad/resolve/ddc9a7e80d6758f6fc795a1e8a04b798eb929d3a/onnx/model.onnx -O model.onnx
 cd ..
 mkdir -p llm || exit
 # 0.6B

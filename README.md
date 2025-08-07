@@ -123,14 +123,15 @@ pnpm nx run chobits-server:run
 
 ## Support Component
 
-| 模块名称         | 组件                  |
-| ---------------- | --------------------- |
-| ASR(语音识别)    | sherpa-rs(SenseVoice) |
-| LLM(大模型)      | candle(Qwen3)         |
-| VLLM(视觉大模型) |                       |
-| TTS(语音合成)    | sherpa-rs(Kokoro)     |
-| Intent(意图识别) |                       |
-| Memory(记忆功能) |                       |
+| 模块名称          | 组件                     |
+| ----------------- | ------------------------ |
+| VAD(语音活动检测) | candle(onnx->silero-vad) |
+| ASR(语音识别)     | sherpa-rs(SenseVoice)    |
+| LLM(大模型)       | candle(Qwen3)            |
+| VLLM(视觉大模型)  |                          |
+| TTS(语音合成)     | sherpa-rs(Kokoro)        |
+| Intent(意图识别)  |                          |
+| Memory(记忆功能)  |                          |
 
 ## Thanks
 

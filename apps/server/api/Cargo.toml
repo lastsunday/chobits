@@ -81,6 +81,7 @@ intel-mkl-src = { version = "0.8.1", features = [
   "mkl-static-lp64-iomp",
 ], optional = true }
 accelerate-src = { version = "0.3.2", optional = true }
+candle-onnx = { version = "0.9.1"  }
 # llm end
 
 entity = { path = "../entity" }

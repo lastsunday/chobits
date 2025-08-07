@@ -1,10 +1,10 @@
 use std::thread;
 use std::{cmp, sync::Arc};
 
-use crate::{config, ws::llm::LlmError};
+use crate::config;
+use crate::ws::common::ModelError;
 use futures::Stream;
 use futures::executor::block_on;
-use futures::stream::FuturesOrdered;
 pub use sherpa_rs::tts::KokoroTts;
 use tokio::sync::{Mutex, mpsc::channel};
 use tokio_stream::StreamExt;
@@ -14,7 +14,10 @@ pub trait Tts {
     fn output(&self, text: String) -> impl Stream<Item = Vec<u8>> + Unpin + Send;
     fn output_stream(
         &self,
-        text_stream: impl Stream<Item = core::result::Result<String, LlmError>> + Unpin + Send + 'static,
+        text_stream: impl Stream<Item = core::result::Result<String, ModelError>>
+        + Unpin
+        + Send
+        + 'static,
     ) -> impl Stream<Item = core::result::Result<TtsData, TtsError>> + Unpin + Send + 'static;
 }
 
@@ -113,7 +116,7 @@ impl Tts for TtsKokoro {
 
     fn output_stream(
         &self,
-        mut text_stream: impl Stream<Item = core::result::Result<String, LlmError>>
+        mut text_stream: impl Stream<Item = core::result::Result<String, ModelError>>
         + Unpin
         + Send
         + 'static,
@@ -187,8 +190,10 @@ impl Tts for TtsKokoro {
                                 tracing::info!("[TTS] encode and send audio success");
                             }
                         }
-                        Err(e) => {
-                            tx.send(Err(TtsError::Text)).await;
+                        Err(_e) => {
+                            if let Err(e) = tx.send(Err(TtsError::Text)).await {
+                                tracing::error!("send error failure = {}", e);
+                            }
                         }
                     }
                 }

@@ -43,7 +43,8 @@ where
     }
 
     pub fn listen(&mut self, data: Rc<&[u8]>) {
-        let session_id = self.session_id.clone();
+        //TODO: session not use
+        let _session_id = self.session_id.clone();
         let data = data.to_vec();
         let temp_voice_data = self.temp_voice_data.clone();
         let voice_data = self.voice_data.clone();
@@ -67,39 +68,23 @@ where
             let window_size = 512;
             while temp_voice_data.len() > window_size {
                 let window: Vec<f32> = temp_voice_data.drain(..window_size).collect();
-                vad.accept_waveform(window.to_vec()).await;
+                if let Err(e) = vad.accept_waveform(window.to_vec()).await {
+                    tracing::error!("accept_waveform error = {}", e.to_string());
+                    return;
+                }
                 if vad.is_speech().await {
                     let mut state = state.lock().await;
                     state.update_last_activity_time();
                     state.update_last_speaking_time();
                     drop(state);
-                    while !vad.is_empty().await {
-                        let mut segment = vad.front().await;
-                        let start_sec = (segment.start as f32) / sample_rate as f32;
-                        let duration_sec = (segment.samples.len() as f32) / sample_rate as f32;
-                        tracing::info!("start={}s duration={}s", start_sec, duration_sec);
-                        let mut voice_data = voice_data.lock().await;
-                        voice_data.append(&mut segment.samples);
-                        drop(voice_data);
-                        vad.pop().await;
-                    }
-                }
-            }
-            vad.flush().await;
-            if vad.is_speech().await {
-                let mut state = state.lock().await;
-                state.update_last_activity_time();
-                state.update_last_speaking_time();
-                drop(state);
-                while !vad.is_empty().await {
                     let mut segment = vad.front().await;
-                    let start_sec = (segment.start as f32) / sample_rate as f32;
-                    let duration_sec = (segment.samples.len() as f32) / sample_rate as f32;
-                    tracing::info!("start={}s duration={}s", start_sec, duration_sec);
+                    vad.pop().await;
                     let mut voice_data = voice_data.lock().await;
                     voice_data.append(&mut segment.samples);
+                    let start_sec = (segment.start as f32) / sample_rate as f32;
+                    let duration_sec = (voice_data.len() as f32) / sample_rate as f32;
+                    tracing::info!("start={}s duration={}s", start_sec, duration_sec);
                     drop(voice_data);
-                    vad.pop().await;
                 }
             }
         });
@@ -129,7 +114,8 @@ where
     }
 
     pub async fn get_result(&mut self) -> Option<String> {
-        let session_id = self.session_id.clone();
+        //TODO:session id not use
+        let _session_id = self.session_id.clone();
         let voice_data = self.voice_data.clone();
         let voice_data = voice_data.lock().await;
         let audio_config = config::get().audio();

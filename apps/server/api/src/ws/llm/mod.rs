@@ -7,31 +7,28 @@ extern crate accelerate_src;
 pub mod llm_cache;
 pub mod models;
 pub mod token_output_stream;
-
-use std::thread;
-
-use candle_core::{Device, Result, Tensor, quantized::gguf_file};
-use futures::{Stream, executor::block_on};
-use regex::Regex;
-use tokenizers::Tokenizer;
-
+use candle_core::{Device, Tensor, quantized::gguf_file};
 use candle_transformers::generation::{LogitsProcessor, Sampling};
-
-use candle_core::utils::{cuda_is_available, metal_is_available};
+use futures::{Stream, executor::block_on};
 use models::quantized_qwen3::ModelWeights as Qwen3;
+use regex::Regex;
+use std::thread;
 use token_output_stream::TokenOutputStream;
-
+use tokenizers::Tokenizer;
 use tokio::sync::mpsc::channel;
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::ws::util::llm::{filter, filter_think};
+use crate::ws::{
+    common::{ModelError, device, format_size},
+    util::llm::{filter, filter_think},
+};
 
 pub trait Llm {
     fn chat(
         &self,
         system_prompt: String,
         text: String,
-    ) -> impl Stream<Item = core::result::Result<String, LlmError>> + Unpin + Send + 'static;
+    ) -> impl Stream<Item = core::result::Result<String, ModelError>> + Unpin + Send + 'static;
 }
 
 #[derive(Clone)]
@@ -41,29 +38,15 @@ pub struct LlmQwen {
     device: Device,
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum LlmError {
-    #[error("model file not found path = {0}")]
-    ModelFileNotFound(String),
-    #[error("token file not found path = {0}")]
-    TokenFileNotFound(String),
-    #[error("model init failure path = {0}")]
-    ModelInitFailure(String),
-    #[error("token init failure path = {0}")]
-    TokenInitFailure(String),
-    #[error("chat failure msg = {0}")]
-    Chat(String),
-}
-
 impl LlmQwen {
-    pub fn new(model_path: String, token_path: String) -> core::result::Result<Self, LlmError> {
+    pub fn new(model_path: String, token_path: String) -> core::result::Result<Self, ModelError> {
         let mut file = std::fs::File::open(model_path.clone())
-            .map_err(|_e| LlmError::ModelFileNotFound(model_path.clone()))?;
+            .map_err(|_e| ModelError::ModelFileNotFound(model_path.clone()))?;
         let start = std::time::Instant::now();
         let device = device(false).unwrap();
         let model = {
             let model = gguf_file::Content::read(&mut file)
-                .map_err(|_e| LlmError::ModelInitFailure(model_path.clone()))?;
+                .map_err(|_e| ModelError::ModelInitFailure(model_path.clone()))?;
             let mut total_size_in_bytes = 0;
             for (_, tensor) in model.tensor_infos.iter() {
                 let elem_count = tensor.shape.elem_count();
@@ -77,11 +60,11 @@ impl LlmQwen {
                 start.elapsed().as_secs_f32(),
             );
             Qwen3::from_gguf(model, &mut file, &device)
-                .map_err(|_e| LlmError::ModelInitFailure(model_path.clone()))?
+                .map_err(|_e| ModelError::ModelInitFailure(model_path.clone()))?
         };
         tracing::info!("model built");
         let tokenizer = Tokenizer::from_file(token_path.clone())
-            .map_err(|_e| LlmError::TokenInitFailure(token_path.clone()))?;
+            .map_err(|_e| ModelError::TokenInitFailure(token_path.clone()))?;
         Ok(Self {
             model,
             tokenizer,
@@ -96,8 +79,8 @@ async fn handle_chat(
     tokenizer: Tokenizer,
     mut model: Qwen3,
     device: Device,
-    tx: tokio::sync::mpsc::Sender<core::result::Result<String, LlmError>>,
-) -> core::result::Result<(), LlmError> {
+    tx: tokio::sync::mpsc::Sender<core::result::Result<String, ModelError>>,
+) -> core::result::Result<(), ModelError> {
     let mut tos = TokenOutputStream::new(tokenizer);
     let prompt_str = format!(
         "<|im_start|>system\n{system_prompt} /no_think<|im_end|>\n<|im_start|>user\n{text}<|im_end|>\n<|im_start|>assistant\n"
@@ -107,7 +90,7 @@ async fn handle_chat(
     let tokens = tos
         .tokenizer()
         .encode(prompt_str, true)
-        .map_err(|e| LlmError::Chat(format!("tokenizer encode error {}", e.to_string())))?;
+        .map_err(|e| ModelError::Chat(format!("tokenizer encode error {}", e.to_string())))?;
     let tokens = tokens.get_ids();
 
     // TODO:setting
@@ -126,25 +109,27 @@ async fn handle_chat(
     let start_prompt_processing = std::time::Instant::now();
 
     let input = Tensor::new(tokens, &device)
-        .map_err(|e| LlmError::Chat(format!("tensor create error {}", e.to_string())))?
+        .map_err(|e| ModelError::Chat(format!("tensor create error {}", e.to_string())))?
         .unsqueeze(0)
-        .map_err(|e| LlmError::Chat(format!("tensor create unsqueeze error {}", e.to_string())))?;
+        .map_err(|e| {
+            ModelError::Chat(format!("tensor create unsqueeze error {}", e.to_string()))
+        })?;
     let logits = model
         .forward(&input, 0)
-        .map_err(|e| LlmError::Chat(format!("model forward error {}", e.to_string())))?;
+        .map_err(|e| ModelError::Chat(format!("model forward error {}", e.to_string())))?;
     let logits = logits
         .squeeze(0)
-        .map_err(|e| LlmError::Chat(format!("tensor squeeze error {}", e.to_string())))?;
-    let mut next_token = logits_processor
-        .sample(&logits)
-        .map_err(|e| LlmError::Chat(format!("tensor processor sample error {}", e.to_string())))?;
+        .map_err(|e| ModelError::Chat(format!("tensor squeeze error {}", e.to_string())))?;
+    let mut next_token = logits_processor.sample(&logits).map_err(|e| {
+        ModelError::Chat(format!("tensor processor sample error {}", e.to_string()))
+    })?;
 
     let prompt_dt = start_prompt_processing.elapsed();
 
     all_tokens.push(next_token);
     if let Some(t) = tos
         .next_token(next_token)
-        .map_err(|e| LlmError::Chat(format!("tensor encoding error {}", e.to_string())))?
+        .map_err(|e| ModelError::Chat(format!("tensor encoding error {}", e.to_string())))?
     {
         text_result.push(t);
     }
@@ -153,7 +138,7 @@ async fn handle_chat(
         .tokenizer()
         .get_vocab(true)
         .get("<|im_end|>")
-        .ok_or_else(|| LlmError::Chat(format!("tensor can't get eos_token error ")))?;
+        .ok_or_else(|| ModelError::Chat(format!("tensor can't get eos_token error ")))?;
 
     let start_post_prompt = std::time::Instant::now();
 
@@ -162,17 +147,17 @@ async fn handle_chat(
     let mut sentence: Vec<char> = Vec::new();
     for index in 0..to_sample {
         let input = Tensor::new(&[next_token], &device)
-            .map_err(|e| LlmError::Chat(format!("tensor create error {}", e.to_string())))?
+            .map_err(|e| ModelError::Chat(format!("tensor create error {}", e.to_string())))?
             .unsqueeze(0)
             .map_err(|e| {
-                LlmError::Chat(format!("tensor create unsqueeze error {}", e.to_string()))
+                ModelError::Chat(format!("tensor create unsqueeze error {}", e.to_string()))
             })?;
         let logits = model
             .forward(&input, tokens.len() + index)
-            .map_err(|e| LlmError::Chat(format!("model forward error {}", e.to_string())))?;
+            .map_err(|e| ModelError::Chat(format!("model forward error {}", e.to_string())))?;
         let logits = logits
             .squeeze(0)
-            .map_err(|e| LlmError::Chat(format!("tensor squeeze error {}", e.to_string())))?;
+            .map_err(|e| ModelError::Chat(format!("tensor squeeze error {}", e.to_string())))?;
         let logits = {
             let start_at = all_tokens.len().saturating_sub(repeat_last_n);
             candle_transformers::utils::apply_repeat_penalty(
@@ -181,19 +166,19 @@ async fn handle_chat(
                 &all_tokens[start_at..],
             )
             .map_err(|e| {
-                LlmError::Chat(format!(
+                ModelError::Chat(format!(
                     "tensor apply repeat penalty error {}",
                     e.to_string()
                 ))
             })?
         };
         next_token = logits_processor.sample(&logits).map_err(|e| {
-            LlmError::Chat(format!("tensor processor sample error {}", e.to_string()))
+            ModelError::Chat(format!("tensor processor sample error {}", e.to_string()))
         })?;
         all_tokens.push(next_token);
         if let Some(t) = tos
             .next_token(next_token)
-            .map_err(|e| LlmError::Chat(format!("tensor encoding error {}", e.to_string())))?
+            .map_err(|e| ModelError::Chat(format!("tensor encoding error {}", e.to_string())))?
         {
             text_result.push(t);
             let text: String = text_result.clone().into_iter().collect();
@@ -241,7 +226,7 @@ async fn handle_chat(
 
     if let Some(rest) = tos
         .decode_rest()
-        .map_err(|e| LlmError::Chat(format!("tensor decode rest error {}", e.to_string())))?
+        .map_err(|e| ModelError::Chat(format!("tensor decode rest error {}", e.to_string())))?
     {
         let text: String = sentence.clone().into_iter().collect();
         let text = format!("{text}{rest}");
@@ -274,11 +259,11 @@ impl Llm for LlmQwen {
         &self,
         system_prompt: String,
         text: String,
-    ) -> impl Stream<Item = core::result::Result<String, LlmError>> + Unpin + Send + 'static {
+    ) -> impl Stream<Item = core::result::Result<String, ModelError>> + Unpin + Send + 'static {
         let tokenizer = self.tokenizer.clone();
         let model = self.model.clone();
         let device = self.device.clone();
-        let (tx, rx) = channel::<core::result::Result<String, LlmError>>(10);
+        let (tx, rx) = channel::<core::result::Result<String, ModelError>>(10);
         thread::spawn(move || {
             block_on(async move {
                 if let Err(e) =
@@ -292,41 +277,5 @@ impl Llm for LlmQwen {
             })
         });
         ReceiverStream::new(rx)
-    }
-}
-
-pub fn device(cpu: bool) -> Result<Device> {
-    if cpu {
-        Ok(Device::Cpu)
-    } else if cuda_is_available() {
-        Ok(Device::new_cuda(0)?)
-    } else if metal_is_available() {
-        Ok(Device::new_metal(0)?)
-    } else {
-        #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-        {
-            println!(
-                "Running on CPU, to run on GPU(metal), build this example with `--features metal`"
-            );
-        }
-        #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
-        {
-            tracing::info!(
-                "Running on CPU, to run on GPU, build this example with `--features cuda`"
-            );
-        }
-        Ok(Device::Cpu)
-    }
-}
-
-fn format_size(size_in_bytes: usize) -> String {
-    if size_in_bytes < 1_000 {
-        format!("{size_in_bytes}B")
-    } else if size_in_bytes < 1_000_000 {
-        format!("{:.2}KB", size_in_bytes as f64 / 1e3)
-    } else if size_in_bytes < 1_000_000_000 {
-        format!("{:.2}MB", size_in_bytes as f64 / 1e6)
-    } else {
-        format!("{:.2}GB", size_in_bytes as f64 / 1e9)
     }
 }

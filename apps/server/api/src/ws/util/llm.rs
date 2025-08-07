@@ -1,5 +1,4 @@
 use fancy_regex::Regex;
-use sea_orm::ColIdx;
 use std::{collections::HashMap, sync::LazyLock};
 
 use std::sync::OnceLock;
@@ -49,7 +48,8 @@ pub static EMOJI_MAP: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
     map
 });
 
-pub fn analyze_emotion(text: &str) -> &str {
+//TODO: text not use
+pub fn analyze_emotion(_text: &str) -> &str {
     // TODO: use llm to analyze emotion
     return r#"happy"#;
 }
