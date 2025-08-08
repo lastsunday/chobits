@@ -40,9 +40,9 @@ use utoipa_scalar::{Scalar, Servable as ScalarServable};
 
 use framework::auth::Jwt;
 
-use crate::ws::asr_cache::AsrCache;
+use crate::ws::asr::asr_cache::AsrCache;
 use crate::ws::llm::llm_cache::LlmCache;
-use crate::ws::tts_cache::TtsCache;
+use crate::ws::tts::tts_cache::TtsCache;
 use crate::ws::vad::vad_cache::VadCache;
 
 #[macro_use]

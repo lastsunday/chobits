@@ -1,5 +1,4 @@
 pub mod asr;
-pub mod asr_cache;
 pub mod common;
 pub mod frame;
 pub mod handler;
@@ -9,7 +8,6 @@ pub mod message_converter;
 pub mod sender;
 pub mod state;
 pub mod tts;
-pub mod tts_cache;
 pub mod util;
 pub mod vad;
 
@@ -17,9 +15,9 @@ use super::ws::sender::Sender;
 use crate::{
     AppState,
     ws::{
-        asr_cache::AsrCache, frame::Frame, handler::Handler, listener::Listener,
+        asr::asr_cache::AsrCache, frame::Frame, handler::Handler, listener::Listener,
         llm::llm_cache::LlmCache, message_converter::convert_to_frame, state::State,
-        tts_cache::TtsCache, vad::vad_cache::VadCache,
+        tts::tts_cache::TtsCache, vad::vad_cache::VadCache,
     },
 };
 use axum::{

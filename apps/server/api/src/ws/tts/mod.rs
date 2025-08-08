@@ -1,3 +1,5 @@
+pub mod tts_cache;
+
 use std::thread;
 use std::{cmp, sync::Arc};
 
