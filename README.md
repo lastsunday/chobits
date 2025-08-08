@@ -126,7 +126,7 @@ pnpm nx run chobits-server:run
 | 模块名称          | 组件                     |
 | ----------------- | ------------------------ |
 | VAD(语音活动检测) | candle(onnx->silero-vad) |
-| ASR(语音识别)     | sherpa-rs(SenseVoice)    |
+| ASR(语音识别)     | candle(whisper)          |
 | LLM(大模型)       | candle(Qwen3)            |
 | VLLM(视觉大模型)  |                          |
 | TTS(语音合成)     | sherpa-rs(Kokoro)        |
