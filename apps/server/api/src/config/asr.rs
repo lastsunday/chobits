@@ -4,21 +4,15 @@ use serde::Deserialize;
 pub struct AsrConfig {
     model: Option<String>,
     tokens: Option<String>,
-    language: Option<String>,
-    num_threads: Option<i32>,
+    config: Option<String>,
 }
 
 impl AsrConfig {
     pub fn new() -> Self {
         Self {
-            model: Some(String::from(
-                "data/asr/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/model.onnx",
-            )),
-            tokens: Some(String::from(
-                "data/asr/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/tokens.txt",
-            )),
-            language: Some(String::from("zh")),
-            num_threads: Some(4),
+            model: Some(String::from("data/asr/model.safetensors")),
+            tokens: Some(String::from("data/asr/tokenizer.json")),
+            config: Some(String::from("data/asr/config.json")),
         }
     }
 
@@ -30,11 +24,7 @@ impl AsrConfig {
         self.tokens.as_deref().unwrap_or_default()
     }
 
-    pub fn language(&self) -> &str {
-        self.language.as_deref().unwrap_or_default()
-    }
-
-    pub fn num_threads(&self) -> i32 {
-        self.num_threads.unwrap_or_default()
+    pub fn config(&self) -> &str {
+        self.config.as_deref().unwrap_or_default()
     }
 }

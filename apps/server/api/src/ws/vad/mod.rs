@@ -47,7 +47,7 @@ pub struct VadSilero {
 impl VadSilero {
     pub fn new(model_path: String) -> core::result::Result<Self, ModelError> {
         let start = std::time::Instant::now();
-        let device = device(true).unwrap();
+        let device = device(true)?;
         let model = candle_onnx::read_file(model_path.clone())?;
         tracing::info!("loaded the model in {:?}", start.elapsed());
         tracing::info!("model built");

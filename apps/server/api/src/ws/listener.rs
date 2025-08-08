@@ -125,10 +125,12 @@ where
         tracing::info!("voice_data len = {}", voice_data.len());
         let result = asr.transcribe(sample_rate, &voice_data).await;
         tracing::info!("recognizer result = {:?}", result);
-        if result.text.is_empty() {
-            None
-        } else {
-            Some(result.text)
+        match result {
+            Ok(result) => Some(result.text),
+            Err(e) => {
+                tracing::error!("get result error = {}", e.to_string());
+                None
+            }
         }
     }
 }

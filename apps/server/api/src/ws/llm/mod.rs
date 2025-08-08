@@ -43,7 +43,7 @@ impl LlmQwen {
         let mut file = std::fs::File::open(model_path.clone())
             .map_err(|_e| ModelError::ModelFileNotFound(model_path.clone()))?;
         let start = std::time::Instant::now();
-        let device = device(false).unwrap();
+        let device = device(false)?;
         let model = {
             let model = gguf_file::Content::read(&mut file)
                 .map_err(|_e| ModelError::ModelInitFailure(model_path.clone()))?;

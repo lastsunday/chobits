@@ -15,7 +15,7 @@ impl LogicConfig {
             close_connection_no_voice_time: Some(30000),
             silence_voice_timeout: Some(1200),
             system_prompt: Some(String::from(
-                "你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等并且数字使用中文字代替。",
+                "你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等。",
             )),
         }
     }

@@ -53,6 +53,8 @@ pub enum ModelError {
     Chat(String),
     #[error("tensor error msg = {0}")]
     Tensor(String),
+    #[error("decoder error msg = {0}")]
+    Decoder(String),
 }
 
 impl From<Error> for ModelError {
