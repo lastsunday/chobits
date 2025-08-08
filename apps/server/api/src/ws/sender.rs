@@ -58,50 +58,6 @@ where
         }
     }
 
-    pub async fn send_tts(&mut self, text: String) -> Result<(), SenderError> {
-        let audio_config = config::get().audio();
-        let delay = audio_config.output_frame_duration();
-        let mut output = self.tts.output(text);
-        let mut latest_time = Instant::now() + Duration::from_millis(delay);
-        // pre buffer count
-        let pre_buffer_frame_count: u64 = 6;
-        let mut send_frame_count: u64 = 0;
-        let mut state = self.state.lock().await;
-        state.client_speaking = true;
-        drop(state);
-        while let Some(packet) = output.next().await {
-            let now = Instant::now();
-            let offset = (now - latest_time).as_millis() as u64;
-            let mut actual_delay: u64 = 0;
-            if offset < delay {
-                actual_delay = delay - offset;
-            }
-            if send_frame_count >= pre_buffer_frame_count && actual_delay > 0 {
-                sleep(Duration::from_millis(actual_delay)).await;
-            }
-            latest_time = Instant::now();
-            if self
-                .write
-                .send(Message::Binary(packet.into()))
-                .await
-                .is_err()
-            {
-                return Err(SenderError::SendError);
-            }
-            send_frame_count += 1;
-            let mut state = self.state.lock().await;
-            state.update_last_activity_time();
-            if !state.client_speaking {
-                break;
-            }
-            drop(state);
-        }
-        let mut state = self.state.lock().await;
-        state.client_speaking = false;
-        drop(state);
-        Ok(())
-    }
-
     pub async fn send_audio(&mut self, data: Vec<Vec<u8>>) -> Result<(), SenderError> {
         let audio_config = config::get().audio();
         let delay = audio_config.output_frame_duration();
@@ -143,48 +99,6 @@ where
         let mut state = self.state.lock().await;
         state.client_speaking = false;
         drop(state);
-        Ok(())
-    }
-
-    pub async fn send_tts_with_text(&mut self, text: String) -> Result<(), SenderError> {
-        let emotion = analyze_emotion(&text);
-        if self.send_llm(emotion.to_string()).await.is_err() {
-            return Err(SenderError::SendError);
-        }
-        if self
-            .send_json_text(&TtsMessage::new(
-                Some(TtsState::SentenceStart),
-                Some(text.clone()),
-            ))
-            .await
-            .is_err()
-        {
-            return Err(SenderError::SendError);
-        }
-        if self
-            .send_json_text(&TtsMessage::new(Some(TtsState::Start), None))
-            .await
-            .is_err()
-        {
-            return Err(SenderError::SendError);
-        }
-        if self.send_tts(text.clone()).await.is_err() {
-            return Err(SenderError::SendError);
-        }
-        if self
-            .send_json_text(&TtsMessage::new(Some(TtsState::SentenceEnd), None))
-            .await
-            .is_err()
-        {
-            return Err(SenderError::SendError);
-        }
-        if self
-            .send_json_text(&TtsMessage::new(Some(TtsState::Stop), None))
-            .await
-            .is_err()
-        {
-            return Err(SenderError::SendError);
-        }
         Ok(())
     }
 

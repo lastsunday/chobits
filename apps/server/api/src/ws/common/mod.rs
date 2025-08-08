@@ -55,6 +55,8 @@ pub enum ModelError {
     Tensor(String),
     #[error("decoder error msg = {0}")]
     Decoder(String),
+    #[error("tts error msg = {0}")]
+    Tts(String),
 }
 
 impl From<Error> for ModelError {

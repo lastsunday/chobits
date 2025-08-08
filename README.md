@@ -129,7 +129,7 @@ pnpm nx run chobits-server:run
 | ASR(语音识别)     | candle(whisper)          |
 | LLM(大模型)       | candle(Qwen3)            |
 | VLLM(视觉大模型)  |                          |
-| TTS(语音合成)     | sherpa-rs(Kokoro)        |
+| TTS(语音合成)     | kokoro-tts               |
 | Intent(意图识别)  |                          |
 | Memory(记忆功能)  |                          |
 

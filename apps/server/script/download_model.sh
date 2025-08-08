@@ -9,9 +9,8 @@ wget https://huggingface.co/openai/whisper-large-v3-turbo/resolve/41f01f3fe87f28
 cd ..
 mkdir -p tts
 cd tts || exit
-wget https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-multi-lang-v1_1.tar.bz2
-tar xvfj kokoro-multi-lang-v1_1.tar.bz2
-rm -rf kokoro-multi-lang-v1_1.tar.bz2
+wget https://github.com/mzdk100/kokoro/releases/download/V1.1/kokoro-v1.1-zh.onnx -O model.onnx
+wget https://github.com/mzdk100/kokoro/releases/download/V1.1/voices-v1.1-zh.bin -O voice.bin
 cd ..
 mkdir -p vad
 cd vad || exit
