@@ -12,6 +12,19 @@ pub struct HelloMessage {
     pub session_id: Option<String>,
 }
 
+impl Default for HelloMessage {
+    fn default() -> Self {
+        Self {
+            message: Message { mtype: Type::Hello },
+            version: Default::default(),
+            transport: Default::default(),
+            audio_params: Default::default(),
+            features: Default::default(),
+            session_id: Default::default(),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AudioParam {
     pub format: AudioFormat,

@@ -6,6 +6,7 @@ pub mod listener;
 pub mod llm;
 pub mod message_converter;
 pub mod sender;
+pub mod session;
 pub mod state;
 pub mod tts;
 pub mod util;

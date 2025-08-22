@@ -41,8 +41,6 @@ impl AsrWhisper {
     ) -> Result<Self, ModelError> {
         let start = std::time::Instant::now();
         let device = device(false)?;
-        tracing::info!("loaded the model in {:?}", start.elapsed());
-        tracing::info!("model built");
         let config: Config =
             serde_json::from_str(&std::fs::read_to_string(config_path.clone()).map_err(|_e| {
                 ModelError::ModelFileNotFound(format!(
@@ -70,7 +68,8 @@ impl AsrWhisper {
         );
         let vb = unsafe { VarBuilder::from_mmaped_safetensors(&[model_path], m::DTYPE, &device)? };
         let model = Model::Normal(m::model::Whisper::load(&vb, config.clone())?);
-
+        tracing::info!("loaded the model in {:?}", start.elapsed());
+        tracing::info!("model built");
         Ok(Self {
             device: device.clone(),
             model,

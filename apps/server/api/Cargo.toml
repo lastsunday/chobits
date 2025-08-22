@@ -88,6 +88,7 @@ rand_distr = { version = "0.5.1" }
 kokoro-tts = { version = "0.2.8" }
 # tts end
 
+tracing-test = { version = "0.2.5" }
 entity = { path = "../entity" }
 migration = { path = "../migration" }
 service = { path = "../service" }

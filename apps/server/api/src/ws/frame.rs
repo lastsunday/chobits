@@ -3,7 +3,7 @@ use service::chobits::message::{
     abort::AbortMessage, close::CloseMessage, hello::HelloMessage, listen::ListenMessage,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Frame {
     Hello(HelloMessage),
     Listen(ListenMessage),
@@ -14,3 +14,11 @@ pub enum Frame {
     Pong(Bytes),
     Close(CloseMessage),
 }
+
+#[derive(Debug)]
+pub enum FrameResult {
+    HelloResult(HelloMessage),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum FrameError {}
