@@ -110,7 +110,6 @@ where
         + 'static,
     ) -> Result<(), SenderError> {
         let tts = &self.tts;
-        let state = self.state.clone();
         let mut text_stream = tts.output_stream(text_stream);
         while let Some(data) = text_stream.next().await {
             match data {
@@ -136,10 +135,6 @@ where
                         .is_err()
                     {
                         return Err(SenderError::SendError);
-                    }
-                    let state = state.lock().await;
-                    if !state.client_speaking {
-                        break;
                     }
                     if self.send_audio(data.audio).await.is_err() {
                         return Err(SenderError::SendError);

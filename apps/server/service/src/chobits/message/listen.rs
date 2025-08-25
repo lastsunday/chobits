@@ -12,6 +12,20 @@ pub struct ListenMessage {
     pub text: Option<String>,
 }
 
+impl Default for ListenMessage {
+    fn default() -> Self {
+        Self {
+            message: Message {
+                mtype: Type::Listen,
+            },
+            session_id: Default::default(),
+            state: ListenState::Start,
+            mmod: Default::default(),
+            text: Default::default(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum ListenState {
     Start,

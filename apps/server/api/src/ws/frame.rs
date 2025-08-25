@@ -18,6 +18,7 @@ pub enum Frame {
 #[derive(Debug)]
 pub enum FrameResult {
     HelloResult(HelloMessage),
+    STTResult(String),
 }
 
 #[derive(Debug, thiserror::Error)]
