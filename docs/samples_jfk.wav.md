@@ -106,14 +106,16 @@ Stream size                    : 344 KiB (100%)
 
 ## 计算
 
+```
 1. 播放时间 duration = 11 s
    1. 公式 1：data[chunkSize] / avgBytesPerSec
       352000 / 32000
-   2. 公式 2：data[chunkSize] *8 / (samplesPerSec* bitsPerSample *channels)
-      352000* 8 / (16000 *16* 1)
+   2. 公式 2：data[chunkSize] * 8 / (samplesPerSec * bitsPerSample * channels)
+      352000 * 8 / (16000 * 16 * 1)
 2. 文件大小 file size = 352078 B
    1. 公式 1：RIFF Chunk Size + RIFF Header Signature(区块大小) + RIFF Chunk Size(区块大小)
       352070 + 4 + 4
+```
 
 ## 备注
 
