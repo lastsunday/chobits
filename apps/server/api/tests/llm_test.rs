@@ -5,6 +5,7 @@ mod tests {
 
     #[tokio::test]
     #[ignore]
+    /// cargo test --test llm_test --features cuda -- tests::test_llm_chat --ignored --show-output
     async fn test_llm_chat() {
         LlmCache::init().await;
         let llm = LlmCache::global().instance.clone();

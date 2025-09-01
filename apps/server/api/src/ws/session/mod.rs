@@ -1,6 +1,8 @@
 use crate::config;
+use crate::ws::asr::asr_cache::AsrCache;
 use crate::ws::frame::{self, Frame, FrameError, FrameResult};
 use crate::ws::session::listener::{DefaultListener, Listener};
+use crate::ws::vad::vad_cache::VadCache;
 use core::result::Result;
 use framework::id::gen_id;
 use futures::Stream;
@@ -228,8 +230,13 @@ impl Round {
 
 #[cfg(test)]
 mod tests {
+    use std::cmp;
+
+    use crate::ws::util::audio::pcm_decode;
+
     use super::*;
 
+    use anyhow::Context;
     use axum::body::Bytes;
     use service::chobits::message::{hello::HelloMessage, listen::ListenMessage};
     use tokio_stream::StreamExt;
@@ -238,8 +245,9 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     /// hello paramter input and output the hello result
+    /// cargo test --package api --lib -- ws::session::tests::test_chat_flow_hello --show-output
     async fn test_chat_flow_hello() {
-        let mut session = Session::new(Box::new(DefaultListener {}));
+        let mut session = create_session().await;
         session.start().await;
         let mut output = session.output_frame().await;
         let join_handle = tokio::spawn(async move {
@@ -272,8 +280,62 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     /// listen voice and output the asr text result
+    /// cargo test --features cuda --package api --lib -- ws::session::tests::test_chat_flow_listen --show-output
     async fn test_chat_flow_listen() {
-        let mut session = Session::new(Box::new(DefaultListener {}));
+        use std::path::PathBuf;
+
+        let wav_file: PathBuf = [
+            env!("CARGO_MANIFEST_DIR"),
+            "resources",
+            "test",
+            "samples_jfk.wav",
+        ]
+        .iter()
+        .collect();
+        info!("{}", wav_file.display());
+        let (pcm_data, sample_rate) = pcm_decode(wav_file).unwrap();
+        info!(
+            "pcm_data len = {},sample_rate = {}",
+            pcm_data.len(),
+            sample_rate
+        );
+
+        /// the follow code is output wav file to test
+        // use wavers::{AudioSample, ConvertSlice, ConvertTo, Samples, read, write};
+        // let fp = "./decode_pcm_data.wav";
+        // let sr: i32 = 16000;
+        // write(fp, &pcm_data, sr, 1);
+
+        const ENCODE_SAMPLE_RATE: u32 = 16000;
+        let mut encoder = opus::Encoder::new(
+            ENCODE_SAMPLE_RATE,
+            opus::Channels::Mono,
+            opus::Application::Audio,
+        )
+        .unwrap();
+
+        // 16000Hz * 1 channel * 60 ms / 1000 = 960
+        const MONO_60MS: usize = ENCODE_SAMPLE_RATE as usize * 60 / 1000;
+        let size = MONO_60MS;
+        info!("size = {}", size);
+        let len = pcm_data.len();
+        let mut count = len / size;
+        if len % size > 0 {
+            count = count + 1;
+        }
+        info!("count = {}", count);
+        let mut audio: Vec<Vec<u8>> = Vec::new();
+
+        for n in 0..count {
+            let start = n * size;
+            let end = cmp::min((n + 1) * size, len);
+            let packet = encoder
+                .encode_vec_float(&pcm_data[start..end], size)
+                .unwrap();
+            audio.push(packet);
+        }
+
+        let mut session = create_session().await;
         let session_id = session.id.clone();
         session.start().await;
         let mut output = session.output_frame().await;
@@ -307,9 +369,11 @@ mod tests {
                 ..Default::default()
             }))
             .await;
-        session.accept_frame(Frame::Voice(Bytes::new())).await;
-        session.accept_frame(Frame::Voice(Bytes::new())).await;
-        session.accept_frame(Frame::Voice(Bytes::new())).await;
+        for n in 0..audio.len() {
+            session
+                .accept_frame(Frame::Voice(Bytes::copy_from_slice(&audio.get(n).unwrap())))
+                .await;
+        }
         session
             .accept_frame(Frame::Listen(ListenMessage {
                 state: ListenState::Stop,
@@ -324,4 +388,19 @@ mod tests {
     #[traced_test]
     /// when a round running and has a break event,the output stream will stop the original output
     async fn test_chat_flow_break() {}
+
+    async fn create_session() -> Session<impl Listener> {
+        info!("init vad cahce");
+        VadCache::init().await;
+        info!("init vad cahce successfully");
+        info!("init asr cahce");
+        AsrCache::init().await;
+        info!("init asr cahce successfully");
+
+        let vad = VadCache::create_vad();
+        let vad = Arc::new(Mutex::new(vad));
+        let asr = AsrCache::global().instance.clone();
+        let asr = Arc::new(Mutex::new(asr));
+        Session::new(Box::new(DefaultListener::new(vad, asr.clone())))
+    }
 }
