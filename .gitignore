@@ -58,4 +58,4 @@ lua
 application.yaml
 /data
 target
-apps/server/api/data
+apps/server/api/*.wav
