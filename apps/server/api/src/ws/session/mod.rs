@@ -1,13 +1,17 @@
 use crate::config;
 use crate::ws::asr::asr_cache::AsrCache;
 use crate::ws::frame::{self, Frame, FrameError, FrameResult};
+use crate::ws::llm::llm_cache::LlmCache;
+use crate::ws::llm::{Llm, LlmQwen};
 use crate::ws::session::listener::{DefaultListener, Listener};
+use crate::ws::util::llm::analyze_emotion;
 use crate::ws::vad::vad_cache::VadCache;
 use core::result::Result;
 use framework::id::gen_id;
-use futures::Stream;
+use futures::{Stream, StreamExt};
 use service::chobits::message::hello::{AudioParam, HelloMessage};
 use service::chobits::message::listen::ListenState;
+use service::chobits::message::llm::LlmMessage;
 use service::chobits::message::stt::SttMessage;
 use service::chobits::message::{AudioFormat, Transport};
 use std::collections::VecDeque;
@@ -18,11 +22,10 @@ use tokio::sync::{Mutex, Notify};
 use tokio::task::yield_now;
 use tokio::time::{Duration, sleep};
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{info, instrument};
+use tracing::{error, info, instrument};
 
 pub mod listener;
 
-#[derive(Debug)]
 pub struct Session<L> {
     pub id: String,
     pub current_round: Option<Box<Round>>,
@@ -50,7 +53,7 @@ where
 
     #[instrument(skip(self), name="Session stop" fields(id = %self.id))]
     pub async fn stop(&mut self) {
-        if let Some(round) = self.current_round.clone() {
+        if let Some(round) = &mut self.current_round {
             round.stop().await;
         }
         info!("end");
@@ -59,16 +62,25 @@ where
     #[instrument(skip(self), name="Session new round",fields(id = %self.id))]
     pub async fn new_round(&mut self) {
         info!("new round");
-        if let Some(round) = self.current_round.clone() {
+        if let Some(round) = &mut self.current_round {
             round.stop().await;
         }
         let tx = self
             .output_tx
             .clone()
             .expect("tx not create,maybe new round method before output frame method");
-        self.current_round = Some(Box::new(Round::new(self.id.clone(), tx)));
-        let round = self.current_round.clone().unwrap();
-        round.start().await;
+
+        let llm = LlmCache::global().instance.clone();
+        self.current_round = Some(Box::new(Round::new(
+            self.id.clone(),
+            tx,
+            Arc::new(Mutex::new(llm)),
+        )));
+        if let Some(round) = &mut self.current_round {
+            round.start().await;
+        } else {
+            panic!("current round is none");
+        }
     }
 
     pub async fn accept_frame(&mut self, frame: Frame) {
@@ -85,13 +97,16 @@ where
                         self.new_round().await;
                     }
                     ListenState::Stop => {
-                        let mut round = self.current_round.clone().unwrap();
-                        let command = self.listener.get_result().await;
-                        match command {
-                            Some(command) => {
-                                round.accept_command(command).await;
+                        if let Some(round) = &mut self.current_round {
+                            let command = self.listener.get_result().await;
+                            match command {
+                                Some(command) => {
+                                    round.accept_command(command).await;
+                                }
+                                None => todo!(),
                             }
-                            None => todo!(),
+                        } else {
+                            panic!("current round is none");
                         }
                     }
                     ListenState::Detect => todo!(),
@@ -106,7 +121,7 @@ where
             Frame::Ping(bytes) => todo!(),
             Frame::Pong(bytes) => todo!(),
             Frame::Close(close_message) => {
-                if let Some(round) = self.current_round.clone() {
+                if let Some(round) = &mut self.current_round {
                     round.stop().await;
                 }
             }
@@ -177,21 +192,26 @@ where
     }
 }
 
-#[derive(Debug, Clone)]
 pub struct Round {
     pub parent_id: String,
     pub id: String,
     tx: Sender<Result<FrameResult, FrameError>>,
     stop: Arc<AtomicBool>,
+    llm: Arc<Mutex<Box<LlmQwen>>>,
 }
 
 impl Round {
-    pub fn new(parent_id: String, tx: Sender<Result<FrameResult, FrameError>>) -> Self {
+    pub fn new(
+        parent_id: String,
+        tx: Sender<Result<FrameResult, FrameError>>,
+        llm: Arc<Mutex<Box<LlmQwen>>>,
+    ) -> Self {
         Self {
             parent_id,
             id: gen_id(),
             tx,
             stop: Arc::new(AtomicBool::new(false)),
+            llm,
         }
     }
 
@@ -205,11 +225,12 @@ impl Round {
         let tx = self.tx.clone();
         let stop_me = self.stop.clone();
         let session_id = self.parent_id.clone();
+        let llm = self.llm.clone();
         tokio::spawn(async move {
             // TODO: llm,tts logic
             if tx
                 .send(Ok(FrameResult::STTResult(SttMessage::new(
-                    Some(session_id),
+                    Some(session_id.clone()),
                     Some(format!("{command}")),
                 ))))
                 .await
@@ -217,12 +238,39 @@ impl Round {
             {
                 info!("send stt result failure");
             }
-            // TODO: stop
-            if stop_me.load(Ordering::Relaxed) {
-                // TODO: stop tx
-                drop(tx);
-                // TODO: stop llm
-                // TODO: stop tts
+            let llm = llm.lock().await;
+            let system_prompt = config::get().logic().system_prompt().to_string();
+            let mut llm_output = llm.chat(system_prompt, format!("{command}"));
+            while let llm_result = llm_output.next().await {
+                if let Some(llm_result) = llm_result {
+                    match llm_result {
+                        Ok(text) => {
+                            let emotion = analyze_emotion(&text);
+                            if tx
+                                .send(Ok(FrameResult::LLMResult(LlmMessage::new(
+                                    Some(session_id.to_string()),
+                                    Some(emotion.to_string()),
+                                    Some(text),
+                                ))))
+                                .await
+                                .is_err()
+                            {
+                                info!("send llm message failure");
+                            }
+                        }
+                        Err(e) => {
+                            error!("{:?}", e);
+                        }
+                    }
+                }
+                // TODO: stop
+                if stop_me.load(Ordering::Relaxed) {
+                    // TODO: stop tx
+                    drop(tx);
+                    // TODO: stop llm
+                    // TODO: stop tts
+                    return;
+                }
             }
         });
     }
@@ -238,7 +286,7 @@ impl Round {
 mod tests {
     use std::cmp;
 
-    use crate::ws::util::audio::pcm_decode;
+    use crate::ws::{llm::llm_cache::LlmCache, util::audio::pcm_decode};
 
     use super::*;
 
@@ -288,8 +336,8 @@ mod tests {
     #[traced_test]
     #[ignore]
     /// listen voice and output the asr text result
-    /// cargo test --features cuda --package api --lib -- ws::session::tests::test_chat_flow_listen --ignored --show-output
-    async fn test_chat_flow_listen() {
+    /// cargo test --features cuda --package api --lib -- ws::session::tests::test_chat_flow_all --ignored --show-output
+    async fn test_chat_flow_all() {
         use std::path::PathBuf;
 
         let wav_file: PathBuf = [
@@ -353,7 +401,8 @@ mod tests {
                 match data {
                     Ok(frame_result) => match frame_result {
                         FrameResult::HelloResult(_hello_message) => {}
-                        FrameResult::STTResult(_text) => {
+                        FrameResult::STTResult(_stt_message) => {}
+                        FrameResult::LLMResult(_llm_message) => {
                             return;
                         }
                         (_) => {
@@ -404,6 +453,9 @@ mod tests {
         info!("init asr cahce");
         AsrCache::init().await;
         info!("init asr cahce successfully");
+        tracing::info!("init llm cahce");
+        LlmCache::init().await;
+        tracing::info!("init llm cahce successfully");
 
         let vad = VadCache::create_vad();
         let vad = Arc::new(Mutex::new(vad));

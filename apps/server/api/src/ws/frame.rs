@@ -1,7 +1,7 @@
 use axum::{body::Bytes, extract::ws::Utf8Bytes};
 use service::chobits::message::{
     abort::AbortMessage, close::CloseMessage, hello::HelloMessage, listen::ListenMessage,
-    stt::SttMessage,
+    llm::LlmMessage, stt::SttMessage,
 };
 
 #[derive(Debug, Clone)]
@@ -20,6 +20,7 @@ pub enum Frame {
 pub enum FrameResult {
     HelloResult(HelloMessage),
     STTResult(SttMessage),
+    LLMResult(LlmMessage),
 }
 
 #[derive(Debug, thiserror::Error)]

@@ -127,6 +127,13 @@ where
                             info!("send stt message failure");
                         }
                     }
+                    frame::FrameResult::LLMResult(llm_message) => {
+                        let result: String = serde_json::to_string(&llm_message)
+                            .expect("llm message to json failure");
+                        if write.send(Message::Text(result.into())).await.is_err() {
+                            info!("send llm message failure");
+                        }
+                    }
                 },
                 Err(e) => {
                     error!("{:?}", e);
