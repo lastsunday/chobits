@@ -10,6 +10,7 @@ use tracing::info;
 pub trait Listener {
     fn listen(&mut self, data: &[u8]) -> impl std::future::Future<Output = ()> + Send;
     fn get_result(&mut self) -> impl std::future::Future<Output = Option<String>> + Send;
+    fn clear(&mut self) -> impl std::future::Future<Output = ()> + Send;
 }
 
 #[derive(Debug)]
@@ -112,5 +113,11 @@ where
                 None
             }
         }
+    }
+
+    async fn clear(&mut self) {
+        let voice_data = self.voice_data.clone();
+        let mut voice_data = voice_data.lock().await;
+        voice_data.clear();
     }
 }

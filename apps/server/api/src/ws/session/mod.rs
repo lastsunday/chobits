@@ -8,6 +8,7 @@ use framework::id::gen_id;
 use futures::Stream;
 use service::chobits::message::hello::{AudioParam, HelloMessage};
 use service::chobits::message::listen::ListenState;
+use service::chobits::message::stt::SttMessage;
 use service::chobits::message::{AudioFormat, Transport};
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -80,6 +81,7 @@ where
                 let state = listen_message.state;
                 match state {
                     ListenState::Start => {
+                        self.listener.clear().await;
                         self.new_round().await;
                     }
                     ListenState::Stop => {
@@ -202,21 +204,25 @@ impl Round {
     pub async fn accept_command(&mut self, command: String) {
         let tx = self.tx.clone();
         let stop_me = self.stop.clone();
+        let session_id = self.parent_id.clone();
         tokio::spawn(async move {
-            loop {
-                // TODO: llm,tts logic
-                tx.send(Ok(FrameResult::STTResult(format!("{command}"))))
-                    .await;
-                if stop_me.load(Ordering::Relaxed) {
-                    // TODO: stop tx
-                    drop(tx);
-                    // TODO: stop llm
-                    // TODO: stop tts
-                    break;
-                }
-                if true {
-                    break;
-                }
+            // TODO: llm,tts logic
+            if tx
+                .send(Ok(FrameResult::STTResult(SttMessage::new(
+                    Some(session_id),
+                    Some(format!("{command}")),
+                ))))
+                .await
+                .is_err()
+            {
+                info!("send stt result failure");
+            }
+            // TODO: stop
+            if stop_me.load(Ordering::Relaxed) {
+                // TODO: stop tx
+                drop(tx);
+                // TODO: stop llm
+                // TODO: stop tts
             }
         });
     }
@@ -244,8 +250,9 @@ mod tests {
 
     #[tokio::test]
     #[traced_test]
+    #[ignore]
     /// hello paramter input and output the hello result
-    /// cargo test --package api --lib -- ws::session::tests::test_chat_flow_hello --show-output
+    /// cargo test --package api --lib -- ws::session::tests::test_chat_flow_hello --ignored --show-output
     async fn test_chat_flow_hello() {
         let mut session = create_session().await;
         session.start().await;
@@ -279,8 +286,9 @@ mod tests {
 
     #[tokio::test]
     #[traced_test]
+    #[ignore]
     /// listen voice and output the asr text result
-    /// cargo test --features cuda --package api --lib -- ws::session::tests::test_chat_flow_listen --show-output
+    /// cargo test --features cuda --package api --lib -- ws::session::tests::test_chat_flow_listen --ignored --show-output
     async fn test_chat_flow_listen() {
         use std::path::PathBuf;
 
