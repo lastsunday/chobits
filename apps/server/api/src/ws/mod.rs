@@ -1,25 +1,19 @@
 pub mod asr;
 pub mod common;
 pub mod frame;
-pub mod handler;
-pub mod listener;
 pub mod llm;
 pub mod message_converter;
-pub mod sender;
 pub mod session;
 pub mod state;
 pub mod tts;
 pub mod util;
 pub mod vad;
 
-use super::ws::sender::Sender;
 use crate::{
-    AppState,
+    AppState, config,
     ws::{
         asr::asr_cache::AsrCache,
         frame::Frame,
-        handler::Handler,
-        listener::Listener,
         llm::llm_cache::LlmCache,
         message_converter::convert_to_frame,
         session::{Session, listener::DefaultListener},
@@ -37,8 +31,10 @@ use axum::{
 use axum_extra::{TypedHeader, headers};
 use framework::id::gen_id;
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
+use std::time::Duration;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
+use tokio::time::{Instant, sleep};
 use tracing::{error, info};
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
@@ -87,27 +83,6 @@ where
     let vad = Arc::new(Mutex::new(VadCache::create_vad()));
     let asr = Arc::new(Mutex::new(AsrCache::global().instance.clone()));
     let mut session = Session::new(Box::new(DefaultListener::new(vad, asr.clone())));
-
-    // let session_id = gen_id();
-    // let state = Arc::new(Mutex::new(State::new()));
-    // let tts = TtsCache::global().instance.clone();
-    // let sender = Sender::new(Box::new(write), tts, state.clone());
-    // let sender = Arc::new(Mutex::new(sender));
-    // let vad = VadCache::create_vad();
-    // let vad = Arc::new(Mutex::new(vad));
-    // let asr = AsrCache::global().instance.clone();
-    // let asr = Arc::new(Mutex::new(asr));
-    // let listener = Listener::new(session_id.clone(), vad, asr.clone(), state.clone());
-    // let listener = Arc::new(Mutex::new(listener));
-    // let llm = LlmCache::global().instance.clone();
-    // let llm = Arc::new(Mutex::new(llm));
-    // let handler = Handler::new(
-    //     session_id,
-    //     sender.clone(),
-    //     listener.clone(),
-    //     state.clone(),
-    //     llm.clone(),
-    // );
     let mut output = session.output_frame().await;
     tokio::spawn(async move {
         while let Some(data) = output.next().await {
@@ -132,6 +107,39 @@ where
                             .expect("llm message to json failure");
                         if write.send(Message::Text(result.into())).await.is_err() {
                             info!("send llm message failure");
+                        }
+                    }
+                    frame::FrameResult::TTSResult(tts_message) => {
+                        let result: String = serde_json::to_string(&tts_message)
+                            .expect("tts message to json failure");
+                        if write.send(Message::Text(result.into())).await.is_err() {
+                            info!("send tts message failure");
+                        }
+                    }
+                    frame::FrameResult::AudioResult(audio_message) => {
+                        let data = audio_message.data;
+                        let audio_config = config::get().audio();
+                        let delay = audio_config.output_frame_duration();
+                        let mut latest_time = Instant::now() + Duration::from_millis(delay);
+                        // pre buffer count
+                        let pre_buffer_frame_count: u64 = 6;
+                        let mut send_frame_count: u64 = 0;
+                        let mut data = data.into_iter();
+                        while let Some(packet) = data.next() {
+                            let now = Instant::now();
+                            let offset = (now - latest_time).as_millis() as u64;
+                            let mut actual_delay: u64 = 0;
+                            if offset < delay {
+                                actual_delay = delay - offset;
+                            }
+                            if send_frame_count >= pre_buffer_frame_count && actual_delay > 0 {
+                                sleep(Duration::from_millis(actual_delay)).await;
+                            }
+                            latest_time = Instant::now();
+                            if write.send(Message::Binary(packet.into())).await.is_err() {
+                                info!("send audio data failure");
+                            }
+                            send_frame_count += 1;
                         }
                     }
                 },

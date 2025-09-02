@@ -1,7 +1,7 @@
 use axum::{body::Bytes, extract::ws::Utf8Bytes};
 use service::chobits::message::{
-    abort::AbortMessage, close::CloseMessage, hello::HelloMessage, listen::ListenMessage,
-    llm::LlmMessage, stt::SttMessage,
+    abort::AbortMessage, audio::AudioMessage, close::CloseMessage, hello::HelloMessage,
+    listen::ListenMessage, llm::LlmMessage, stt::SttMessage, tts::TtsMessage,
 };
 
 #[derive(Debug, Clone)]
@@ -21,6 +21,8 @@ pub enum FrameResult {
     HelloResult(HelloMessage),
     STTResult(SttMessage),
     LLMResult(LlmMessage),
+    TTSResult(TtsMessage),
+    AudioResult(AudioMessage),
 }
 
 #[derive(Debug, thiserror::Error)]

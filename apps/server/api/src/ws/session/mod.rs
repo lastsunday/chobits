@@ -4,15 +4,20 @@ use crate::ws::frame::{self, Frame, FrameError, FrameResult};
 use crate::ws::llm::llm_cache::LlmCache;
 use crate::ws::llm::{Llm, LlmQwen};
 use crate::ws::session::listener::{DefaultListener, Listener};
-use crate::ws::util::llm::analyze_emotion;
+use crate::ws::tts::tts_cache::TtsCache;
+use crate::ws::tts::{Tts, TtsKokoro};
+use crate::ws::util::llm::{EMOJI_MAP, analyze_emotion};
 use crate::ws::vad::vad_cache::VadCache;
+use anyhow::Context;
 use core::result::Result;
 use framework::id::gen_id;
 use futures::{Stream, StreamExt};
+use service::chobits::message::audio::AudioMessage;
 use service::chobits::message::hello::{AudioParam, HelloMessage};
 use service::chobits::message::listen::ListenState;
 use service::chobits::message::llm::LlmMessage;
 use service::chobits::message::stt::SttMessage;
+use service::chobits::message::tts::{TtsMessage, TtsState};
 use service::chobits::message::{AudioFormat, Transport};
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -71,10 +76,12 @@ where
             .expect("tx not create,maybe new round method before output frame method");
 
         let llm = LlmCache::global().instance.clone();
+        let tts = TtsCache::global().instance.clone();
         self.current_round = Some(Box::new(Round::new(
             self.id.clone(),
             tx,
             Arc::new(Mutex::new(llm)),
+            Arc::new(Mutex::new(tts)),
         )));
         if let Some(round) = &mut self.current_round {
             round.start().await;
@@ -198,6 +205,7 @@ pub struct Round {
     tx: Sender<Result<FrameResult, FrameError>>,
     stop: Arc<AtomicBool>,
     llm: Arc<Mutex<Box<LlmQwen>>>,
+    tts: Arc<Mutex<Box<TtsKokoro>>>,
 }
 
 impl Round {
@@ -205,6 +213,7 @@ impl Round {
         parent_id: String,
         tx: Sender<Result<FrameResult, FrameError>>,
         llm: Arc<Mutex<Box<LlmQwen>>>,
+        tts: Arc<Mutex<Box<TtsKokoro>>>,
     ) -> Self {
         Self {
             parent_id,
@@ -212,6 +221,7 @@ impl Round {
             tx,
             stop: Arc::new(AtomicBool::new(false)),
             llm,
+            tts,
         }
     }
 
@@ -226,6 +236,7 @@ impl Round {
         let stop_me = self.stop.clone();
         let session_id = self.parent_id.clone();
         let llm = self.llm.clone();
+        let tts = self.tts.clone();
         tokio::spawn(async move {
             // TODO: llm,tts logic
             if tx
@@ -239,23 +250,71 @@ impl Round {
                 info!("send stt result failure");
             }
             let llm = llm.lock().await;
+            let tts = tts.lock().await;
             let system_prompt = config::get().logic().system_prompt().to_string();
-            let mut llm_output = llm.chat(system_prompt, format!("{command}"));
-            while let llm_result = llm_output.next().await {
-                if let Some(llm_result) = llm_result {
-                    match llm_result {
-                        Ok(text) => {
+            let llm_output = llm.chat(system_prompt, format!("{command}"));
+            let mut tts_output = tts.output_stream(llm_output);
+            while let result = tts_output.next().await {
+                if let Some(result) = result {
+                    match result {
+                        Ok(result) => {
+                            let text = result.text;
                             let emotion = analyze_emotion(&text);
-                            if tx
-                                .send(Ok(FrameResult::LLMResult(LlmMessage::new(
+                            let session_id = session_id.clone();
+                            let tx = tx.clone();
+                            let text = text.clone();
+                            let audio_data = result.audio;
+                            let result = async move || -> Result<(), anyhow::Error> {
+                                //llm
+                                tx.send(Ok(FrameResult::LLMResult(LlmMessage::new(
                                     Some(session_id.to_string()),
                                     Some(emotion.to_string()),
-                                    Some(text),
+                                    Some(EMOJI_MAP.get(emotion).map_or(r#"😶"#, |v| v).to_string()),
                                 ))))
                                 .await
-                                .is_err()
-                            {
-                                info!("send llm message failure");
+                                .context("send llm result failure")?;
+                                //tts
+                                tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
+                                    Some(session_id.to_string()),
+                                    Some(TtsState::Start),
+                                    None,
+                                ))))
+                                .await
+                                .context("send stt result start failure")?;
+                                tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
+                                    Some(session_id.to_string()),
+                                    Some(TtsState::SentenceStart),
+                                    Some(text.to_string()),
+                                ))))
+                                .await
+                                .context("send stt result sentence start failure")?;
+
+                                //audio
+                                tx.send(Ok(FrameResult::AudioResult(AudioMessage::new(
+                                    audio_data,
+                                ))))
+                                .await
+                                .context("send audio result failure")?;
+
+                                tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
+                                    Some(session_id.to_string()),
+                                    Some(TtsState::SentenceEnd),
+                                    None,
+                                ))))
+                                .await
+                                .context("send stt result sentence end failure")?;
+                                tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
+                                    Some(session_id.to_string()),
+                                    Some(TtsState::Stop),
+                                    None,
+                                ))))
+                                .await
+                                .context("send stt result start failure")?;
+                                Ok(())
+                            }()
+                            .await;
+                            if let Err(e) = result {
+                                error!("{:?}", e)
                             }
                         }
                         Err(e) => {
@@ -286,7 +345,7 @@ impl Round {
 mod tests {
     use std::cmp;
 
-    use crate::ws::{llm::llm_cache::LlmCache, util::audio::pcm_decode};
+    use crate::ws::{llm::llm_cache::LlmCache, tts::tts_cache::TtsCache, util::audio::pcm_decode};
 
     use super::*;
 
@@ -402,9 +461,16 @@ mod tests {
                     Ok(frame_result) => match frame_result {
                         FrameResult::HelloResult(_hello_message) => {}
                         FrameResult::STTResult(_stt_message) => {}
-                        FrameResult::LLMResult(_llm_message) => {
-                            return;
+                        FrameResult::LLMResult(_llm_message) => {}
+                        FrameResult::TTSResult(tts_message) => {
+                            let state = tts_message.state;
+                            if let Some(state) = state {
+                                if TtsState::Stop == state {
+                                    return;
+                                }
+                            }
                         }
+                        FrameResult::AudioResult(audio_message) => {}
                         (_) => {
                             panic!("unexpected frame result");
                         }
@@ -456,7 +522,9 @@ mod tests {
         tracing::info!("init llm cahce");
         LlmCache::init().await;
         tracing::info!("init llm cahce successfully");
-
+        tracing::info!("init tts cahce");
+        TtsCache::init().await;
+        tracing::info!("init tts cahce successfully");
         let vad = VadCache::create_vad();
         let vad = Arc::new(Mutex::new(vad));
         let asr = AsrCache::global().instance.clone();

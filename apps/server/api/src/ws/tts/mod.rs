@@ -39,11 +39,23 @@ pub enum TtsError {
 #[derive(Clone)]
 pub struct TtsKokoro {
     instance: Arc<Mutex<KokoroTts>>,
+    encoder: Arc<Mutex<opus::Encoder>>,
 }
 
 impl TtsKokoro {
     pub fn new(instance: Arc<Mutex<KokoroTts>>) -> Self {
-        Self { instance }
+        let audio_config = config::get().audio();
+        let sample_rate = audio_config.output_sample_rate();
+        let encoder = opus::Encoder::new(
+            sample_rate,
+            opus::Channels::Mono,
+            opus::Application::LowDelay,
+        )
+        .unwrap();
+        Self {
+            instance,
+            encoder: Arc::new(Mutex::new(encoder)),
+        }
     }
 }
 impl Tts for TtsKokoro {
@@ -56,6 +68,7 @@ impl Tts for TtsKokoro {
     ) -> impl Stream<Item = core::result::Result<TtsData, TtsError>> + Unpin + Send + 'static {
         let (tx, rx) = channel(10);
         let instance = self.instance.clone();
+        let encoder = self.encoder.clone();
         thread::spawn(move || {
             block_on(async move {
                 while let Some(text) = text_stream.next().await {
@@ -74,12 +87,6 @@ impl Tts for TtsKokoro {
                                     let sample_rate = audio_config.output_sample_rate();
                                     let channel = audio_config.output_channel();
                                     let frame_duration = audio_config.output_frame_duration();
-                                    let mut encoder = opus::Encoder::new(
-                                        sample_rate,
-                                        opus::Channels::Mono,
-                                        opus::Application::LowDelay,
-                                    )
-                                    .unwrap();
                                     let len = sample.len();
                                     let size = calcalute_tts_packet_size(
                                         sample_rate,
@@ -91,6 +98,7 @@ impl Tts for TtsKokoro {
                                     for n in 1..count {
                                         let start = (n - 1) * size;
                                         let end = cmp::min(n * size, len);
+                                        let mut encoder = encoder.lock().await;
                                         let packet = encoder
                                             .encode_vec_float(&sample[start..end], size)
                                             .unwrap();
