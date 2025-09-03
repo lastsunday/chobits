@@ -21,12 +21,12 @@ impl TtsMessage {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TtsState {
     Start,
-    Stop,
     SentenceStart,
     SentenceEnd,
+    Stop,
 }
 
 impl<'de> Deserialize<'de> for TtsState {

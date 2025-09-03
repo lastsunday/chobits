@@ -3,11 +3,12 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AudioMessage {
-    pub data: Vec<Vec<u8>>,
+    pub session_id: Option<String>,
+    pub data: Vec<u8>,
 }
 
 impl AudioMessage {
-    pub fn new(data: Vec<Vec<u8>>) -> Self {
-        Self { data }
+    pub fn new(session_id: Option<String>, data: Vec<u8>) -> Self {
+        Self { session_id, data }
     }
 }

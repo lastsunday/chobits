@@ -79,7 +79,7 @@ impl Tts for TtsKokoro {
                             tracing::info!("[TTS] receive, text = {}", text);
                             let instance = instance.lock().await;
                             match instance
-                                .synth(text.clone(), kokoro_tts::Voice::Zf043(1))
+                                .synth(text.clone(), kokoro_tts::Voice::Zf059(1))
                                 .await
                             {
                                 Ok((sample, _took)) => {
@@ -109,7 +109,8 @@ impl Tts for TtsKokoro {
                                         text: text.to_string(),
                                     };
                                     if let Err(e) = tx.send(Ok(data)).await {
-                                        tracing::info!("output packet error = {}", e);
+                                        tracing::error!("output packet error = {}", e);
+                                        break;
                                     } else {
                                         tracing::info!("[TTS] encode and send audio success");
                                     }

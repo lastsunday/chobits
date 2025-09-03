@@ -195,7 +195,7 @@ async fn handle_chat(
             } else {
                 for c in text.chars() {
                     sentence.push(c);
-                    let regex = Regex::new(r"[。！？!?，、；,;]").unwrap();
+                    let regex = Regex::new(r"[。！？!?；;]").unwrap();
                     // Break a sentence
                     if regex.is_match(&c.to_string()) {
                         let text: String = sentence.clone().into_iter().collect();
