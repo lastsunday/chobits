@@ -1,6 +1,6 @@
 use crate::config;
 use crate::ws::asr::asr_cache::AsrCache;
-use crate::ws::frame::{self, Frame, FrameError, FrameResult};
+use crate::ws::frame::{Frame, FrameError, FrameResult};
 use crate::ws::llm::llm_cache::LlmCache;
 use crate::ws::llm::{Llm, LlmQwen};
 use crate::ws::session::listener::{DefaultListener, Listener};
@@ -25,7 +25,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 use tokio::sync::mpsc::{Sender, channel};
 use tokio::sync::{Mutex, Notify};
-use tokio::task::yield_now;
 use tokio::time::{Duration, sleep};
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{error, info, instrument};
@@ -37,6 +36,14 @@ pub struct Session<L> {
     pub current_round: Option<Box<Round>>,
     output_tx: Option<Sender<Result<FrameResult, FrameError>>>,
     listener: Box<L>,
+    phase: Phase,
+}
+
+#[derive(Debug, Clone)]
+pub enum Phase {
+    Hello,
+    ListenDetect,
+    Listen,
 }
 
 impl<L> Session<L>
@@ -49,6 +56,7 @@ where
             current_round: None,
             output_tx: None,
             listener,
+            phase: Phase::Hello,
         }
     }
 
@@ -92,47 +100,104 @@ where
     }
 
     pub async fn accept_frame(&mut self, frame: Frame) {
-        match frame {
-            Frame::Hello(hello_message) => {
-                self.new_round().await;
-                self.handle_connect(hello_message).await;
-            }
-            Frame::Listen(listen_message) => {
-                let state = listen_message.state;
-                match state {
-                    ListenState::Start => {
-                        self.listener.clear().await;
-                        self.new_round().await;
-                    }
-                    ListenState::Stop => {
-                        if let Some(round) = &mut self.current_round {
-                            let command = self.listener.get_result().await;
-                            match command {
-                                Some(command) => {
-                                    round.accept_command(command).await;
-                                }
-                                None => todo!(),
-                            }
-                        } else {
-                            panic!("current round is none");
+        let phase = self.phase.clone();
+        match phase {
+            Phase::Hello => match frame {
+                Frame::Hello(hello_message) => {
+                    self.new_round().await;
+                    self.handle_connect(hello_message).await;
+                    self.phase = Phase::ListenDetect;
+                }
+                Frame::Abort(abort_message) => todo!(),
+                Frame::Ping(bytes) => todo!(),
+                Frame::Pong(bytes) => todo!(),
+                Frame::Close(close_message) => todo!(),
+                _ => {
+                    error!(
+                        "invalid frame in phase = {:?},frame = {:?}",
+                        self.phase, frame
+                    );
+                }
+            },
+            Phase::ListenDetect => match frame.clone() {
+                Frame::Listen(listen_message) => {
+                    let state = listen_message.state;
+                    match state {
+                        ListenState::Start => {
+                            self.phase = Phase::Listen;
+                            Box::pin(self.accept_frame(frame)).await;
+                        }
+                        _ => {
+                            error!(
+                                "invalid frame in phase = {:?},frame = {:?}, state = {:?}",
+                                self.phase, frame, state
+                            );
                         }
                     }
-                    ListenState::Detect => todo!(),
-                    ListenState::Text => todo!(),
                 }
-            }
-            Frame::UnknowText(utf8_bytes) => todo!(),
-            Frame::Voice(bytes) => {
-                self.listener.listen(&bytes).await;
-            }
-            Frame::Abort(abort_message) => todo!(),
-            Frame::Ping(bytes) => todo!(),
-            Frame::Pong(bytes) => todo!(),
-            Frame::Close(close_message) => {
-                if let Some(round) = &mut self.current_round {
-                    round.stop().await;
+                Frame::UnknowText(utf8_bytes) => todo!(),
+                Frame::Voice(bytes) => todo!(),
+                Frame::Abort(abort_message) => todo!(),
+                Frame::Ping(bytes) => todo!(),
+                Frame::Pong(bytes) => todo!(),
+                Frame::Close(close_message) => todo!(),
+                _ => {
+                    error!(
+                        "invalid frame in phase = {:?},frame = {:?}",
+                        self.phase, frame
+                    );
                 }
-            }
+            },
+            Phase::Listen => match frame.clone() {
+                Frame::Listen(listen_message) => {
+                    let state = listen_message.state;
+                    match state {
+                        ListenState::Start => {
+                            self.listener.clear().await;
+                            self.new_round().await;
+                        }
+                        ListenState::Stop => {
+                            if let Some(round) = &mut self.current_round {
+                                let command = self.listener.get_result().await;
+                                match command {
+                                    Some(command) => {
+                                        round.accept_command(command).await;
+                                    }
+                                    None => todo!(),
+                                }
+                            } else {
+                                panic!("current round is none");
+                            }
+                        }
+                        ListenState::Detect => todo!(),
+                        ListenState::Text => todo!(),
+                        _ => {
+                            error!(
+                                "invalid frame in phase = {:?},frame = {:?}",
+                                self.phase, frame
+                            );
+                        }
+                    }
+                }
+                Frame::UnknowText(utf8_bytes) => todo!(),
+                Frame::Voice(bytes) => {
+                    self.listener.listen(&bytes).await;
+                }
+                Frame::Abort(abort_message) => todo!(),
+                Frame::Ping(bytes) => todo!(),
+                Frame::Pong(bytes) => todo!(),
+                Frame::Close(close_message) => {
+                    if let Some(round) = &mut self.current_round {
+                        round.stop().await;
+                    }
+                }
+                _ => {
+                    error!(
+                        "invalid frame in phase = {:?},frame = {:?}",
+                        self.phase, frame
+                    );
+                }
+            },
         }
     }
 
@@ -208,6 +273,11 @@ pub struct Round {
     llm: Arc<Mutex<Box<LlmQwen>>>,
     tts: Arc<Mutex<Box<TtsKokoro>>>,
     pub tts_state: Arc<Mutex<Option<TtsState>>>,
+}
+
+pub enum Command {
+    Chat(String),
+    Detect(String),
 }
 
 impl Round {
@@ -440,7 +510,6 @@ mod tests {
 
     use super::*;
 
-    use anyhow::Context;
     use axum::body::Bytes;
     use service::chobits::message::{hello::HelloMessage, listen::ListenMessage};
     use tokio_stream::StreamExt;
@@ -562,7 +631,7 @@ mod tests {
                             }
                         }
                         FrameResult::AudioResult(audio_message) => {}
-                        (_) => {
+                        _ => {
                             panic!("unexpected frame result");
                         }
                     },

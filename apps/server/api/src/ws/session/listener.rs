@@ -1,11 +1,9 @@
 use crate::{
     config,
-    ws::{asr::Asr, state::State, vad::Vad},
+    ws::{asr::Asr, vad::Vad},
 };
-use futures::future::join;
-use std::{io::Write, rc::Rc, sync::Arc};
+use std::sync::Arc;
 use tokio::sync::Mutex;
-use tracing::info;
 
 pub trait Listener {
     fn listen(&mut self, data: &[u8]) -> impl std::future::Future<Output = ()> + Send;
@@ -85,8 +83,8 @@ where
                 vad.pop().await;
                 let mut voice_data = voice_data.lock().await;
                 voice_data.append(&mut segment.samples);
-                let start_sec = (segment.start as f32) / sample_rate as f32;
-                let duration_sec = (voice_data.len() as f32) / sample_rate as f32;
+                // let start_sec = (segment.start as f32) / sample_rate as f32;
+                // let duration_sec = (voice_data.len() as f32) / sample_rate as f32;
                 // tracing::info!("start={}s duration={}s", start_sec, duration_sec);
             }
         }
