@@ -23,6 +23,7 @@ pub enum FrameResult {
     LLMResult(LlmMessage),
     TTSResult(TtsMessage),
     AudioResult(AudioMessage),
+    CloseResult,
 }
 
 #[derive(Debug, thiserror::Error)]

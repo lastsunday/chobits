@@ -29,7 +29,7 @@ use futures_util::{Sink, SinkExt, Stream, StreamExt};
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
 use tracing::{error, info};
-use utoipa::ToSchema;
+use utoipa::{ToSchema, openapi::info};
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 const TAG: &str = "ws";
@@ -115,6 +115,9 @@ where
                             info!("send audio data failure");
                         }
                     }
+                    frame::FrameResult::CloseResult => {
+                        write.close().await;
+                    }
                 },
                 Err(e) => {
                     error!("{:?}", e);
@@ -129,11 +132,20 @@ where
             if result.is_break() {
                 if let Some(item) = result.break_value() {
                     match item {
-                        Some(frame) => {
-                            session.accept_frame(frame).await;
-                        }
+                        Some(frame) => match frame {
+                            frame::Frame::Close(close_message) => {
+                                info!("break value close message = {:?}", close_message);
+                                session.stop().await;
+                                return;
+                            }
+                            _ => {
+                                session.accept_frame(frame).await;
+                            }
+                        },
                         None => {
-                            info!("unkonw break message");
+                            info!("break value none");
+                            session.stop().await;
+                            return;
                         }
                     }
                 }
@@ -143,7 +155,23 @@ where
                 if let Some(item) = result.continue_value() {
                     match item {
                         Some(frame) => {
-                            session.accept_frame(frame).await;
+                            match frame {
+                                frame::Frame::Abort(abort_message) => {
+                                    info!("abort message = {:?}", abort_message);
+                                    session.stop().await;
+                                }
+                                frame::Frame::Ping(bytes) => {
+                                    // TODO: log session id
+                                    info!("ping");
+                                }
+                                frame::Frame::Pong(bytes) => {
+                                    // TODO: log session id
+                                    info!("pong");
+                                }
+                                _ => {
+                                    session.accept_frame(frame).await;
+                                }
+                            }
                         }
                         None => {
                             info!("unkonw continue message");

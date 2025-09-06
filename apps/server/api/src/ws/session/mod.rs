@@ -43,7 +43,14 @@ pub struct Session<L> {
 pub enum Phase {
     Hello,
     ListenDetect,
-    Listen,
+    Listen(ListenMode),
+}
+
+#[derive(Debug, Clone)]
+pub enum ListenMode {
+    Auto,
+    Manual,
+    RealTime,
 }
 
 impl<L> Session<L>
@@ -70,6 +77,8 @@ where
         if let Some(round) = &mut self.current_round {
             round.stop().await;
         }
+        let tx = self.output_tx.clone().unwrap();
+        tx.send(Ok(FrameResult::CloseResult)).await;
         info!("end");
     }
 
@@ -101,17 +110,13 @@ where
 
     pub async fn accept_frame(&mut self, frame: Frame) {
         let phase = self.phase.clone();
+        info!("current phase = {:?}", phase.clone());
         match phase {
             Phase::Hello => match frame {
                 Frame::Hello(hello_message) => {
-                    self.new_round().await;
                     self.handle_connect(hello_message).await;
                     self.phase = Phase::ListenDetect;
                 }
-                Frame::Abort(abort_message) => todo!(),
-                Frame::Ping(bytes) => todo!(),
-                Frame::Pong(bytes) => todo!(),
-                Frame::Close(close_message) => todo!(),
                 _ => {
                     error!(
                         "invalid frame in phase = {:?},frame = {:?}",
@@ -124,7 +129,31 @@ where
                     let state = listen_message.state;
                     match state {
                         ListenState::Start => {
-                            self.phase = Phase::Listen;
+                            let mode = listen_message.mmod;
+                            if let Some(mode) = mode {
+                                match mode {
+                                    service::chobits::message::listen::ListenMode::Auto => {
+                                        self.phase = Phase::Listen(ListenMode::Auto);
+                                    }
+                                    service::chobits::message::listen::ListenMode::Manual => {
+                                        self.phase = Phase::Listen(ListenMode::Manual);
+                                    }
+                                    service::chobits::message::listen::ListenMode::RealTime => {
+                                        self.phase = Phase::Listen(ListenMode::RealTime);
+                                    }
+                                }
+                                Box::pin(self.accept_frame(frame)).await;
+                            } else {
+                                error!(
+                                    "invalid frame in phase = {:?},frame = {:?}, state = {:?}",
+                                    self.phase, frame, state
+                                );
+                            }
+                        }
+                        ListenState::Detect => {
+                            // eps32-c3 default listen mode is none
+                            // set listen mode to auto
+                            self.phase = Phase::Listen(ListenMode::Auto);
                             Box::pin(self.accept_frame(frame)).await;
                         }
                         _ => {
@@ -135,12 +164,9 @@ where
                         }
                     }
                 }
-                Frame::UnknowText(utf8_bytes) => todo!(),
-                Frame::Voice(bytes) => todo!(),
-                Frame::Abort(abort_message) => todo!(),
-                Frame::Ping(bytes) => todo!(),
-                Frame::Pong(bytes) => todo!(),
-                Frame::Close(close_message) => todo!(),
+                Frame::Voice(bytes) => {
+                    self.listener.listen(&bytes).await;
+                }
                 _ => {
                     error!(
                         "invalid frame in phase = {:?},frame = {:?}",
@@ -148,55 +174,212 @@ where
                     );
                 }
             },
-            Phase::Listen => match frame.clone() {
-                Frame::Listen(listen_message) => {
-                    let state = listen_message.state;
-                    match state {
-                        ListenState::Start => {
-                            self.listener.clear().await;
-                            self.new_round().await;
+            Phase::Listen(mode) => match mode {
+                ListenMode::Auto => match frame.clone() {
+                    Frame::Listen(listen_message) => {
+                        let state = listen_message.state;
+                        match state {
+                            ListenState::Start => {
+                                let mode = listen_message.mmod;
+                                if let Some(mode) = mode {
+                                    match mode {
+                                        service::chobits::message::listen::ListenMode::Auto => {
+                                            self.phase = Phase::Listen(ListenMode::Auto);
+                                            let silence_voice_timeout =
+                                                config::get().logic().silence_voice_timeout();
+                                            //reset listener to option(slinent condition limit)
+                                            self.listener.reset(Some(silence_voice_timeout)).await;
+                                        }
+                                        service::chobits::message::listen::ListenMode::Manual => {
+                                            self.phase = Phase::Listen(ListenMode::Manual);
+                                            self.listener.reset(None).await;
+                                            self.new_round().await;
+                                        }
+                                        service::chobits::message::listen::ListenMode::RealTime => {
+                                            self.phase = Phase::Listen(ListenMode::RealTime);
+                                        }
+                                    }
+                                } else {
+                                    error!(
+                                        "invalid frame in phase = {:?},frame = {:?}, state = {:?}",
+                                        self.phase, frame, state
+                                    );
+                                }
+                            }
+                            ListenState::Stop => todo!(),
+                            ListenState::Detect => {
+                                let text = listen_message.text;
+                                match text {
+                                    Some(text) => {
+                                        info!("detect text = {}", text.to_string());
+                                        self.new_round().await;
+                                        //if match walk word
+                                        if let Some(round) = &mut self.current_round {
+                                            // TODO: detech voice id
+                                            self.listener.set_state(
+                                                crate::ws::session::listener::ListenState::End,
+                                            );
+                                            let command = self.listener.get_result().await;
+                                            info!("command  = {:?}", command);
+                                            //say hello
+                                            round.accept_command(Command::Wake(text)).await;
+                                        } else {
+                                            panic!("current round is none");
+                                        }
+                                    }
+                                    None => {
+                                        error!(
+                                            "invalid frame in phase = {:?},frame = {:?}",
+                                            self.phase, frame
+                                        );
+                                    }
+                                }
+                            }
+                            ListenState::Text => todo!(),
                         }
-                        ListenState::Stop => {
-                            if let Some(round) = &mut self.current_round {
+                    }
+                    Frame::Voice(bytes) => {
+                        // TODO: close connection when no voice time is over the limit setting
+                        let mut end = false;
+                        match &self.current_round {
+                            Some(round) => {
+                                end = round.end.load(Ordering::Relaxed);
+                            }
+                            None => {
+                                end = true;
+                            }
+                        }
+                        info!("round is end = {}", end);
+                        if end {
+                            //round is end
+                            if self.listener.get_state()
+                                == crate::ws::session::listener::ListenState::End
+                            {
+                                let silence_voice_timeout =
+                                    config::get().logic().silence_voice_timeout();
+                                //reset listener to option(slinent condition limit)
+                                self.listener.reset(Some(silence_voice_timeout)).await;
+                            }
+                            //Auto mode is not enabled aec,so the audio data not be sent when speaking
+                            info!(
+                                "frame in phase = {:?},bytes len = {:?}",
+                                self.phase,
+                                bytes.len()
+                            );
+                            self.listener.listen(&bytes).await;
+                            //if listen is end,let go to next round
+                            if self.listener.get_state()
+                                == crate::ws::session::listener::ListenState::End
+                            {
+                                self.new_round().await;
                                 let command = self.listener.get_result().await;
                                 match command {
                                     Some(command) => {
-                                        round.accept_command(command).await;
+                                        if let Some(round) = &mut self.current_round {
+                                            round.accept_command(Command::Chat(command)).await;
+                                        } else {
+                                            panic!("current round is none");
+                                        }
                                     }
                                     None => todo!(),
                                 }
-                            } else {
-                                panic!("current round is none");
                             }
                         }
-                        ListenState::Detect => todo!(),
-                        ListenState::Text => todo!(),
-                        _ => {
-                            error!(
-                                "invalid frame in phase = {:?},frame = {:?}",
-                                self.phase, frame
-                            );
+                    }
+                    _ => {
+                        error!(
+                            "invalid frame in phase = {:?},frame = {:?}",
+                            self.phase, frame
+                        );
+                    }
+                },
+                ListenMode::Manual => match frame.clone() {
+                    Frame::Listen(listen_message) => {
+                        let state = listen_message.state;
+                        match state {
+                            ListenState::Start => {
+                                let mode = listen_message.mmod;
+                                if let Some(mode) = mode {
+                                    match mode {
+                                        service::chobits::message::listen::ListenMode::Auto => {
+                                            self.phase = Phase::Listen(ListenMode::Auto);
+                                            let silence_voice_timeout =
+                                                config::get().logic().silence_voice_timeout();
+                                            //reset listener to option(slinent condition limit)
+                                            self.listener.reset(Some(silence_voice_timeout)).await;
+                                        }
+                                        service::chobits::message::listen::ListenMode::Manual => {
+                                            self.phase = Phase::Listen(ListenMode::Manual);
+                                            self.listener.reset(None).await;
+                                            self.new_round().await;
+                                        }
+                                        service::chobits::message::listen::ListenMode::RealTime => {
+                                            self.phase = Phase::Listen(ListenMode::RealTime);
+                                        }
+                                    }
+                                } else {
+                                    error!(
+                                        "invalid frame in phase = {:?},frame = {:?}, state = {:?}",
+                                        self.phase, frame, state
+                                    );
+                                }
+                            }
+                            ListenState::Stop => {
+                                if let Some(round) = &mut self.current_round {
+                                    self.listener
+                                        .set_state(crate::ws::session::listener::ListenState::End);
+                                    let command = self.listener.get_result().await;
+                                    match command {
+                                        Some(command) => {
+                                            round.accept_command(Command::Chat(command)).await;
+                                        }
+                                        None => todo!(),
+                                    }
+                                } else {
+                                    panic!("current round is none");
+                                }
+                            }
+                            ListenState::Detect => {
+                                let text = listen_message.text;
+                                match text {
+                                    Some(text) => {
+                                        info!("detect text = {}", text.to_string());
+                                        self.new_round().await;
+                                        //if match walk word
+                                        if let Some(round) = &mut self.current_round {
+                                            // handle send text
+                                            round.accept_command(Command::Chat(text)).await;
+                                        } else {
+                                            panic!("current round is none");
+                                        }
+                                    }
+                                    None => {
+                                        error!(
+                                            "invalid frame in phase = {:?},frame = {:?}",
+                                            self.phase, frame
+                                        );
+                                    }
+                                }
+                            }
+                            _ => {
+                                error!(
+                                    "invalid frame in phase = {:?},frame = {:?}",
+                                    self.phase, frame
+                                );
+                            }
                         }
                     }
-                }
-                Frame::UnknowText(utf8_bytes) => todo!(),
-                Frame::Voice(bytes) => {
-                    self.listener.listen(&bytes).await;
-                }
-                Frame::Abort(abort_message) => todo!(),
-                Frame::Ping(bytes) => todo!(),
-                Frame::Pong(bytes) => todo!(),
-                Frame::Close(close_message) => {
-                    if let Some(round) = &mut self.current_round {
-                        round.stop().await;
+                    Frame::Voice(bytes) => {
+                        self.listener.listen(&bytes).await;
                     }
-                }
-                _ => {
-                    error!(
-                        "invalid frame in phase = {:?},frame = {:?}",
-                        self.phase, frame
-                    );
-                }
+                    _ => {
+                        error!(
+                            "invalid frame in phase = {:?},frame = {:?}",
+                            self.phase, frame
+                        );
+                    }
+                },
+                ListenMode::RealTime => todo!(),
             },
         }
     }
@@ -273,11 +456,13 @@ pub struct Round {
     llm: Arc<Mutex<Box<LlmQwen>>>,
     tts: Arc<Mutex<Box<TtsKokoro>>>,
     pub tts_state: Arc<Mutex<Option<TtsState>>>,
+    pub speaking: Arc<AtomicBool>,
+    pub end: Arc<AtomicBool>,
 }
 
 pub enum Command {
     Chat(String),
-    Detect(String),
+    Wake(String),
 }
 
 impl Round {
@@ -295,6 +480,8 @@ impl Round {
             llm,
             tts,
             tts_state: Arc::new(Mutex::new(None)),
+            speaking: Arc::new(AtomicBool::new(false)),
+            end: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -304,151 +491,325 @@ impl Round {
     }
 
     // TODO: command wrapper a enum? eg,Text,Call
-    pub async fn accept_command(&mut self, command: String) {
-        let tx = self.tx.clone();
-        let stop_me = self.stop.clone();
-        let session_id = self.parent_id.clone();
-        let llm = self.llm.clone();
-        let tts = self.tts.clone();
-        let tts_state_clone = self.tts_state.clone();
-        tokio::spawn(async move {
-            // TODO: llm,tts logic
-            if tx
-                .send(Ok(FrameResult::STTResult(SttMessage::new(
-                    Some(session_id.clone()),
-                    Some(format!("{command}")),
-                ))))
-                .await
-                .is_err()
-            {
-                info!("send stt result failure");
-            }
-            let llm = llm.lock().await;
-            let tts = tts.lock().await;
-            let system_prompt = config::get().logic().system_prompt().to_string();
-            let llm_output = llm.chat(system_prompt, format!("{command}"));
-            let mut tts_output = tts.output_stream(llm_output);
-            let audio_config = config::get().audio();
-            let delay = audio_config.output_frame_duration();
-            let mut latest_time = Instant::now() + Duration::from_millis(delay);
-            // pre buffer count
-            let pre_buffer_frame_count: u64 = 6;
-            let mut send_frame_count: u64 = 0;
-            while let Some(result) = tts_output.next().await {
-                match result {
-                    Ok(result) => {
-                        if stop_me.load(Ordering::Relaxed) {
-                            break;
-                        }
-                        let text = result.text;
-                        let emotion = analyze_emotion(&text);
-                        let session_id = session_id.clone();
-                        let tx = tx.clone();
-                        let text = text.clone();
-                        let audio_data = result.audio;
-                        let tts_state_clone = tts_state_clone.clone();
-                        let stop_me = stop_me.clone();
-                        let result = async move || -> Result<(), anyhow::Error> {
-                            //llm
-                            tx.send(Ok(FrameResult::LLMResult(LlmMessage::new(
-                                Some(session_id.to_string()),
-                                Some(emotion.to_string()),
-                                Some(EMOJI_MAP.get(emotion).map_or(r#"😶"#, |v| v).to_string()),
-                            ))))
-                            .await
-                            .context("send llm result failure")?;
-                            //tts
-                            tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                                Some(session_id.to_string()),
-                                Some(TtsState::Start),
-                                None,
-                            ))))
-                            .await
-                            .context("send stt result start failure")?;
-                            let tts_state = tts_state_clone.clone();
-                            let mut tts_state = tts_state.lock().await;
-                            *tts_state = Some(TtsState::Start);
-                            drop(tts_state);
-                            tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                                Some(session_id.to_string()),
-                                Some(TtsState::SentenceStart),
-                                Some(text.to_string()),
-                            ))))
-                            .await
-                            .context("send stt result sentence start failure")?;
-                            let tts_state = tts_state_clone.clone();
-                            let mut tts_state = tts_state.lock().await;
-                            *tts_state = Some(TtsState::SentenceStart);
-                            drop(tts_state);
-                            //audio
-                            //real time send audio
-                            let mut data = audio_data.into_iter();
-                            while let Some(packet) = data.next() {
+    pub async fn accept_command(&mut self, command: Command) {
+        match command {
+            Command::Chat(text) => {
+                let tx = self.tx.clone();
+                let stop_me = self.stop.clone();
+                let session_id = self.parent_id.clone();
+                let llm = self.llm.clone();
+                let tts = self.tts.clone();
+                let tts_state_clone = self.tts_state.clone();
+                let speaking = self.speaking.clone();
+                let end = self.end.clone();
+                tokio::spawn(async move {
+                    // TODO: llm,tts logic
+                    if tx
+                        .send(Ok(FrameResult::STTResult(SttMessage::new(
+                            Some(session_id.clone()),
+                            Some(format!("{text}")),
+                        ))))
+                        .await
+                        .is_err()
+                    {
+                        info!("send stt result failure");
+                    }
+                    let llm = llm.lock().await;
+                    let tts = tts.lock().await;
+                    let system_prompt = config::get().logic().system_prompt().to_string();
+                    let llm_output = llm.chat(system_prompt, format!("{text}"));
+                    let mut tts_output = tts.output_stream(llm_output);
+                    let audio_config = config::get().audio();
+                    let delay = audio_config.output_frame_duration();
+                    let mut latest_time = Instant::now() + Duration::from_millis(delay);
+                    // pre buffer count
+                    let pre_buffer_frame_count: u64 = 6;
+                    let mut send_frame_count: u64 = 0;
+                    let speaking = speaking.clone();
+                    while let Some(result) = tts_output.next().await {
+                        match result {
+                            Ok(result) => {
                                 if stop_me.load(Ordering::Relaxed) {
                                     break;
                                 }
-                                let now = Instant::now();
-                                let offset = (now - latest_time).as_millis() as u64;
-                                let mut actual_delay: u64 = 0;
-                                if offset < delay {
-                                    actual_delay = delay - offset;
+                                let text = result.text;
+                                let emotion = analyze_emotion(&text);
+                                let session_id = session_id.clone();
+                                let tx = tx.clone();
+                                let text = text.clone();
+                                let audio_data = result.audio;
+                                let tts_state_clone = tts_state_clone.clone();
+                                let stop_me = stop_me.clone();
+                                let speaking = speaking.clone();
+                                let result = async move || -> Result<(), anyhow::Error> {
+                                    //llm
+                                    tx.send(Ok(FrameResult::LLMResult(LlmMessage::new(
+                                        Some(session_id.to_string()),
+                                        Some(emotion.to_string()),
+                                        Some(
+                                            EMOJI_MAP
+                                                .get(emotion)
+                                                .map_or(r#"😶"#, |v| v)
+                                                .to_string(),
+                                        ),
+                                    ))))
+                                    .await
+                                    .context("send llm result failure")?;
+                                    //tts
+                                    tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
+                                        Some(session_id.to_string()),
+                                        Some(TtsState::Start),
+                                        None,
+                                    ))))
+                                    .await
+                                    .context("send stt result start failure")?;
+                                    let tts_state = tts_state_clone.clone();
+                                    let mut tts_state = tts_state.lock().await;
+                                    *tts_state = Some(TtsState::Start);
+                                    drop(tts_state);
+                                    tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
+                                        Some(session_id.to_string()),
+                                        Some(TtsState::SentenceStart),
+                                        Some(text.to_string()),
+                                    ))))
+                                    .await
+                                    .context("send stt result sentence start failure")?;
+                                    let tts_state = tts_state_clone.clone();
+                                    let mut tts_state = tts_state.lock().await;
+                                    *tts_state = Some(TtsState::SentenceStart);
+                                    drop(tts_state);
+                                    //audio
+                                    //real time send audio
+                                    let mut data = audio_data.into_iter();
+                                    speaking.store(true, Ordering::Relaxed);
+                                    info!("set speaking = true");
+                                    while let Some(packet) = data.next() {
+                                        if stop_me.load(Ordering::Relaxed) {
+                                            break;
+                                        }
+                                        let now = Instant::now();
+                                        let offset = (now - latest_time).as_millis() as u64;
+                                        let mut actual_delay: u64 = 0;
+                                        if offset < delay {
+                                            actual_delay = delay - offset;
+                                        }
+                                        if send_frame_count >= pre_buffer_frame_count
+                                            && actual_delay > 0
+                                        {
+                                            sleep(Duration::from_millis(actual_delay)).await;
+                                        }
+                                        latest_time = Instant::now();
+                                        tx.send(Ok(FrameResult::AudioResult(AudioMessage::new(
+                                            Some(session_id.to_string()),
+                                            packet,
+                                        ))))
+                                        .await
+                                        .context("send audio result failure")?;
+                                        send_frame_count += 1;
+                                        info!("send audio frame = {}", send_frame_count);
+                                    }
+                                    speaking.store(false, Ordering::Relaxed);
+                                    info!("set speaking = false");
+                                    tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
+                                        Some(session_id.to_string()),
+                                        Some(TtsState::SentenceEnd),
+                                        None,
+                                    ))))
+                                    .await
+                                    .context("send stt result sentence end failure")?;
+                                    let tts_state = tts_state_clone.clone();
+                                    let mut tts_state = tts_state.lock().await;
+                                    *tts_state = Some(TtsState::SentenceEnd);
+                                    drop(tts_state);
+                                    tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
+                                        Some(session_id.to_string()),
+                                        Some(TtsState::Stop),
+                                        None,
+                                    ))))
+                                    .await
+                                    .context("send stt result start failure")?;
+                                    let tts_state = tts_state_clone.clone();
+                                    let mut tts_state = tts_state.lock().await;
+                                    *tts_state = Some(TtsState::Stop);
+                                    drop(tts_state);
+                                    Ok(())
+                                }()
+                                .await;
+                                if let Err(e) = result {
+                                    error!("{:?}", e);
                                 }
-                                if send_frame_count >= pre_buffer_frame_count && actual_delay > 0 {
-                                    sleep(Duration::from_millis(actual_delay)).await;
-                                }
-                                latest_time = Instant::now();
-                                tx.send(Ok(FrameResult::AudioResult(AudioMessage::new(
-                                    Some(session_id.to_string()),
-                                    packet,
-                                ))))
-                                .await
-                                .context("send audio result failure")?;
-                                send_frame_count += 1;
                             }
-
-                            tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                                Some(session_id.to_string()),
-                                Some(TtsState::SentenceEnd),
-                                None,
-                            ))))
-                            .await
-                            .context("send stt result sentence end failure")?;
-                            let tts_state = tts_state_clone.clone();
-                            let mut tts_state = tts_state.lock().await;
-                            *tts_state = Some(TtsState::SentenceEnd);
-                            drop(tts_state);
-                            tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                                Some(session_id.to_string()),
-                                Some(TtsState::Stop),
-                                None,
-                            ))))
-                            .await
-                            .context("send stt result start failure")?;
-                            let tts_state = tts_state_clone.clone();
-                            let mut tts_state = tts_state.lock().await;
-                            *tts_state = Some(TtsState::Stop);
-                            drop(tts_state);
-                            Ok(())
-                        }()
-                        .await;
-                        if let Err(e) = result {
-                            error!("{:?}", e);
+                            Err(e) => {
+                                error!("{:?}", e);
+                            }
                         }
                     }
-                    Err(e) => {
-                        error!("{:?}", e);
+                    //stop
+                    if stop_me.load(Ordering::Relaxed) {
+                        drop(tx);
                     }
-                }
+                    end.store(true, Ordering::Relaxed);
+                });
             }
-            // TODO: stop
-            if stop_me.load(Ordering::Relaxed) {
-                // TODO: stop tx
-                drop(tx);
-                // TODO: stop llm
-                // TODO: stop tts
-                return;
+            Command::Wake(text) => {
+                let tx = self.tx.clone();
+                let stop_me = self.stop.clone();
+                let session_id = self.parent_id.clone();
+                let llm = self.llm.clone();
+                let tts = self.tts.clone();
+                let tts_state_clone = self.tts_state.clone();
+                let speaking = self.speaking.clone();
+                let end = self.end.clone();
+                tokio::spawn(async move {
+                    // TODO: llm,tts logic
+                    if tx
+                        .send(Ok(FrameResult::STTResult(SttMessage::new(
+                            Some(session_id.clone()),
+                            Some(format!("{text}")),
+                        ))))
+                        .await
+                        .is_err()
+                    {
+                        info!("send stt result failure");
+                    }
+                    let llm = llm.lock().await;
+                    let tts = tts.lock().await;
+                    let prompt = config::get().logic().system_wake_prompt().to_string();
+                    let llm_output = llm.chat(prompt, format!("{text}"));
+                    let mut tts_output = tts.output_stream(llm_output);
+                    let audio_config = config::get().audio();
+                    let delay = audio_config.output_frame_duration();
+                    let mut latest_time = Instant::now() + Duration::from_millis(delay);
+                    // pre buffer count
+                    let pre_buffer_frame_count: u64 = 6;
+                    let mut send_frame_count: u64 = 0;
+                    while let Some(result) = tts_output.next().await {
+                        match result {
+                            Ok(result) => {
+                                if stop_me.load(Ordering::Relaxed) {
+                                    break;
+                                }
+                                let text = result.text;
+                                let emotion = analyze_emotion(&text);
+                                let session_id = session_id.clone();
+                                let tx = tx.clone();
+                                let text = text.clone();
+                                let audio_data = result.audio;
+                                let tts_state_clone = tts_state_clone.clone();
+                                let stop_me = stop_me.clone();
+                                let speaking = speaking.clone();
+                                let result = async move || -> Result<(), anyhow::Error> {
+                                    //llm
+                                    tx.send(Ok(FrameResult::LLMResult(LlmMessage::new(
+                                        Some(session_id.to_string()),
+                                        Some(emotion.to_string()),
+                                        Some(
+                                            EMOJI_MAP
+                                                .get(emotion)
+                                                .map_or(r#"😶"#, |v| v)
+                                                .to_string(),
+                                        ),
+                                    ))))
+                                    .await
+                                    .context("send llm result failure")?;
+                                    //tts
+                                    tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
+                                        Some(session_id.to_string()),
+                                        Some(TtsState::Start),
+                                        None,
+                                    ))))
+                                    .await
+                                    .context("send stt result start failure")?;
+                                    let tts_state = tts_state_clone.clone();
+                                    let mut tts_state = tts_state.lock().await;
+                                    *tts_state = Some(TtsState::Start);
+                                    drop(tts_state);
+                                    tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
+                                        Some(session_id.to_string()),
+                                        Some(TtsState::SentenceStart),
+                                        Some(text.to_string()),
+                                    ))))
+                                    .await
+                                    .context("send stt result sentence start failure")?;
+                                    let tts_state = tts_state_clone.clone();
+                                    let mut tts_state = tts_state.lock().await;
+                                    *tts_state = Some(TtsState::SentenceStart);
+                                    drop(tts_state);
+                                    //audio
+                                    //real time send audio
+                                    let mut data = audio_data.into_iter();
+                                    speaking.store(true, Ordering::Relaxed);
+                                    info!("set speaking = true");
+                                    while let Some(packet) = data.next() {
+                                        if stop_me.load(Ordering::Relaxed) {
+                                            speaking.store(false, Ordering::Relaxed);
+                                            break;
+                                        }
+                                        let now = Instant::now();
+                                        let offset = (now - latest_time).as_millis() as u64;
+                                        let mut actual_delay: u64 = 0;
+                                        if offset < delay {
+                                            actual_delay = delay - offset;
+                                        }
+                                        if send_frame_count >= pre_buffer_frame_count
+                                            && actual_delay > 0
+                                        {
+                                            sleep(Duration::from_millis(actual_delay)).await;
+                                        }
+                                        latest_time = Instant::now();
+                                        tx.send(Ok(FrameResult::AudioResult(AudioMessage::new(
+                                            Some(session_id.to_string()),
+                                            packet,
+                                        ))))
+                                        .await
+                                        .context("send audio result failure")?;
+                                        send_frame_count += 1;
+                                        info!("send audio frame = {}", send_frame_count);
+                                    }
+                                    speaking.store(false, Ordering::Relaxed);
+                                    info!("set speaking = false");
+                                    tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
+                                        Some(session_id.to_string()),
+                                        Some(TtsState::SentenceEnd),
+                                        None,
+                                    ))))
+                                    .await
+                                    .context("send stt result sentence end failure")?;
+                                    let tts_state = tts_state_clone.clone();
+                                    let mut tts_state = tts_state.lock().await;
+                                    *tts_state = Some(TtsState::SentenceEnd);
+                                    drop(tts_state);
+                                    tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
+                                        Some(session_id.to_string()),
+                                        Some(TtsState::Stop),
+                                        None,
+                                    ))))
+                                    .await
+                                    .context("send stt result start failure")?;
+                                    let tts_state = tts_state_clone.clone();
+                                    let mut tts_state = tts_state.lock().await;
+                                    *tts_state = Some(TtsState::Stop);
+                                    drop(tts_state);
+                                    Ok(())
+                                }()
+                                .await;
+                                if let Err(e) = result {
+                                    error!("{:?}", e);
+                                }
+                            }
+                            Err(e) => {
+                                error!("{:?}", e);
+                            }
+                        }
+                    }
+                    //stop
+                    if stop_me.load(Ordering::Relaxed) {
+                        drop(tx);
+                    }
+                    end.store(true, Ordering::Relaxed);
+                });
             }
-        });
+        }
     }
 
     #[instrument(skip(self), name="Round stop",fields(id = %self.id,parent_id = %self.parent_id))]
@@ -554,9 +915,9 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     #[ignore]
-    /// listen voice and output the asr text result
-    /// cargo test --features cuda --package api --lib -- ws::session::tests::test_chat_flow_all --ignored --show-output
-    async fn test_chat_flow_all() {
+    /// listen voice by manual mode and output the asr text result
+    /// cargo test --features cuda --package api --lib -- ws::session::tests::test_chat_flow_listen_manual --ignored --show-output
+    async fn test_chat_flow_listen_manual() {
         use std::path::PathBuf;
 
         let wav_file: PathBuf = [
@@ -649,6 +1010,7 @@ mod tests {
         session
             .accept_frame(Frame::Listen(ListenMessage {
                 state: ListenState::Start,
+                mmod: Some(service::chobits::message::listen::ListenMode::Manual),
                 ..Default::default()
             }))
             .await;
@@ -669,8 +1031,38 @@ mod tests {
 
     #[tokio::test]
     #[traced_test]
+    #[ignore]
+    /// listen voice by auto mode and output the asr text result
+    /// cargo test --features cuda --package api --lib -- ws::session::tests::test_chat_flow_listen_auto --ignored --show-output
+    async fn test_chat_flow_listen_auto() {
+        todo!();
+    }
+
+    #[tokio::test]
+    #[traced_test]
+    #[ignore]
+    /// listen voice by realtime mode and output the asr text result
+    /// cargo test --features cuda --package api --lib -- ws::session::tests::test_chat_flow_listen_remaltime --ignored --show-output
+    async fn test_chat_flow_listen_realtime() {
+        todo!();
+    }
+
+    #[tokio::test]
+    #[traced_test]
+    #[ignore]
+    /// get text message and output the asr text result
+    /// cargo test --features cuda --package api --lib -- ws::session::tests::test_chat_flow_handle_text_message --ignored --show-output
+    async fn test_chat_flow_handle_text_message() {
+        todo!();
+    }
+
+    #[tokio::test]
+    #[traced_test]
+    #[ignore]
     /// when a round running and has a break event,the output stream will stop the original output
-    async fn test_chat_flow_break() {}
+    async fn test_chat_flow_break() {
+        todo!();
+    }
 
     async fn create_session() -> Session<impl Listener> {
         info!("init vad cahce");
