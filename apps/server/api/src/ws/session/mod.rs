@@ -1,14 +1,13 @@
 use crate::config;
-use crate::ws::asr::asr_cache::AsrCache;
 use crate::ws::frame::{Frame, FrameError, FrameResult};
 use crate::ws::llm::llm_cache::LlmCache;
 use crate::ws::llm::{Llm, LlmQwen};
-use crate::ws::session::listener::{DefaultListener, Listener};
+use crate::ws::session::listener::Listener;
 use crate::ws::tts::tts_cache::TtsCache;
 use crate::ws::tts::{Tts, TtsKokoro};
 use crate::ws::util::llm::{EMOJI_MAP, analyze_emotion};
-use crate::ws::vad::vad_cache::VadCache;
 use anyhow::Context;
+use chrono::Local;
 use core::result::Result;
 use framework::id::gen_id;
 use futures::{Stream, StreamExt};
@@ -37,6 +36,8 @@ pub struct Session<L> {
     output_tx: Option<Sender<Result<FrameResult, FrameError>>>,
     listener: Box<L>,
     phase: Phase,
+    latest_activity_time: Arc<Mutex<Option<i64>>>,
+    close_connection_no_voice_time: Option<i64>,
 }
 
 #[derive(Debug, Clone)]
@@ -55,16 +56,28 @@ pub enum ListenMode {
 
 impl<L> Session<L>
 where
-    L: Listener,
+    L: Listener + Send,
 {
-    pub fn new(listener: Box<L>) -> Self {
+    pub fn new(listener: Box<L>, close_connection_no_voice_time: Option<i64>) -> Self {
         Self {
             id: gen_id(),
             current_round: None,
             output_tx: None,
             listener,
             phase: Phase::Hello,
+            latest_activity_time: Arc::new(Mutex::new(None)),
+            close_connection_no_voice_time,
         }
+    }
+
+    pub async fn update_latest_activity_time(&mut self) {
+        let mut time = self.latest_activity_time.lock().await;
+        *time = Some(Local::now().timestamp_millis());
+    }
+
+    pub async fn get_latest_activity_time(&mut self) -> Option<i64> {
+        let time = self.latest_activity_time.lock().await;
+        *time
     }
 
     #[instrument(skip(self), name="Session start",fields(id = %self.id))]
@@ -110,7 +123,7 @@ where
 
     pub async fn accept_frame(&mut self, frame: Frame) {
         let phase = self.phase.clone();
-        info!("current phase = {:?}", phase.clone());
+        // info!("current phase = {:?}", phase.clone());
         match phase {
             Phase::Hello => match frame {
                 Frame::Hello(hello_message) => {
@@ -185,10 +198,6 @@ where
                                     match mode {
                                         service::chobits::message::listen::ListenMode::Auto => {
                                             self.phase = Phase::Listen(ListenMode::Auto);
-                                            let silence_voice_timeout =
-                                                config::get().logic().silence_voice_timeout();
-                                            //reset listener to option(slinent condition limit)
-                                            self.listener.reset(Some(silence_voice_timeout)).await;
                                         }
                                         service::chobits::message::listen::ListenMode::Manual => {
                                             self.phase = Phase::Listen(ListenMode::Manual);
@@ -213,6 +222,7 @@ where
                                     Some(text) => {
                                         info!("detect text = {}", text.to_string());
                                         self.new_round().await;
+                                        self.update_latest_activity_time().await;
                                         //if match walk word
                                         if let Some(round) = &mut self.current_round {
                                             // TODO: detech voice id
@@ -220,9 +230,20 @@ where
                                                 crate::ws::session::listener::ListenState::End,
                                             );
                                             let command = self.listener.get_result().await;
-                                            info!("command  = {:?}", command);
-                                            //say hello
-                                            round.accept_command(Command::Wake(text)).await;
+                                            match command {
+                                                Ok(command) => {
+                                                    info!("command  = {:?}", command);
+                                                    //say hello
+                                                    round.accept_command(Command::Wake(text)).await;
+                                                }
+                                                Err(e) => {
+                                                    error!("{:?}", e);
+                                                }
+                                            }
+                                            let silence_voice_timeout =
+                                                config::get().logic().silence_voice_timeout();
+                                            //reset listener to option(slinent condition limit)
+                                            self.listener.reset(Some(silence_voice_timeout)).await;
                                         } else {
                                             panic!("current round is none");
                                         }
@@ -239,52 +260,71 @@ where
                         }
                     }
                     Frame::Voice(bytes) => {
-                        // TODO: close connection when no voice time is over the limit setting
-                        let mut end = false;
+                        let state = self.listener.get_state();
                         match &self.current_round {
                             Some(round) => {
-                                end = round.end.load(Ordering::Relaxed);
+                                let end = round.end.load(Ordering::Relaxed);
+                                if end {
+                                    //round is end
+                                    if state == crate::ws::session::listener::ListenState::End {
+                                        self.handle_listen_end().await;
+                                        let silence_voice_timeout =
+                                            config::get().logic().silence_voice_timeout();
+                                        self.listener.reset(Some(silence_voice_timeout)).await;
+                                        self.update_latest_activity_time().await;
+                                    } else {
+                                        info!(
+                                            "listener listen bytes len = {},round end = {}",
+                                            &bytes.len(),
+                                            end
+                                        );
+                                        self.listener.listen(&bytes).await;
+                                    }
+                                } else {
+                                    //round is running
+                                }
                             }
                             None => {
-                                end = true;
-                            }
-                        }
-                        info!("round is end = {}", end);
-                        if end {
-                            //round is end
-                            if self.listener.get_state()
-                                == crate::ws::session::listener::ListenState::End
-                            {
-                                let silence_voice_timeout =
-                                    config::get().logic().silence_voice_timeout();
-                                //reset listener to option(slinent condition limit)
-                                self.listener.reset(Some(silence_voice_timeout)).await;
-                            }
-                            //Auto mode is not enabled aec,so the audio data not be sent when speaking
-                            info!(
-                                "frame in phase = {:?},bytes len = {:?}",
-                                self.phase,
-                                bytes.len()
-                            );
-                            self.listener.listen(&bytes).await;
-                            //if listen is end,let go to next round
-                            if self.listener.get_state()
-                                == crate::ws::session::listener::ListenState::End
-                            {
-                                self.new_round().await;
-                                let command = self.listener.get_result().await;
-                                match command {
-                                    Some(command) => {
-                                        if let Some(round) = &mut self.current_round {
-                                            round.accept_command(Command::Chat(command)).await;
-                                        } else {
-                                            panic!("current round is none");
-                                        }
-                                    }
-                                    None => todo!(),
+                                if state == crate::ws::session::listener::ListenState::End {
+                                    self.new_round().await;
+                                    self.handle_listen_end().await;
+                                    let silence_voice_timeout =
+                                        config::get().logic().silence_voice_timeout();
+                                    self.listener.reset(Some(silence_voice_timeout)).await;
+                                    self.update_latest_activity_time().await;
+                                } else {
+                                    self.listener.listen(&bytes).await;
                                 }
                             }
                         }
+                        // TODO: close connection when no voice time is over the limit setting
+                        let round_end = match &self.current_round {
+                            Some(round) => round.end.load(Ordering::Relaxed),
+                            None => true,
+                        };
+                        let is_speech = match self.listener.get_state() {
+                            listener::ListenState::Listening(speech) => speech,
+                            _ => false,
+                        };
+                        if !round_end || is_speech {
+                            self.update_latest_activity_time().await;
+                        } else {
+                            let latest_activity_time = self.get_latest_activity_time().await;
+                            if let Some(latest_activity_time) = latest_activity_time {
+                                if let Some(close_connection_no_voice_time) =
+                                    self.close_connection_no_voice_time
+                                {
+                                    //connection timeout handle
+                                    let offset_time =
+                                        Local::now().timestamp_millis() - latest_activity_time;
+                                    info!("offset_time = {}", offset_time);
+                                    if offset_time >= close_connection_no_voice_time {
+                                        self.stop().await;
+                                    }
+                                }
+                            }
+                        }
+                        // info!("latest_activity_time = {:?}", self.latest_activity_time);
                     }
                     _ => {
                         error!(
@@ -325,19 +365,9 @@ where
                                 }
                             }
                             ListenState::Stop => {
-                                if let Some(round) = &mut self.current_round {
-                                    self.listener
-                                        .set_state(crate::ws::session::listener::ListenState::End);
-                                    let command = self.listener.get_result().await;
-                                    match command {
-                                        Some(command) => {
-                                            round.accept_command(Command::Chat(command)).await;
-                                        }
-                                        None => todo!(),
-                                    }
-                                } else {
-                                    panic!("current round is none");
-                                }
+                                self.listener
+                                    .set_state(crate::ws::session::listener::ListenState::End);
+                                self.handle_listen_end().await;
                             }
                             ListenState::Detect => {
                                 let text = listen_message.text;
@@ -384,6 +414,30 @@ where
         }
     }
 
+    async fn handle_listen_end(&mut self) {
+        let command = self.listener.get_result().await;
+        match command {
+            Ok(command) => {
+                info!("command = {:?}", command.clone());
+                let is_speech_clear = self.is_speech_clear(command.prob);
+                if let Some(round) = &mut self.current_round {
+                    if is_speech_clear {
+                        round.accept_command(Command::Chat(command.text)).await;
+                    } else {
+                        round
+                            .accept_command(Command::ListenUnclear(command.text))
+                            .await;
+                    }
+                } else {
+                    panic!("current round is none");
+                }
+            }
+            Err(e) => {
+                error!("{:?}", e);
+            }
+        }
+    }
+
     pub async fn output_frame(
         &mut self,
     ) -> impl Stream<Item = Result<FrameResult, FrameError>> + Unpin + Send + 'static {
@@ -404,6 +458,7 @@ where
             }
         });
         // core logic handle
+        let latest_activity_time = self.latest_activity_time.clone();
         tokio::spawn(async move {
             loop {
                 let frame_result = {
@@ -412,6 +467,8 @@ where
                 };
                 match frame_result {
                     Some(frame_result) => {
+                        let mut time = latest_activity_time.lock().await;
+                        *time = Some(Local::now().timestamp_millis());
                         outer_tx.send(frame_result).await;
                     }
                     None => {
@@ -446,6 +503,10 @@ where
         };
         tx.send(Ok(FrameResult::HelloResult(data))).await;
     }
+
+    pub fn is_speech_clear(&self, prob: f32) -> bool {
+        prob >= 0.8
+    }
 }
 
 pub struct Round {
@@ -460,9 +521,11 @@ pub struct Round {
     pub end: Arc<AtomicBool>,
 }
 
+#[derive(Debug)]
 pub enum Command {
     Chat(String),
     Wake(String),
+    ListenUnclear(String),
 }
 
 impl Round {
@@ -583,6 +646,7 @@ impl Round {
                                     let mut data = audio_data.into_iter();
                                     speaking.store(true, Ordering::Relaxed);
                                     info!("set speaking = true");
+                                    info!("send audio frame start");
                                     while let Some(packet) = data.next() {
                                         if stop_me.load(Ordering::Relaxed) {
                                             break;
@@ -606,8 +670,8 @@ impl Round {
                                         .await
                                         .context("send audio result failure")?;
                                         send_frame_count += 1;
-                                        info!("send audio frame = {}", send_frame_count);
                                     }
+                                    info!("send audio frame end");
                                     speaking.store(false, Ordering::Relaxed);
                                     info!("set speaking = false");
                                     tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
@@ -740,6 +804,7 @@ impl Round {
                                     let mut data = audio_data.into_iter();
                                     speaking.store(true, Ordering::Relaxed);
                                     info!("set speaking = true");
+                                    info!("send audio frame start");
                                     while let Some(packet) = data.next() {
                                         if stop_me.load(Ordering::Relaxed) {
                                             speaking.store(false, Ordering::Relaxed);
@@ -764,8 +829,170 @@ impl Round {
                                         .await
                                         .context("send audio result failure")?;
                                         send_frame_count += 1;
-                                        info!("send audio frame = {}", send_frame_count);
                                     }
+                                    info!("send audio frame end");
+                                    speaking.store(false, Ordering::Relaxed);
+                                    info!("set speaking = false");
+                                    tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
+                                        Some(session_id.to_string()),
+                                        Some(TtsState::SentenceEnd),
+                                        None,
+                                    ))))
+                                    .await
+                                    .context("send stt result sentence end failure")?;
+                                    let tts_state = tts_state_clone.clone();
+                                    let mut tts_state = tts_state.lock().await;
+                                    *tts_state = Some(TtsState::SentenceEnd);
+                                    drop(tts_state);
+                                    tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
+                                        Some(session_id.to_string()),
+                                        Some(TtsState::Stop),
+                                        None,
+                                    ))))
+                                    .await
+                                    .context("send stt result start failure")?;
+                                    let tts_state = tts_state_clone.clone();
+                                    let mut tts_state = tts_state.lock().await;
+                                    *tts_state = Some(TtsState::Stop);
+                                    drop(tts_state);
+                                    Ok(())
+                                }()
+                                .await;
+                                if let Err(e) = result {
+                                    error!("{:?}", e);
+                                }
+                            }
+                            Err(e) => {
+                                error!("{:?}", e);
+                            }
+                        }
+                    }
+                    //stop
+                    if stop_me.load(Ordering::Relaxed) {
+                        drop(tx);
+                    }
+                    end.store(true, Ordering::Relaxed);
+                });
+            }
+            Command::ListenUnclear(text) => {
+                let tx = self.tx.clone();
+                let stop_me = self.stop.clone();
+                let session_id = self.parent_id.clone();
+                let llm = self.llm.clone();
+                let tts = self.tts.clone();
+                let tts_state_clone = self.tts_state.clone();
+                let speaking = self.speaking.clone();
+                let end = self.end.clone();
+                tokio::spawn(async move {
+                    // TODO: llm,tts logic
+                    if tx
+                        .send(Ok(FrameResult::STTResult(SttMessage::new(
+                            Some(session_id.clone()),
+                            Some(format!("{text}")),
+                        ))))
+                        .await
+                        .is_err()
+                    {
+                        info!("send stt result failure");
+                    }
+                    let llm = llm.lock().await;
+                    let tts = tts.lock().await;
+                    let prompt = config::get()
+                        .logic()
+                        .system_listen_unclear_prompt()
+                        .to_string();
+                    let llm_output = llm.chat(prompt, format!("{text}"));
+                    let mut tts_output = tts.output_stream(llm_output);
+                    let audio_config = config::get().audio();
+                    let delay = audio_config.output_frame_duration();
+                    let mut latest_time = Instant::now() + Duration::from_millis(delay);
+                    // pre buffer count
+                    let pre_buffer_frame_count: u64 = 6;
+                    let mut send_frame_count: u64 = 0;
+                    while let Some(result) = tts_output.next().await {
+                        match result {
+                            Ok(result) => {
+                                if stop_me.load(Ordering::Relaxed) {
+                                    break;
+                                }
+                                let text = result.text;
+                                let emotion = analyze_emotion(&text);
+                                let session_id = session_id.clone();
+                                let tx = tx.clone();
+                                let text = text.clone();
+                                let audio_data = result.audio;
+                                let tts_state_clone = tts_state_clone.clone();
+                                let stop_me = stop_me.clone();
+                                let speaking = speaking.clone();
+                                let result = async move || -> Result<(), anyhow::Error> {
+                                    //llm
+                                    tx.send(Ok(FrameResult::LLMResult(LlmMessage::new(
+                                        Some(session_id.to_string()),
+                                        Some(emotion.to_string()),
+                                        Some(
+                                            EMOJI_MAP
+                                                .get(emotion)
+                                                .map_or(r#"😶"#, |v| v)
+                                                .to_string(),
+                                        ),
+                                    ))))
+                                    .await
+                                    .context("send llm result failure")?;
+                                    //tts
+                                    tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
+                                        Some(session_id.to_string()),
+                                        Some(TtsState::Start),
+                                        None,
+                                    ))))
+                                    .await
+                                    .context("send stt result start failure")?;
+                                    let tts_state = tts_state_clone.clone();
+                                    let mut tts_state = tts_state.lock().await;
+                                    *tts_state = Some(TtsState::Start);
+                                    drop(tts_state);
+                                    tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
+                                        Some(session_id.to_string()),
+                                        Some(TtsState::SentenceStart),
+                                        Some(text.to_string()),
+                                    ))))
+                                    .await
+                                    .context("send stt result sentence start failure")?;
+                                    let tts_state = tts_state_clone.clone();
+                                    let mut tts_state = tts_state.lock().await;
+                                    *tts_state = Some(TtsState::SentenceStart);
+                                    drop(tts_state);
+                                    //audio
+                                    //real time send audio
+                                    let mut data = audio_data.into_iter();
+                                    speaking.store(true, Ordering::Relaxed);
+                                    info!("set speaking = true");
+                                    info!("send audio frame start");
+                                    while let Some(packet) = data.next() {
+                                        if stop_me.load(Ordering::Relaxed) {
+                                            speaking.store(false, Ordering::Relaxed);
+                                            break;
+                                        }
+                                        let now = Instant::now();
+                                        let offset = (now - latest_time).as_millis() as u64;
+                                        let mut actual_delay: u64 = 0;
+                                        if offset < delay {
+                                            actual_delay = delay - offset;
+                                        }
+                                        if send_frame_count >= pre_buffer_frame_count
+                                            && actual_delay > 0
+                                        {
+                                            sleep(Duration::from_millis(actual_delay)).await;
+                                        }
+                                        latest_time = Instant::now();
+                                        tx.send(Ok(FrameResult::AudioResult(AudioMessage::new(
+                                            Some(session_id.to_string()),
+                                            packet,
+                                        ))))
+                                        .await
+                                        .context("send audio result failure")?;
+                                        send_frame_count += 1;
+                                    }
+                                    info!("send audio frame end");
                                     speaking.store(false, Ordering::Relaxed);
                                     info!("set speaking = false");
                                     tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
@@ -867,7 +1094,10 @@ impl Round {
 mod tests {
     use std::cmp;
 
-    use crate::ws::{llm::llm_cache::LlmCache, tts::tts_cache::TtsCache, util::audio::pcm_decode};
+    use crate::ws::{
+        asr::asr_cache::AsrCache, llm::llm_cache::LlmCache, session::listener::DefaultListener,
+        tts::tts_cache::TtsCache, util::audio::pcm_decode, vad::vad_cache::VadCache,
+    };
 
     use super::*;
 
@@ -1081,6 +1311,10 @@ mod tests {
         let vad = Arc::new(Mutex::new(vad));
         let asr = AsrCache::global().instance.clone();
         let asr = Arc::new(Mutex::new(asr));
-        Session::new(Box::new(DefaultListener::new(vad, asr.clone())))
+        let close_connection_no_voice_time = config::get().logic().close_connection_no_voice_time();
+        Session::new(
+            Box::new(DefaultListener::new(vad, asr.clone())),
+            Some(close_connection_no_voice_time),
+        )
     }
 }

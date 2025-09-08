@@ -110,7 +110,7 @@ pub fn detect_language(
     model: &mut super::Model,
     tokenizer: &Tokenizer,
     mel: &Tensor,
-) -> candle_core::Result<u32> {
+) -> candle_core::Result<(u32, String, f32)> {
     let (_bsize, _, seq_len) = mel.dims3()?;
     let mel = mel.narrow(
         2,
@@ -137,5 +137,5 @@ pub fn detect_language(
         tracing::info!("{language}: {p}")
     }
     let language = token_id(tokenizer, &format!("<|{}|>", probs[0].0.0))?;
-    Ok(language)
+    Ok((language, probs[0].0.1.to_string(), probs[0].1.clone()))
 }

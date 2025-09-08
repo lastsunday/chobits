@@ -10,7 +10,7 @@ pub mod util;
 pub mod vad;
 
 use crate::{
-    AppState,
+    AppState, config,
     ws::{
         asr::asr_cache::AsrCache,
         message_converter::convert_to_frame,
@@ -29,7 +29,7 @@ use futures_util::{Sink, SinkExt, Stream, StreamExt};
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
 use tracing::{error, info};
-use utoipa::{ToSchema, openapi::info};
+use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 const TAG: &str = "ws";
@@ -75,7 +75,11 @@ where
 {
     let vad = Arc::new(Mutex::new(VadCache::create_vad()));
     let asr = Arc::new(Mutex::new(AsrCache::global().instance.clone()));
-    let mut session = Session::new(Box::new(DefaultListener::new(vad, asr.clone())));
+    let close_connection_no_voice_time = config::get().logic().close_connection_no_voice_time();
+    let mut session = Session::new(
+        Box::new(DefaultListener::new(vad, asr.clone())),
+        Some(close_connection_no_voice_time),
+    );
     let mut output = session.output_frame().await;
     tokio::spawn(async move {
         while let Some(data) = output.next().await {

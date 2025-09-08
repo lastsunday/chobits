@@ -22,6 +22,8 @@ pub trait Asr: Send + Sync {
 #[derive(Debug, Clone)]
 pub struct RecognizerResult {
     pub text: String,
+    pub language: String,
+    pub prob: f32,
 }
 
 #[derive(Clone)]
@@ -114,13 +116,14 @@ impl Asr for AsrWhisper {
             tokenizer,
             seed,
             device,
-            language_token,
+            Some(language_token.clone().unwrap().0.clone()),
             task,
             timestamps,
             verbose,
         ) {
             Ok(mut dc) => {
                 let result = dc.run(&mel);
+                tracing::info!("result = {:?}", result);
                 match result {
                     Ok(result) => {
                         let text = result
@@ -129,7 +132,11 @@ impl Asr for AsrWhisper {
                                 return item.dr.text;
                             })
                             .collect::<String>();
-                        Ok(RecognizerResult { text })
+                        Ok(RecognizerResult {
+                            text,
+                            language: language_token.clone().unwrap().1.clone(),
+                            prob: language_token.clone().unwrap().2.clone(),
+                        })
                     }
                     Err(e) => {
                         return Err(ModelError::Decoder(format!(
