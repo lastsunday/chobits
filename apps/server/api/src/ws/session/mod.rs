@@ -553,490 +553,175 @@ impl Round {
         info!("start");
     }
 
-    // TODO: command wrapper a enum? eg,Text,Call
     pub async fn accept_command(&mut self, command: Command) {
         match command {
             Command::Chat(text) => {
-                let tx = self.tx.clone();
-                let stop_me = self.stop.clone();
-                let session_id = self.parent_id.clone();
-                let llm = self.llm.clone();
-                let tts = self.tts.clone();
-                let tts_state_clone = self.tts_state.clone();
-                let speaking = self.speaking.clone();
-                let end = self.end.clone();
-                tokio::spawn(async move {
-                    // TODO: llm,tts logic
-                    if tx
-                        .send(Ok(FrameResult::STTResult(SttMessage::new(
-                            Some(session_id.clone()),
-                            Some(format!("{text}")),
-                        ))))
-                        .await
-                        .is_err()
-                    {
-                        info!("send stt result failure");
-                    }
-                    let llm = llm.lock().await;
-                    let tts = tts.lock().await;
-                    let system_prompt = config::get().logic().system_prompt().to_string();
-                    let llm_output = llm.chat(system_prompt, format!("{text}"));
-                    let mut tts_output = tts.output_stream(llm_output);
-                    let audio_config = config::get().audio();
-                    let delay = audio_config.output_frame_duration();
-                    let mut latest_time = Instant::now() + Duration::from_millis(delay);
-                    // pre buffer count
-                    let pre_buffer_frame_count: u64 = 6;
-                    let mut send_frame_count: u64 = 0;
-                    let speaking = speaking.clone();
-                    while let Some(result) = tts_output.next().await {
-                        match result {
-                            Ok(result) => {
-                                if stop_me.load(Ordering::Relaxed) {
-                                    break;
-                                }
-                                let text = result.text;
-                                let emotion = analyze_emotion(&text);
-                                let session_id = session_id.clone();
-                                let tx = tx.clone();
-                                let text = text.clone();
-                                let audio_data = result.audio;
-                                let tts_state_clone = tts_state_clone.clone();
-                                let stop_me = stop_me.clone();
-                                let speaking = speaking.clone();
-                                let result = async move || -> Result<(), anyhow::Error> {
-                                    //llm
-                                    tx.send(Ok(FrameResult::LLMResult(LlmMessage::new(
-                                        Some(session_id.to_string()),
-                                        Some(emotion.to_string()),
-                                        Some(
-                                            EMOJI_MAP
-                                                .get(emotion)
-                                                .map_or(r#"😶"#, |v| v)
-                                                .to_string(),
-                                        ),
-                                    ))))
-                                    .await
-                                    .context("send llm result failure")?;
-                                    //tts
-                                    tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                                        Some(session_id.to_string()),
-                                        Some(TtsState::Start),
-                                        None,
-                                    ))))
-                                    .await
-                                    .context("send stt result start failure")?;
-                                    let tts_state = tts_state_clone.clone();
-                                    let mut tts_state = tts_state.lock().await;
-                                    *tts_state = Some(TtsState::Start);
-                                    drop(tts_state);
-                                    tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                                        Some(session_id.to_string()),
-                                        Some(TtsState::SentenceStart),
-                                        Some(text.to_string()),
-                                    ))))
-                                    .await
-                                    .context("send stt result sentence start failure")?;
-                                    let tts_state = tts_state_clone.clone();
-                                    let mut tts_state = tts_state.lock().await;
-                                    *tts_state = Some(TtsState::SentenceStart);
-                                    drop(tts_state);
-                                    //audio
-                                    //real time send audio
-                                    let mut data = audio_data.into_iter();
-                                    speaking.store(true, Ordering::Relaxed);
-                                    info!("set speaking = true");
-                                    info!("send audio frame start");
-                                    while let Some(packet) = data.next() {
-                                        if stop_me.load(Ordering::Relaxed) {
-                                            break;
-                                        }
-                                        let now = Instant::now();
-                                        let offset = (now - latest_time).as_millis() as u64;
-                                        let mut actual_delay: u64 = 0;
-                                        if offset < delay {
-                                            actual_delay = delay - offset;
-                                        }
-                                        if send_frame_count >= pre_buffer_frame_count
-                                            && actual_delay > 0
-                                        {
-                                            sleep(Duration::from_millis(actual_delay)).await;
-                                        }
-                                        latest_time = Instant::now();
-                                        tx.send(Ok(FrameResult::AudioResult(AudioMessage::new(
-                                            Some(session_id.to_string()),
-                                            packet,
-                                        ))))
-                                        .await
-                                        .context("send audio result failure")?;
-                                        send_frame_count += 1;
-                                    }
-                                    info!("send audio frame end");
-                                    speaking.store(false, Ordering::Relaxed);
-                                    info!("set speaking = false");
-                                    tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                                        Some(session_id.to_string()),
-                                        Some(TtsState::SentenceEnd),
-                                        None,
-                                    ))))
-                                    .await
-                                    .context("send stt result sentence end failure")?;
-                                    let tts_state = tts_state_clone.clone();
-                                    let mut tts_state = tts_state.lock().await;
-                                    *tts_state = Some(TtsState::SentenceEnd);
-                                    drop(tts_state);
-                                    tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                                        Some(session_id.to_string()),
-                                        Some(TtsState::Stop),
-                                        None,
-                                    ))))
-                                    .await
-                                    .context("send stt result start failure")?;
-                                    let tts_state = tts_state_clone.clone();
-                                    let mut tts_state = tts_state.lock().await;
-                                    *tts_state = Some(TtsState::Stop);
-                                    drop(tts_state);
-                                    Ok(())
-                                }()
-                                .await;
-                                if let Err(e) = result {
-                                    error!("{:?}", e);
-                                }
-                            }
-                            Err(e) => {
-                                error!("{:?}", e);
-                            }
-                        }
-                    }
-                    //stop
-                    if stop_me.load(Ordering::Relaxed) {
-                        drop(tx);
-                    }
-                    end.store(true, Ordering::Relaxed);
-                });
+                let system_prompt = config::get().logic().system_prompt().to_string();
+                self.llm_tts_handle(text, system_prompt).await;
             }
             Command::Wake(text) => {
-                let tx = self.tx.clone();
-                let stop_me = self.stop.clone();
-                let session_id = self.parent_id.clone();
-                let llm = self.llm.clone();
-                let tts = self.tts.clone();
-                let tts_state_clone = self.tts_state.clone();
-                let speaking = self.speaking.clone();
-                let end = self.end.clone();
-                tokio::spawn(async move {
-                    // TODO: llm,tts logic
-                    if tx
-                        .send(Ok(FrameResult::STTResult(SttMessage::new(
-                            Some(session_id.clone()),
-                            Some(format!("{text}")),
-                        ))))
-                        .await
-                        .is_err()
-                    {
-                        info!("send stt result failure");
-                    }
-                    let llm = llm.lock().await;
-                    let tts = tts.lock().await;
-                    let prompt = config::get().logic().system_wake_prompt().to_string();
-                    let llm_output = llm.chat(prompt, format!("{text}"));
-                    let mut tts_output = tts.output_stream(llm_output);
-                    let audio_config = config::get().audio();
-                    let delay = audio_config.output_frame_duration();
-                    let mut latest_time = Instant::now() + Duration::from_millis(delay);
-                    // pre buffer count
-                    let pre_buffer_frame_count: u64 = 6;
-                    let mut send_frame_count: u64 = 0;
-                    while let Some(result) = tts_output.next().await {
-                        match result {
-                            Ok(result) => {
-                                if stop_me.load(Ordering::Relaxed) {
-                                    break;
-                                }
-                                let text = result.text;
-                                let emotion = analyze_emotion(&text);
-                                let session_id = session_id.clone();
-                                let tx = tx.clone();
-                                let text = text.clone();
-                                let audio_data = result.audio;
-                                let tts_state_clone = tts_state_clone.clone();
-                                let stop_me = stop_me.clone();
-                                let speaking = speaking.clone();
-                                let result = async move || -> Result<(), anyhow::Error> {
-                                    //llm
-                                    tx.send(Ok(FrameResult::LLMResult(LlmMessage::new(
-                                        Some(session_id.to_string()),
-                                        Some(emotion.to_string()),
-                                        Some(
-                                            EMOJI_MAP
-                                                .get(emotion)
-                                                .map_or(r#"😶"#, |v| v)
-                                                .to_string(),
-                                        ),
-                                    ))))
-                                    .await
-                                    .context("send llm result failure")?;
-                                    //tts
-                                    tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                                        Some(session_id.to_string()),
-                                        Some(TtsState::Start),
-                                        None,
-                                    ))))
-                                    .await
-                                    .context("send stt result start failure")?;
-                                    let tts_state = tts_state_clone.clone();
-                                    let mut tts_state = tts_state.lock().await;
-                                    *tts_state = Some(TtsState::Start);
-                                    drop(tts_state);
-                                    tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                                        Some(session_id.to_string()),
-                                        Some(TtsState::SentenceStart),
-                                        Some(text.to_string()),
-                                    ))))
-                                    .await
-                                    .context("send stt result sentence start failure")?;
-                                    let tts_state = tts_state_clone.clone();
-                                    let mut tts_state = tts_state.lock().await;
-                                    *tts_state = Some(TtsState::SentenceStart);
-                                    drop(tts_state);
-                                    //audio
-                                    //real time send audio
-                                    let mut data = audio_data.into_iter();
-                                    speaking.store(true, Ordering::Relaxed);
-                                    info!("set speaking = true");
-                                    info!("send audio frame start");
-                                    while let Some(packet) = data.next() {
-                                        if stop_me.load(Ordering::Relaxed) {
-                                            speaking.store(false, Ordering::Relaxed);
-                                            break;
-                                        }
-                                        let now = Instant::now();
-                                        let offset = (now - latest_time).as_millis() as u64;
-                                        let mut actual_delay: u64 = 0;
-                                        if offset < delay {
-                                            actual_delay = delay - offset;
-                                        }
-                                        if send_frame_count >= pre_buffer_frame_count
-                                            && actual_delay > 0
-                                        {
-                                            sleep(Duration::from_millis(actual_delay)).await;
-                                        }
-                                        latest_time = Instant::now();
-                                        tx.send(Ok(FrameResult::AudioResult(AudioMessage::new(
-                                            Some(session_id.to_string()),
-                                            packet,
-                                        ))))
-                                        .await
-                                        .context("send audio result failure")?;
-                                        send_frame_count += 1;
-                                    }
-                                    info!("send audio frame end");
-                                    speaking.store(false, Ordering::Relaxed);
-                                    info!("set speaking = false");
-                                    tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                                        Some(session_id.to_string()),
-                                        Some(TtsState::SentenceEnd),
-                                        None,
-                                    ))))
-                                    .await
-                                    .context("send stt result sentence end failure")?;
-                                    let tts_state = tts_state_clone.clone();
-                                    let mut tts_state = tts_state.lock().await;
-                                    *tts_state = Some(TtsState::SentenceEnd);
-                                    drop(tts_state);
-                                    tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                                        Some(session_id.to_string()),
-                                        Some(TtsState::Stop),
-                                        None,
-                                    ))))
-                                    .await
-                                    .context("send stt result start failure")?;
-                                    let tts_state = tts_state_clone.clone();
-                                    let mut tts_state = tts_state.lock().await;
-                                    *tts_state = Some(TtsState::Stop);
-                                    drop(tts_state);
-                                    Ok(())
-                                }()
-                                .await;
-                                if let Err(e) = result {
-                                    error!("{:?}", e);
-                                }
-                            }
-                            Err(e) => {
-                                error!("{:?}", e);
-                            }
-                        }
-                    }
-                    //stop
-                    if stop_me.load(Ordering::Relaxed) {
-                        drop(tx);
-                    }
-                    end.store(true, Ordering::Relaxed);
-                });
+                let system_prompt = config::get().logic().system_wake_prompt().to_string();
+                self.llm_tts_handle(text, system_prompt).await;
             }
             Command::ListenUnclear(text) => {
-                let tx = self.tx.clone();
-                let stop_me = self.stop.clone();
-                let session_id = self.parent_id.clone();
-                let llm = self.llm.clone();
-                let tts = self.tts.clone();
-                let tts_state_clone = self.tts_state.clone();
-                let speaking = self.speaking.clone();
-                let end = self.end.clone();
-                tokio::spawn(async move {
-                    // TODO: llm,tts logic
-                    if tx
-                        .send(Ok(FrameResult::STTResult(SttMessage::new(
-                            Some(session_id.clone()),
-                            Some(format!("{text}")),
-                        ))))
-                        .await
-                        .is_err()
-                    {
-                        info!("send stt result failure");
-                    }
-                    let llm = llm.lock().await;
-                    let tts = tts.lock().await;
-                    let prompt = config::get()
-                        .logic()
-                        .system_listen_unclear_prompt()
-                        .to_string();
-                    let llm_output = llm.chat(prompt, format!("{text}"));
-                    let mut tts_output = tts.output_stream(llm_output);
-                    let audio_config = config::get().audio();
-                    let delay = audio_config.output_frame_duration();
-                    let mut latest_time = Instant::now() + Duration::from_millis(delay);
-                    // pre buffer count
-                    let pre_buffer_frame_count: u64 = 6;
-                    let mut send_frame_count: u64 = 0;
-                    while let Some(result) = tts_output.next().await {
-                        match result {
-                            Ok(result) => {
+                let system_prompt = config::get()
+                    .logic()
+                    .system_listen_unclear_prompt()
+                    .to_string();
+                self.llm_tts_handle(text, system_prompt).await;
+            }
+        }
+    }
+
+    async fn llm_tts_handle(&mut self, text: String, system_prompt: String) {
+        let tx = self.tx.clone();
+        let stop_me = self.stop.clone();
+        let session_id = self.parent_id.clone();
+        let llm = self.llm.clone();
+        let tts = self.tts.clone();
+        let tts_state_clone = self.tts_state.clone();
+        let speaking = self.speaking.clone();
+        let end = self.end.clone();
+        tokio::spawn(async move {
+            if tx
+                .send(Ok(FrameResult::STTResult(SttMessage::new(
+                    Some(session_id.clone()),
+                    Some(format!("{text}")),
+                ))))
+                .await
+                .is_err()
+            {
+                info!("send stt result failure");
+            }
+            let llm = llm.lock().await;
+            let tts = tts.lock().await;
+            let llm_output = llm.chat(system_prompt, format!("{text}"));
+            let mut tts_output = tts.output_stream(llm_output);
+            let audio_config = config::get().audio();
+            let delay = audio_config.output_frame_duration();
+            let mut latest_time = Instant::now() + Duration::from_millis(delay);
+            // pre buffer count
+            let pre_buffer_frame_count: u64 = 6;
+            let mut send_frame_count: u64 = 0;
+            let speaking = speaking.clone();
+            while let Some(result) = tts_output.next().await {
+                match result {
+                    Ok(result) => {
+                        if stop_me.load(Ordering::Relaxed) {
+                            break;
+                        }
+                        let text = result.text;
+                        let emotion = analyze_emotion(&text);
+                        let session_id = session_id.clone();
+                        let tx = tx.clone();
+                        let text = text.clone();
+                        let audio_data = result.audio;
+                        let tts_state_clone = tts_state_clone.clone();
+                        let stop_me = stop_me.clone();
+                        let speaking = speaking.clone();
+                        let result = async move || -> Result<(), anyhow::Error> {
+                            //llm
+                            tx.send(Ok(FrameResult::LLMResult(LlmMessage::new(
+                                Some(session_id.to_string()),
+                                Some(emotion.to_string()),
+                                Some(EMOJI_MAP.get(emotion).map_or(r#"😶"#, |v| v).to_string()),
+                            ))))
+                            .await
+                            .context("send llm result failure")?;
+                            //tts
+                            tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
+                                Some(session_id.to_string()),
+                                Some(TtsState::Start),
+                                None,
+                            ))))
+                            .await
+                            .context("send stt result start failure")?;
+                            let tts_state = tts_state_clone.clone();
+                            let mut tts_state = tts_state.lock().await;
+                            *tts_state = Some(TtsState::Start);
+                            drop(tts_state);
+                            tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
+                                Some(session_id.to_string()),
+                                Some(TtsState::SentenceStart),
+                                Some(text.to_string()),
+                            ))))
+                            .await
+                            .context("send stt result sentence start failure")?;
+                            let tts_state = tts_state_clone.clone();
+                            let mut tts_state = tts_state.lock().await;
+                            *tts_state = Some(TtsState::SentenceStart);
+                            drop(tts_state);
+                            //audio
+                            //real time send audio
+                            let mut data = audio_data.into_iter();
+                            speaking.store(true, Ordering::Relaxed);
+                            info!("set speaking = true");
+                            info!("send audio frame start");
+                            while let Some(packet) = data.next() {
                                 if stop_me.load(Ordering::Relaxed) {
                                     break;
                                 }
-                                let text = result.text;
-                                let emotion = analyze_emotion(&text);
-                                let session_id = session_id.clone();
-                                let tx = tx.clone();
-                                let text = text.clone();
-                                let audio_data = result.audio;
-                                let tts_state_clone = tts_state_clone.clone();
-                                let stop_me = stop_me.clone();
-                                let speaking = speaking.clone();
-                                let result = async move || -> Result<(), anyhow::Error> {
-                                    //llm
-                                    tx.send(Ok(FrameResult::LLMResult(LlmMessage::new(
-                                        Some(session_id.to_string()),
-                                        Some(emotion.to_string()),
-                                        Some(
-                                            EMOJI_MAP
-                                                .get(emotion)
-                                                .map_or(r#"😶"#, |v| v)
-                                                .to_string(),
-                                        ),
-                                    ))))
-                                    .await
-                                    .context("send llm result failure")?;
-                                    //tts
-                                    tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                                        Some(session_id.to_string()),
-                                        Some(TtsState::Start),
-                                        None,
-                                    ))))
-                                    .await
-                                    .context("send stt result start failure")?;
-                                    let tts_state = tts_state_clone.clone();
-                                    let mut tts_state = tts_state.lock().await;
-                                    *tts_state = Some(TtsState::Start);
-                                    drop(tts_state);
-                                    tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                                        Some(session_id.to_string()),
-                                        Some(TtsState::SentenceStart),
-                                        Some(text.to_string()),
-                                    ))))
-                                    .await
-                                    .context("send stt result sentence start failure")?;
-                                    let tts_state = tts_state_clone.clone();
-                                    let mut tts_state = tts_state.lock().await;
-                                    *tts_state = Some(TtsState::SentenceStart);
-                                    drop(tts_state);
-                                    //audio
-                                    //real time send audio
-                                    let mut data = audio_data.into_iter();
-                                    speaking.store(true, Ordering::Relaxed);
-                                    info!("set speaking = true");
-                                    info!("send audio frame start");
-                                    while let Some(packet) = data.next() {
-                                        if stop_me.load(Ordering::Relaxed) {
-                                            speaking.store(false, Ordering::Relaxed);
-                                            break;
-                                        }
-                                        let now = Instant::now();
-                                        let offset = (now - latest_time).as_millis() as u64;
-                                        let mut actual_delay: u64 = 0;
-                                        if offset < delay {
-                                            actual_delay = delay - offset;
-                                        }
-                                        if send_frame_count >= pre_buffer_frame_count
-                                            && actual_delay > 0
-                                        {
-                                            sleep(Duration::from_millis(actual_delay)).await;
-                                        }
-                                        latest_time = Instant::now();
-                                        tx.send(Ok(FrameResult::AudioResult(AudioMessage::new(
-                                            Some(session_id.to_string()),
-                                            packet,
-                                        ))))
-                                        .await
-                                        .context("send audio result failure")?;
-                                        send_frame_count += 1;
-                                    }
-                                    info!("send audio frame end");
-                                    speaking.store(false, Ordering::Relaxed);
-                                    info!("set speaking = false");
-                                    tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                                        Some(session_id.to_string()),
-                                        Some(TtsState::SentenceEnd),
-                                        None,
-                                    ))))
-                                    .await
-                                    .context("send stt result sentence end failure")?;
-                                    let tts_state = tts_state_clone.clone();
-                                    let mut tts_state = tts_state.lock().await;
-                                    *tts_state = Some(TtsState::SentenceEnd);
-                                    drop(tts_state);
-                                    tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                                        Some(session_id.to_string()),
-                                        Some(TtsState::Stop),
-                                        None,
-                                    ))))
-                                    .await
-                                    .context("send stt result start failure")?;
-                                    let tts_state = tts_state_clone.clone();
-                                    let mut tts_state = tts_state.lock().await;
-                                    *tts_state = Some(TtsState::Stop);
-                                    drop(tts_state);
-                                    Ok(())
-                                }()
-                                .await;
-                                if let Err(e) = result {
-                                    error!("{:?}", e);
+                                let now = Instant::now();
+                                let offset = (now - latest_time).as_millis() as u64;
+                                let mut actual_delay: u64 = 0;
+                                if offset < delay {
+                                    actual_delay = delay - offset;
                                 }
+                                if send_frame_count >= pre_buffer_frame_count && actual_delay > 0 {
+                                    sleep(Duration::from_millis(actual_delay)).await;
+                                }
+                                latest_time = Instant::now();
+                                tx.send(Ok(FrameResult::AudioResult(AudioMessage::new(
+                                    Some(session_id.to_string()),
+                                    packet,
+                                ))))
+                                .await
+                                .context("send audio result failure")?;
+                                send_frame_count += 1;
                             }
-                            Err(e) => {
-                                error!("{:?}", e);
-                            }
+                            info!("send audio frame end");
+                            speaking.store(false, Ordering::Relaxed);
+                            info!("set speaking = false");
+                            tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
+                                Some(session_id.to_string()),
+                                Some(TtsState::SentenceEnd),
+                                None,
+                            ))))
+                            .await
+                            .context("send stt result sentence end failure")?;
+                            let tts_state = tts_state_clone.clone();
+                            let mut tts_state = tts_state.lock().await;
+                            *tts_state = Some(TtsState::SentenceEnd);
+                            drop(tts_state);
+                            tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
+                                Some(session_id.to_string()),
+                                Some(TtsState::Stop),
+                                None,
+                            ))))
+                            .await
+                            .context("send stt result start failure")?;
+                            let tts_state = tts_state_clone.clone();
+                            let mut tts_state = tts_state.lock().await;
+                            *tts_state = Some(TtsState::Stop);
+                            drop(tts_state);
+                            Ok(())
+                        }()
+                        .await;
+                        if let Err(e) = result {
+                            error!("{:?}", e);
                         }
                     }
-                    //stop
-                    if stop_me.load(Ordering::Relaxed) {
-                        drop(tx);
+                    Err(e) => {
+                        error!("{:?}", e);
                     }
-                    end.store(true, Ordering::Relaxed);
-                });
+                }
             }
-        }
+            //stop
+            if stop_me.load(Ordering::Relaxed) {
+                drop(tx);
+            }
+            end.store(true, Ordering::Relaxed);
+        });
     }
 
     #[instrument(skip(self), name="Round stop",fields(id = %self.id,parent_id = %self.parent_id))]
@@ -1102,7 +787,10 @@ mod tests {
     use super::*;
 
     use axum::body::Bytes;
-    use service::chobits::message::{hello::HelloMessage, listen::ListenMessage};
+    use service::chobits::message::{
+        hello::HelloMessage,
+        listen::{ListenMessage, ListenMode},
+    };
     use tokio_stream::StreamExt;
     use tracing_test::traced_test;
 
@@ -1265,7 +953,138 @@ mod tests {
     /// listen voice by auto mode and output the asr text result
     /// cargo test --features cuda --package api --lib -- ws::session::tests::test_chat_flow_listen_auto --ignored --show-output
     async fn test_chat_flow_listen_auto() {
-        todo!();
+        use std::path::PathBuf;
+
+        let wav_file: PathBuf = [
+            env!("CARGO_MANIFEST_DIR"),
+            "resources",
+            "test",
+            "samples_jfk.wav",
+        ]
+        .iter()
+        .collect();
+        info!("{}", wav_file.display());
+        let (pcm_data, sample_rate) = pcm_decode(wav_file).unwrap();
+        info!(
+            "pcm_data len = {},sample_rate = {}",
+            pcm_data.len(),
+            sample_rate
+        );
+
+        /// the follow code is output wav file to test
+        // use wavers::{AudioSample, ConvertSlice, ConvertTo, Samples, read, write};
+        // let fp = "./decode_pcm_data.wav";
+        // let sr: i32 = 16000;
+        // write(fp, &pcm_data, sr, 1);
+
+        const ENCODE_SAMPLE_RATE: u32 = 16000;
+        let mut encoder = opus::Encoder::new(
+            ENCODE_SAMPLE_RATE,
+            opus::Channels::Mono,
+            opus::Application::Audio,
+        )
+        .unwrap();
+
+        // 16000Hz * 1 channel * 60 ms / 1000 = 960
+        const MONO_60MS: usize = ENCODE_SAMPLE_RATE as usize * 60 / 1000;
+        let size = MONO_60MS;
+        info!("size = {}", size);
+        let len = pcm_data.len();
+        let mut count = len / size;
+        if len % size > 0 {
+            count = count + 1;
+        }
+        info!("count = {}", count);
+        let mut audio: Vec<Vec<u8>> = Vec::new();
+
+        for n in 0..count {
+            let start = n * size;
+            let end = cmp::min((n + 1) * size, len);
+            let packet = encoder
+                .encode_vec_float(&pcm_data[start..end], size)
+                .unwrap();
+            audio.push(packet);
+        }
+
+        let mut session = create_session().await;
+        let session_id = session.id.clone();
+        session.start().await;
+        let mut output = session.output_frame().await;
+        let next_step = Arc::new(AtomicBool::new(false));
+        let next_step_for_sender = next_step.clone();
+        let join_handle = tokio::spawn(async move {
+            let mut count = 0;
+            while let Some(data) = output.next().await {
+                info!("session id = {}, data = {:?}", session_id, data);
+                match data {
+                    Ok(frame_result) => match frame_result {
+                        FrameResult::HelloResult(_hello_message) => {}
+                        FrameResult::STTResult(_stt_message) => {}
+                        FrameResult::LLMResult(_llm_message) => {}
+                        FrameResult::TTSResult(tts_message) => {
+                            let state = tts_message.state;
+                            if let Some(state) = state {
+                                if TtsState::Stop == state {
+                                    count = count + 1;
+                                    next_step.store(true, Ordering::Relaxed);
+                                    //when next round tts stop after wake tts round
+                                    if count >= 2 {
+                                        return;
+                                    }
+                                }
+                            }
+                        }
+                        FrameResult::AudioResult(audio_message) => {}
+                        _ => {
+                            panic!("unexpected frame result");
+                        }
+                    },
+                    Err(_) => {
+                        break;
+                    }
+                }
+            }
+            panic!("receive hello message error");
+        });
+        session
+            .accept_frame(Frame::Hello(HelloMessage {
+                ..Default::default()
+            }))
+            .await;
+        for n in 0..audio.len() {
+            session
+                .accept_frame(Frame::Voice(Bytes::copy_from_slice(&audio.get(n).unwrap())))
+                .await;
+        }
+        session
+            .accept_frame(Frame::Listen(ListenMessage {
+                state: ListenState::Detect,
+                mmod: None,
+                text: Some(String::from("Hello")),
+                ..Default::default()
+            }))
+            .await;
+        session
+            .accept_frame(Frame::Listen(ListenMessage {
+                state: ListenState::Start,
+                mmod: Some(ListenMode::Auto),
+                ..Default::default()
+            }))
+            .await;
+        let mut to_next_step = false;
+        info!("before next step");
+        while !to_next_step {
+            to_next_step = next_step_for_sender.load(Ordering::Relaxed);
+            sleep(Duration::from_millis(500)).await;
+        }
+        info!("after next step");
+        for n in 0..audio.len() {
+            session
+                .accept_frame(Frame::Voice(Bytes::copy_from_slice(&audio.get(n).unwrap())))
+                .await;
+        }
+        join_handle.await.unwrap();
+        session.stop().await;
     }
 
     #[tokio::test]
@@ -1283,7 +1102,53 @@ mod tests {
     /// get text message and output the asr text result
     /// cargo test --features cuda --package api --lib -- ws::session::tests::test_chat_flow_handle_text_message --ignored --show-output
     async fn test_chat_flow_handle_text_message() {
-        todo!();
+        let mut session = create_session().await;
+        let session_id = session.id.clone();
+        session.start().await;
+        let mut output = session.output_frame().await;
+        let join_handle = tokio::spawn(async move {
+            while let Some(data) = output.next().await {
+                info!("session id = {}, data = {:?}", session_id, data);
+                match data {
+                    Ok(frame_result) => match frame_result {
+                        FrameResult::HelloResult(_hello_message) => {}
+                        FrameResult::STTResult(_stt_message) => {}
+                        FrameResult::LLMResult(_llm_message) => {}
+                        FrameResult::TTSResult(tts_message) => {
+                            let state = tts_message.state;
+                            if let Some(state) = state {
+                                if TtsState::Stop == state {
+                                    return;
+                                }
+                            }
+                        }
+                        FrameResult::AudioResult(audio_message) => {}
+                        _ => {
+                            panic!("unexpected frame result");
+                        }
+                    },
+                    Err(_) => {
+                        break;
+                    }
+                }
+            }
+            panic!("receive hello message error");
+        });
+        session
+            .accept_frame(Frame::Hello(HelloMessage {
+                ..Default::default()
+            }))
+            .await;
+        session
+            .accept_frame(Frame::Listen(ListenMessage {
+                state: ListenState::Detect,
+                mmod: Some(service::chobits::message::listen::ListenMode::Manual),
+                text: Some(String::from("Hello")),
+                ..Default::default()
+            }))
+            .await;
+        join_handle.await.unwrap();
+        session.stop().await;
     }
 
     #[tokio::test]
