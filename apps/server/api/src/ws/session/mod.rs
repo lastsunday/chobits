@@ -202,7 +202,6 @@ where
                                         service::chobits::message::listen::ListenMode::Manual => {
                                             self.phase = Phase::Listen(ListenMode::Manual);
                                             self.listener.reset(None).await;
-                                            self.new_round().await;
                                         }
                                         service::chobits::message::listen::ListenMode::RealTime => {
                                             self.phase = Phase::Listen(ListenMode::RealTime);
@@ -221,8 +220,8 @@ where
                                 match text {
                                     Some(text) => {
                                         info!("detect text = {}", text.to_string());
-                                        self.new_round().await;
                                         self.update_latest_activity_time().await;
+                                        self.new_round().await;
                                         //if match walk word
                                         if let Some(round) = &mut self.current_round {
                                             // TODO: detech voice id
@@ -261,10 +260,15 @@ where
                     }
                     Frame::Voice(bytes) => {
                         let state = self.listener.get_state();
+                        let mut round_end = true;
                         match &self.current_round {
                             Some(round) => {
-                                let end = round.end.load(Ordering::Relaxed);
-                                if end {
+                                round_end = round.end.load(Ordering::Relaxed);
+                                info!(
+                                    "listener listen round end = {} state = {:?}",
+                                    round_end, state,
+                                );
+                                if round_end {
                                     //round is end
                                     if state == crate::ws::session::listener::ListenState::End {
                                         self.handle_listen_end().await;
@@ -273,11 +277,6 @@ where
                                         self.listener.reset(Some(silence_voice_timeout)).await;
                                         self.update_latest_activity_time().await;
                                     } else {
-                                        info!(
-                                            "listener listen bytes len = {},round end = {}",
-                                            &bytes.len(),
-                                            end
-                                        );
                                         self.listener.listen(&bytes).await;
                                     }
                                 } else {
@@ -286,7 +285,6 @@ where
                             }
                             None => {
                                 if state == crate::ws::session::listener::ListenState::End {
-                                    self.new_round().await;
                                     self.handle_listen_end().await;
                                     let silence_voice_timeout =
                                         config::get().logic().silence_voice_timeout();
@@ -297,11 +295,6 @@ where
                                 }
                             }
                         }
-                        // TODO: close connection when no voice time is over the limit setting
-                        let round_end = match &self.current_round {
-                            Some(round) => round.end.load(Ordering::Relaxed),
-                            None => true,
-                        };
                         let is_speech = match self.listener.get_state() {
                             listener::ListenState::Listening(speech) => speech,
                             _ => false,
@@ -317,7 +310,7 @@ where
                                     //connection timeout handle
                                     let offset_time =
                                         Local::now().timestamp_millis() - latest_activity_time;
-                                    info!("offset_time = {}", offset_time);
+                                    // info!("offset_time = {}", offset_time);
                                     if offset_time >= close_connection_no_voice_time {
                                         self.stop().await;
                                     }
@@ -351,7 +344,6 @@ where
                                         service::chobits::message::listen::ListenMode::Manual => {
                                             self.phase = Phase::Listen(ListenMode::Manual);
                                             self.listener.reset(None).await;
-                                            self.new_round().await;
                                         }
                                         service::chobits::message::listen::ListenMode::RealTime => {
                                             self.phase = Phase::Listen(ListenMode::RealTime);
@@ -418,6 +410,7 @@ where
         let command = self.listener.get_result().await;
         match command {
             Ok(command) => {
+                self.new_round().await;
                 info!("command = {:?}", command.clone());
                 let is_speech_clear = self.is_speech_clear(command.prob);
                 if let Some(round) = &mut self.current_round {
@@ -721,6 +714,7 @@ impl Round {
                 drop(tx);
             }
             end.store(true, Ordering::Relaxed);
+            info!("round setting end = true");
         });
     }
 
