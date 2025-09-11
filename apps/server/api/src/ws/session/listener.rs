@@ -2,7 +2,7 @@ use crate::{
     config,
     ws::{asr::Asr, common::ModelError, vad::Vad},
 };
-use chrono::{Local, Utc};
+use chrono::Local;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::info;

@@ -91,7 +91,10 @@ where
             round.stop().await;
         }
         let tx = self.output_tx.clone().unwrap();
-        tx.send(Ok(FrameResult::CloseResult)).await;
+        let result = tx.send(Ok(FrameResult::CloseResult)).await;
+        if result.is_err() {
+            info!("tx send frame result close result failure");
+        }
         info!("end");
     }
 
@@ -499,7 +502,7 @@ where
                     Frame::Voice(bytes) => {
                         let state = self.listener.get_state();
                         match &self.current_round {
-                            Some(round) => {
+                            Some(_round) => {
                                 // info!(
                                 //     "listener listen round end = {} state = {:?}",
                                 //     round_end, state,
@@ -616,7 +619,11 @@ where
                     Some(frame_result) => {
                         let mut time = latest_activity_time.lock().await;
                         *time = Some(Local::now().timestamp_millis());
-                        outer_tx.send(frame_result).await;
+                        let result = outer_tx.send(frame_result).await;
+                        if result.is_err() {
+                            info!("outer tx send frame result failure");
+                            break;
+                        }
                     }
                     None => {
                         notify_share_for_main_logic.notified().await;
@@ -648,7 +655,10 @@ where
             features: None,
             session_id: Some(self.id.clone()),
         };
-        tx.send(Ok(FrameResult::HelloResult(data))).await;
+        let result = tx.send(Ok(FrameResult::HelloResult(data))).await;
+        if result.is_err() {
+            info!("tx send hello result failure");
+        }
     }
 
     pub fn is_speech_clear(&self, prob: f32) -> bool {
@@ -1298,8 +1308,6 @@ mod tests {
         let session_id = session.id.clone();
         session.start().await;
         let mut output = session.output_frame().await;
-        let next_step = Arc::new(AtomicBool::new(false));
-        let next_step_for_sender = next_step.clone();
         let join_handle = tokio::spawn(async move {
             let mut count = 0;
             while let Some(data) = output.next().await {

@@ -125,7 +125,11 @@ where
                         }
                     }
                     frame::FrameResult::CloseResult => {
-                        write.close().await;
+                        let result = write.close().await;
+                        if result.is_err() {
+                            info!("write close failure");
+                            break;
+                        }
                     }
                 },
                 Err(e) => {
@@ -134,7 +138,10 @@ where
                 }
             }
         }
-        write.close().await;
+        let result = write.close().await;
+        if result.is_err() {
+            info!("write close failure");
+        }
     });
     tokio::spawn(async move {
         while let Some(Ok(msg)) = read.next().await {
@@ -170,11 +177,11 @@ where
                                     info!("abort message = {:?}", abort_message);
                                     session.stop().await;
                                 }
-                                frame::Frame::Ping(bytes) => {
+                                frame::Frame::Ping(_bytes) => {
                                     // TODO: log session id
                                     info!("ping");
                                 }
-                                frame::Frame::Pong(bytes) => {
+                                frame::Frame::Pong(_bytes) => {
                                     // TODO: log session id
                                     info!("pong");
                                 }

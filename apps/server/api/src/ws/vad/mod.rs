@@ -51,8 +51,8 @@ impl VadSilero {
         let start = std::time::Instant::now();
         let device = device(true)?;
         let model = candle_onnx::read_file(model_path.clone())?;
-        tracing::info!("loaded the model in {:?}", start.elapsed());
-        tracing::info!("model built");
+        info!("loaded the model in {:?}", start.elapsed());
+        info!("model built");
         Ok(Self {
             model,
             device: device.clone(),
