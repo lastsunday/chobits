@@ -214,7 +214,6 @@ where
                                     );
                                 }
                             }
-                            ListenState::Stop => todo!(),
                             ListenState::Detect => {
                                 let text = listen_message.text;
                                 match text {
@@ -232,8 +231,24 @@ where
                                             match command {
                                                 Ok(command) => {
                                                     info!("command  = {:?}", command);
-                                                    //say hello
-                                                    round.accept_command(Command::Wake(text)).await;
+                                                    let mode = listen_message.mmod;
+                                                    let mut is_text_message = false;
+                                                    if let Some(mode) = mode {
+                                                        if mode == service::chobits::message::listen::ListenMode::Manual {
+                                                            is_text_message = true;
+                                                        }
+                                                    }
+                                                    if is_text_message {
+                                                        // text message handle
+                                                        round
+                                                            .accept_command(Command::Chat(text))
+                                                            .await;
+                                                    } else {
+                                                        //say hello
+                                                        round
+                                                            .accept_command(Command::Wake(text))
+                                                            .await;
+                                                    }
                                                 }
                                                 Err(e) => {
                                                     error!("{:?}", e);
@@ -255,7 +270,12 @@ where
                                     }
                                 }
                             }
-                            ListenState::Text => todo!(),
+                            _ => {
+                                error!(
+                                    "invalid frame in phase = {:?},frame = {:?}",
+                                    self.phase, frame
+                                );
+                            }
                         }
                     }
                     Frame::Voice(bytes) => {
@@ -428,7 +448,6 @@ where
                                     );
                                 }
                             }
-                            ListenState::Stop => todo!(),
                             ListenState::Detect => {
                                 let text = listen_message.text;
                                 match text {
@@ -469,12 +488,16 @@ where
                                     }
                                 }
                             }
-                            ListenState::Text => todo!(),
+                            _ => {
+                                error!(
+                                    "invalid frame in phase = {:?},frame = {:?}",
+                                    self.phase, frame
+                                );
+                            }
                         }
                     }
                     Frame::Voice(bytes) => {
                         let state = self.listener.get_state();
-                        let mut round_end = true;
                         match &self.current_round {
                             Some(round) => {
                                 // info!(
@@ -506,7 +529,7 @@ where
                             listener::ListenState::Listening(speech) => speech,
                             _ => false,
                         };
-                        if !round_end || is_speech {
+                        if is_speech {
                             self.update_latest_activity_time().await;
                         } else {
                             let latest_activity_time = self.get_latest_activity_time().await;
@@ -1216,9 +1239,132 @@ mod tests {
     #[traced_test]
     #[ignore]
     /// listen voice by realtime mode and output the asr text result
-    /// cargo test --features cuda --package api --lib -- ws::session::tests::test_chat_flow_listen_remaltime --ignored --show-output
+    /// cargo test --features cuda --package api --lib -- ws::session::tests::test_chat_flow_listen_realtime --ignored --show-output
     async fn test_chat_flow_listen_realtime() {
-        todo!();
+        use std::path::PathBuf;
+
+        let wav_file: PathBuf = [
+            env!("CARGO_MANIFEST_DIR"),
+            "resources",
+            "test",
+            "samples_jfk.wav",
+        ]
+        .iter()
+        .collect();
+        info!("{}", wav_file.display());
+        let (pcm_data, sample_rate) = pcm_decode(wav_file).unwrap();
+        info!(
+            "pcm_data len = {},sample_rate = {}",
+            pcm_data.len(),
+            sample_rate
+        );
+
+        /// the follow code is output wav file to test
+        // use wavers::{AudioSample, ConvertSlice, ConvertTo, Samples, read, write};
+        // let fp = "./decode_pcm_data.wav";
+        // let sr: i32 = 16000;
+        // write(fp, &pcm_data, sr, 1);
+
+        const ENCODE_SAMPLE_RATE: u32 = 16000;
+        let mut encoder = opus::Encoder::new(
+            ENCODE_SAMPLE_RATE,
+            opus::Channels::Mono,
+            opus::Application::Audio,
+        )
+        .unwrap();
+
+        // 16000Hz * 1 channel * 60 ms / 1000 = 960
+        const MONO_60MS: usize = ENCODE_SAMPLE_RATE as usize * 60 / 1000;
+        let size = MONO_60MS;
+        info!("size = {}", size);
+        let len = pcm_data.len();
+        let mut count = len / size;
+        if len % size > 0 {
+            count = count + 1;
+        }
+        info!("count = {}", count);
+        let mut audio: Vec<Vec<u8>> = Vec::new();
+
+        for n in 0..count {
+            let start = n * size;
+            let end = cmp::min((n + 1) * size, len);
+            let packet = encoder
+                .encode_vec_float(&pcm_data[start..end], size)
+                .unwrap();
+            audio.push(packet);
+        }
+
+        let mut session = create_session().await;
+        let session_id = session.id.clone();
+        session.start().await;
+        let mut output = session.output_frame().await;
+        let next_step = Arc::new(AtomicBool::new(false));
+        let next_step_for_sender = next_step.clone();
+        let join_handle = tokio::spawn(async move {
+            let mut count = 0;
+            while let Some(data) = output.next().await {
+                info!("session id = {}, data = {:?}", session_id, data);
+                match data {
+                    Ok(frame_result) => match frame_result {
+                        FrameResult::HelloResult(_hello_message) => {}
+                        FrameResult::STTResult(_stt_message) => {}
+                        FrameResult::LLMResult(_llm_message) => {}
+                        FrameResult::TTSResult(tts_message) => {
+                            let state = tts_message.state;
+                            if let Some(state) = state {
+                                if TtsState::Stop == state {
+                                    count = count + 1;
+                                    //when next round tts stop after wake tts round
+                                    if count >= 2 {
+                                        return;
+                                    }
+                                }
+                            }
+                        }
+                        FrameResult::AudioResult(audio_message) => {}
+                        _ => {
+                            panic!("unexpected frame result");
+                        }
+                    },
+                    Err(_) => {
+                        break;
+                    }
+                }
+            }
+            panic!("receive hello message error");
+        });
+        session
+            .accept_frame(Frame::Hello(HelloMessage {
+                ..Default::default()
+            }))
+            .await;
+        for n in 0..audio.len() {
+            session
+                .accept_frame(Frame::Voice(Bytes::copy_from_slice(&audio.get(n).unwrap())))
+                .await;
+        }
+        session
+            .accept_frame(Frame::Listen(ListenMessage {
+                state: ListenState::Detect,
+                mmod: None,
+                text: Some(String::from("Hello")),
+                ..Default::default()
+            }))
+            .await;
+        session
+            .accept_frame(Frame::Listen(ListenMessage {
+                state: ListenState::Start,
+                mmod: Some(ListenMode::RealTime),
+                ..Default::default()
+            }))
+            .await;
+        for n in 0..audio.len() {
+            session
+                .accept_frame(Frame::Voice(Bytes::copy_from_slice(&audio.get(n).unwrap())))
+                .await;
+        }
+        join_handle.await.unwrap();
+        session.stop().await;
     }
 
     #[tokio::test]
@@ -1280,8 +1426,68 @@ mod tests {
     #[traced_test]
     #[ignore]
     /// when a round running and has a break event,the output stream will stop the original output
+    /// cargo test --features cuda --package api --lib -- ws::session::tests::test_chat_flow_break --ignored --show-output
     async fn test_chat_flow_break() {
-        todo!();
+        let mut session = create_session().await;
+        let session_id = session.id.clone();
+        session.start().await;
+        let mut output = session.output_frame().await;
+        let mut count = 0;
+        let join_handle = tokio::spawn(async move {
+            while let Some(data) = output.next().await {
+                info!("session id = {}, data = {:?}", session_id, data);
+                match data {
+                    Ok(frame_result) => match frame_result {
+                        FrameResult::HelloResult(_hello_message) => {}
+                        FrameResult::STTResult(_stt_message) => {}
+                        FrameResult::LLMResult(_llm_message) => {}
+                        FrameResult::TTSResult(tts_message) => {
+                            let state = tts_message.state;
+                            if let Some(state) = state {
+                                if TtsState::Stop == state {
+                                    count = count + 1;
+                                    //when next round tts stop after wake tts round
+                                    if count >= 2 {
+                                        return;
+                                    }
+                                }
+                            }
+                        }
+                        FrameResult::AudioResult(audio_message) => {}
+                        _ => {
+                            panic!("unexpected frame result");
+                        }
+                    },
+                    Err(_) => {
+                        break;
+                    }
+                }
+            }
+            panic!("receive hello message error");
+        });
+        session
+            .accept_frame(Frame::Hello(HelloMessage {
+                ..Default::default()
+            }))
+            .await;
+        session
+            .accept_frame(Frame::Listen(ListenMessage {
+                state: ListenState::Detect,
+                mmod: Some(service::chobits::message::listen::ListenMode::Manual),
+                text: Some(String::from("Hello")),
+                ..Default::default()
+            }))
+            .await;
+        session
+            .accept_frame(Frame::Listen(ListenMessage {
+                state: ListenState::Detect,
+                mmod: Some(service::chobits::message::listen::ListenMode::Manual),
+                text: Some(String::from("Hello")),
+                ..Default::default()
+            }))
+            .await;
+        join_handle.await.unwrap();
+        session.stop().await;
     }
 
     async fn create_session() -> Session<impl Listener> {

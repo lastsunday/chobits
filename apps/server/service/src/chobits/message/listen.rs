@@ -70,7 +70,7 @@ impl Serialize for ListenState {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ListenMode {
     Auto,
     Manual,
