@@ -344,6 +344,7 @@ where
                                         service::chobits::message::listen::ListenMode::Manual => {
                                             self.phase = Phase::Listen(ListenMode::Manual);
                                             self.listener.reset(None).await;
+                                            self.new_round().await;
                                         }
                                         service::chobits::message::listen::ListenMode::RealTime => {
                                             self.phase = Phase::Listen(ListenMode::RealTime);
@@ -597,6 +598,7 @@ impl Round {
             let pre_buffer_frame_count: u64 = 6;
             let mut send_frame_count: u64 = 0;
             let speaking = speaking.clone();
+            let stop_me = stop_me.clone();
             while let Some(result) = tts_output.next().await {
                 match result {
                     Ok(result) => {
@@ -610,8 +612,8 @@ impl Round {
                         let text = text.clone();
                         let audio_data = result.audio;
                         let tts_state_clone = tts_state_clone.clone();
-                        let stop_me = stop_me.clone();
                         let speaking = speaking.clone();
+                        let stop_me_by_tts_packet = stop_me.clone();
                         let result = async move || -> Result<(), anyhow::Error> {
                             //llm
                             tx.send(Ok(FrameResult::LLMResult(LlmMessage::new(
@@ -651,7 +653,7 @@ impl Round {
                             info!("set speaking = true");
                             info!("send audio frame start");
                             while let Some(packet) = data.next() {
-                                if stop_me.load(Ordering::Relaxed) {
+                                if stop_me_by_tts_packet.load(Ordering::Relaxed) {
                                     break;
                                 }
                                 let now = Instant::now();
@@ -702,16 +704,59 @@ impl Round {
                         .await;
                         if let Err(e) = result {
                             error!("{:?}", e);
+                            stop_me.store(true, Ordering::Relaxed);
+                            break;
                         }
                     }
                     Err(e) => {
                         error!("{:?}", e);
+                        stop_me.store(true, Ordering::Relaxed);
+                        break;
                     }
                 }
             }
-            //stop
             if stop_me.load(Ordering::Relaxed) {
-                drop(tx);
+                let tts_state = tts_state_clone.lock().await;
+                match tts_state.as_ref() {
+                    Some(tts_state) => {
+                        let result = async move || -> Result<(), anyhow::Error> {
+                            info!("{:?}", tts_state);
+                            if tts_state > &TtsState::Start {
+                                tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
+                                    Some(session_id.to_string()),
+                                    Some(TtsState::SentenceStart),
+                                    None,
+                                ))))
+                                .await
+                                .context("send stt result sentence start failure")?;
+                            }
+                            if tts_state > &TtsState::SentenceStart {
+                                tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
+                                    Some(session_id.to_string()),
+                                    Some(TtsState::SentenceEnd),
+                                    None,
+                                ))))
+                                .await
+                                .context("send stt result sentence end failure")?;
+                            }
+                            if tts_state > &TtsState::SentenceEnd {
+                                tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
+                                    Some(session_id.to_string()),
+                                    Some(TtsState::Stop),
+                                    None,
+                                ))))
+                                .await
+                                .context("send stt result stop failure")?;
+                            }
+                            Ok(())
+                        }()
+                        .await;
+                        if let Err(e) = result {
+                            error!("{:?}", e)
+                        }
+                    }
+                    None => {}
+                }
             }
             end.store(true, Ordering::Relaxed);
             info!("round setting end = true");
@@ -722,50 +767,6 @@ impl Round {
     pub async fn stop(&self) {
         info!("stop");
         self.stop.store(true, Ordering::Relaxed);
-        let tts_state = self.tts_state.clone();
-        let tts_state = tts_state.lock().await;
-        match tts_state.as_ref() {
-            Some(tts_state) => {
-                let session_id = self.parent_id.clone();
-                let tx = self.tx.clone();
-                let result = async move || -> Result<(), anyhow::Error> {
-                    info!("{:?}", tts_state);
-                    if tts_state > &TtsState::Start {
-                        tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                            Some(session_id.to_string()),
-                            Some(TtsState::SentenceStart),
-                            None,
-                        ))))
-                        .await
-                        .context("send stt result sentence start failure")?;
-                    }
-                    if tts_state > &TtsState::SentenceStart {
-                        tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                            Some(session_id.to_string()),
-                            Some(TtsState::SentenceEnd),
-                            None,
-                        ))))
-                        .await
-                        .context("send stt result sentence end failure")?;
-                    }
-                    if tts_state > &TtsState::SentenceEnd {
-                        tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                            Some(session_id.to_string()),
-                            Some(TtsState::Stop),
-                            None,
-                        ))))
-                        .await
-                        .context("send stt result stop failure")?;
-                    }
-                    Ok(())
-                }()
-                .await;
-                if let Err(e) = result {
-                    error!("{:?}", e)
-                }
-            }
-            None => {}
-        }
     }
 }
 

@@ -90,6 +90,7 @@ where
                             .expect("hello message to json failure");
                         if write.send(Message::Text(result.into())).await.is_err() {
                             info!("send hello message failure");
+                            break;
                         }
                     }
                     frame::FrameResult::STTResult(stt_message) => {
@@ -97,6 +98,7 @@ where
                             .expect("stt message to json failure");
                         if write.send(Message::Text(result.into())).await.is_err() {
                             info!("send stt message failure");
+                            break;
                         }
                     }
                     frame::FrameResult::LLMResult(llm_message) => {
@@ -104,6 +106,7 @@ where
                             .expect("llm message to json failure");
                         if write.send(Message::Text(result.into())).await.is_err() {
                             info!("send llm message failure");
+                            break;
                         }
                     }
                     frame::FrameResult::TTSResult(tts_message) => {
@@ -111,12 +114,14 @@ where
                             .expect("tts message to json failure");
                         if write.send(Message::Text(result.into())).await.is_err() {
                             info!("send tts message failure");
+                            break;
                         }
                     }
                     frame::FrameResult::AudioResult(audio_message) => {
                         let data = audio_message.data;
                         if write.send(Message::Binary(data.into())).await.is_err() {
                             info!("send audio data failure");
+                            break;
                         }
                     }
                     frame::FrameResult::CloseResult => {
@@ -129,6 +134,7 @@ where
                 }
             }
         }
+        write.close().await;
     });
     tokio::spawn(async move {
         while let Some(Ok(msg)) = read.next().await {

@@ -23,3 +23,9 @@
    1. -> Listen(state:detect,text:"hello")
    1. -> Listen(state:start,mode:auto)
    1. -> Voice
+
+1. listen realtime mode
+
+> > esp32-xiaozhi 设置: Use Device AEC 设置为 true
+
+    1.
