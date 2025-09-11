@@ -2,7 +2,7 @@ use crate::{
     config,
     ws::{asr::Asr, common::ModelError, vad::Vad},
 };
-use chrono::Local;
+use chrono::{Local, Utc};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::info;
@@ -160,7 +160,8 @@ where
         let mut asr = asr.lock().await;
         // the follow code want to output wav file to test
         // use wavers::write;
-        // let fp = "./before_asr_transcribe.wav";
+        // let file_name = Utc::now().format("%Y%m%d%H%M%S").to_string();
+        // let fp = format!("./asr_result{}.wav", file_name);
         // let sr: i32 = 16000;
         // write(fp, &voice_data, sr, 1);
         let result = asr.transcribe(sample_rate, &voice_data).await?;

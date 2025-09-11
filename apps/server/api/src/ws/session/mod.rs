@@ -264,10 +264,10 @@ where
                         match &self.current_round {
                             Some(round) => {
                                 round_end = round.end.load(Ordering::Relaxed);
-                                info!(
-                                    "listener listen round end = {} state = {:?}",
-                                    round_end, state,
-                                );
+                                // info!(
+                                //     "listener listen round end = {} state = {:?}",
+                                //     round_end, state,
+                                // );
                                 if round_end {
                                     //round is end
                                     if state == crate::ws::session::listener::ListenState::End {

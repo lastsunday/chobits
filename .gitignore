@@ -59,3 +59,4 @@ application.yaml
 /data
 target
 apps/server/api/*.wav
+asr_result*.wav
