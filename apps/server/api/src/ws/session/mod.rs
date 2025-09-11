@@ -402,7 +402,137 @@ where
                         );
                     }
                 },
-                ListenMode::RealTime => todo!(),
+                ListenMode::RealTime => match frame.clone() {
+                    Frame::Listen(listen_message) => {
+                        let state = listen_message.state;
+                        match state {
+                            ListenState::Start => {
+                                let mode = listen_message.mmod;
+                                if let Some(mode) = mode {
+                                    match mode {
+                                        service::chobits::message::listen::ListenMode::Auto => {
+                                            self.phase = Phase::Listen(ListenMode::Auto);
+                                        }
+                                        service::chobits::message::listen::ListenMode::Manual => {
+                                            self.phase = Phase::Listen(ListenMode::Manual);
+                                            self.listener.reset(None).await;
+                                        }
+                                        service::chobits::message::listen::ListenMode::RealTime => {
+                                            self.phase = Phase::Listen(ListenMode::RealTime);
+                                        }
+                                    }
+                                } else {
+                                    error!(
+                                        "invalid frame in phase = {:?},frame = {:?}, state = {:?}",
+                                        self.phase, frame, state
+                                    );
+                                }
+                            }
+                            ListenState::Stop => todo!(),
+                            ListenState::Detect => {
+                                let text = listen_message.text;
+                                match text {
+                                    Some(text) => {
+                                        info!("detect text = {}", text.to_string());
+                                        self.update_latest_activity_time().await;
+                                        self.new_round().await;
+                                        //if match walk word
+                                        if let Some(round) = &mut self.current_round {
+                                            // TODO: detech voice id
+                                            self.listener.set_state(
+                                                crate::ws::session::listener::ListenState::End,
+                                            );
+                                            let command = self.listener.get_result().await;
+                                            match command {
+                                                Ok(command) => {
+                                                    info!("command  = {:?}", command);
+                                                    //say hello
+                                                    round.accept_command(Command::Wake(text)).await;
+                                                }
+                                                Err(e) => {
+                                                    error!("{:?}", e);
+                                                }
+                                            }
+                                            let silence_voice_timeout =
+                                                config::get().logic().silence_voice_timeout();
+                                            //reset listener to option(slinent condition limit)
+                                            self.listener.reset(Some(silence_voice_timeout)).await;
+                                        } else {
+                                            panic!("current round is none");
+                                        }
+                                    }
+                                    None => {
+                                        error!(
+                                            "invalid frame in phase = {:?},frame = {:?}",
+                                            self.phase, frame
+                                        );
+                                    }
+                                }
+                            }
+                            ListenState::Text => todo!(),
+                        }
+                    }
+                    Frame::Voice(bytes) => {
+                        let state = self.listener.get_state();
+                        let mut round_end = true;
+                        match &self.current_round {
+                            Some(round) => {
+                                // info!(
+                                //     "listener listen round end = {} state = {:?}",
+                                //     round_end, state,
+                                // );
+                                self.listener.listen(&bytes).await;
+                                if state == crate::ws::session::listener::ListenState::End {
+                                    self.handle_listen_end().await;
+                                    let silence_voice_timeout =
+                                        config::get().logic().silence_voice_timeout();
+                                    self.listener.reset(Some(silence_voice_timeout)).await;
+                                    self.update_latest_activity_time().await;
+                                }
+                            }
+                            None => {
+                                if state == crate::ws::session::listener::ListenState::End {
+                                    self.handle_listen_end().await;
+                                    let silence_voice_timeout =
+                                        config::get().logic().silence_voice_timeout();
+                                    self.listener.reset(Some(silence_voice_timeout)).await;
+                                    self.update_latest_activity_time().await;
+                                } else {
+                                    self.listener.listen(&bytes).await;
+                                }
+                            }
+                        }
+                        let is_speech = match self.listener.get_state() {
+                            listener::ListenState::Listening(speech) => speech,
+                            _ => false,
+                        };
+                        if !round_end || is_speech {
+                            self.update_latest_activity_time().await;
+                        } else {
+                            let latest_activity_time = self.get_latest_activity_time().await;
+                            if let Some(latest_activity_time) = latest_activity_time {
+                                if let Some(close_connection_no_voice_time) =
+                                    self.close_connection_no_voice_time
+                                {
+                                    //connection timeout handle
+                                    let offset_time =
+                                        Local::now().timestamp_millis() - latest_activity_time;
+                                    // info!("offset_time = {}", offset_time);
+                                    if offset_time >= close_connection_no_voice_time {
+                                        self.stop().await;
+                                    }
+                                }
+                            }
+                        }
+                        // info!("latest_activity_time = {:?}", self.latest_activity_time);
+                    }
+                    _ => {
+                        error!(
+                            "invalid frame in phase = {:?},frame = {:?}",
+                            self.phase, frame
+                        );
+                    }
+                },
             },
         }
     }
