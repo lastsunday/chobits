@@ -32,6 +32,30 @@ pub async fn assets_handler(Path(path): Path<String>) -> impl IntoResponse {
     AssetsFile(path).into_response()
 }
 
+#[derive(Embed)]
+#[folder = "device/assets"]
+struct DeviceAssets;
+
+struct DeviceAssetsFile<T>(T);
+
+impl<T: AsRef<str>> IntoResponse for DeviceAssetsFile<T> {
+    fn into_response(self) -> axum::response::Response {
+        let path = self.0.as_ref();
+        match DeviceAssets::get(path) {
+            Some(file) => {
+                let mime = file.metadata.mimetype();
+                let body = file.data;
+                ([(header::CONTENT_TYPE, mime)], body).into_response()
+            }
+            None => (StatusCode::NOT_FOUND, "Not found").into_response(),
+        }
+    }
+}
+
+pub async fn device_assets_handler(Path(path): Path<String>) -> impl IntoResponse {
+    DeviceAssetsFile(path).into_response()
+}
+
 pub async fn index_handler(method: Method) -> impl IntoResponse {
     if method == Method::GET {
         let file = IndexHtml::get("index.html").expect("index.html not found");
