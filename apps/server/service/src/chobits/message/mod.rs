@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 pub mod abort;
+pub mod audio;
 pub mod close;
 pub mod hello;
 pub mod listen;

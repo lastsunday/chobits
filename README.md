@@ -54,6 +54,7 @@ pnpm exec nx run @chobits/server-ui:dev
 pnpm exec nx run @chobits/server-ui:build
 ./apps/server/script/download_model.sh
 pnpm nx run chobits-server:run
+pnpm nx run chobits-server:run --features cuda
 ```
 
 </details>

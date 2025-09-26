@@ -8,6 +8,7 @@ pub mod vad_cache;
 
 use candle_core::{DType, Device, Tensor};
 use candle_onnx::onnx::ModelProto;
+use tracing::info;
 
 use crate::ws::common::{ModelError, device};
 
@@ -42,6 +43,7 @@ pub struct VadSilero {
     min_silence_duration: f32,
     /// unit ms
     current_silence_duration: f32,
+    prediction_list: Vec<f32>,
 }
 
 impl VadSilero {
@@ -49,8 +51,8 @@ impl VadSilero {
         let start = std::time::Instant::now();
         let device = device(true)?;
         let model = candle_onnx::read_file(model_path.clone())?;
-        tracing::info!("loaded the model in {:?}", start.elapsed());
-        tracing::info!("model built");
+        info!("loaded the model in {:?}", start.elapsed());
+        info!("model built");
         Ok(Self {
             model,
             device: device.clone(),
@@ -60,6 +62,7 @@ impl VadSilero {
             total_accept_waveform_samples_len: 0,
             min_silence_duration: 1000.0,
             current_silence_duration: 0.0,
+            prediction_list: Vec::new(),
         })
     }
 }
@@ -121,24 +124,40 @@ impl Vad for VadSilero {
         res.push(output);
         let res_len = res.len() as f32;
         let prediction = res.iter().sum::<f32>() / res_len;
-        if prediction >= threshold {
-            self.current_silence_duration = 0.0;
-            self.samples.append(&mut samples.clone());
-            self.is_speech = true;
-            if self.start < 0 {
-                self.start = self.total_accept_waveform_samples_len;
+
+        // info!("vad prediction = {}", prediction);
+        if !self.is_speech {
+            if prediction > threshold {
+                self.prediction_list.push(prediction);
+            } else {
+                self.clear().await;
+            }
+
+            if self.prediction_list.len() > 0 {
+                self.samples.append(&mut samples.clone());
+            }
+
+            // avoid some noise trigger speech detect
+            if self.prediction_list.len() >= 5 && !self.is_speech {
+                self.is_speech = true;
+                if self.start < 0 {
+                    self.start = self.total_accept_waveform_samples_len;
+                }
             }
         } else {
-            if self.is_speech && self.current_silence_duration <= self.min_silence_duration {
+            if prediction >= threshold {
                 self.samples.append(&mut samples.clone());
             } else {
-                self.is_speech = false;
-                self.start = -1;
-                self.samples.clear();
+                if self.is_speech && self.current_silence_duration <= self.min_silence_duration {
+                    self.samples.append(&mut samples.clone());
+                } else {
+                    self.clear().await;
+                }
+                self.current_silence_duration +=
+                    (samples.len() as f32 / sample_rate as f32) as f32 * 1000.0;
             }
-            self.current_silence_duration +=
-                (samples.len() as f32 / sample_rate as f32) as f32 * 1000.0;
         }
+        // info!("vad len = {}", self.prediction_list.len());
         self.total_accept_waveform_samples_len += samples.len() as i32;
         Ok(())
     }
@@ -172,5 +191,6 @@ impl Vad for VadSilero {
         self.is_speech = false;
         self.current_silence_duration = 0.0;
         self.total_accept_waveform_samples_len = 0;
+        self.prediction_list.clear();
     }
 }

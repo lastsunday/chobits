@@ -8,11 +8,6 @@
 cargo test --workspace
 ```
 
-```shell
-cargo test --test llm_test --features cuda -- tests::test_llm_chat --ignored --show-output
-cargo test --test llm_util_test --features cuda -- tests::test_llm_util_filter --show-output
-```
-
 ## Framework
 
 1. Web framework

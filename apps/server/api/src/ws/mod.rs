@@ -1,23 +1,21 @@
 pub mod asr;
 pub mod common;
 pub mod frame;
-pub mod handler;
-pub mod listener;
 pub mod llm;
 pub mod message_converter;
-pub mod sender;
+pub mod session;
 pub mod state;
 pub mod tts;
 pub mod util;
 pub mod vad;
 
-use super::ws::sender::Sender;
 use crate::{
-    AppState,
+    AppState, config,
     ws::{
-        asr::asr_cache::AsrCache, frame::Frame, handler::Handler, listener::Listener,
-        llm::llm_cache::LlmCache, message_converter::convert_to_frame, state::State,
-        tts::tts_cache::TtsCache, vad::vad_cache::VadCache,
+        asr::asr_cache::AsrCache,
+        message_converter::convert_to_frame,
+        session::{Session, listener::DefaultListener},
+        vad::vad_cache::VadCache,
     },
 };
 use axum::{
@@ -27,10 +25,10 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use axum_extra::{TypedHeader, headers};
-use framework::id::gen_id;
-use futures_util::{Sink, Stream, StreamExt};
+use futures_util::{Sink, SinkExt, Stream, StreamExt};
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
+use tracing::{error, info};
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
@@ -70,78 +68,136 @@ async fn ws_handler(
     })
 }
 
-pub async fn handle_socket<W, R>(write: W, mut read: R)
+pub async fn handle_socket<W, R>(mut write: W, mut read: R)
 where
     W: Sink<Message> + Unpin + Send + 'static,
-    R: Stream<Item = Result<Message, axum::Error>> + Unpin,
+    R: Stream<Item = Result<Message, axum::Error>> + Unpin + Send + 'static,
 {
-    let session_id = gen_id();
-    let state = Arc::new(Mutex::new(State::new()));
-    let tts = TtsCache::global().instance.clone();
-    let sender = Sender::new(Box::new(write), tts, state.clone());
-    let sender = Arc::new(Mutex::new(sender));
-    let vad = VadCache::create_vad();
-    let vad = Arc::new(Mutex::new(vad));
-    let asr = AsrCache::global().instance.clone();
-    let asr = Arc::new(Mutex::new(asr));
-    let listener = Listener::new(session_id.clone(), vad, asr.clone(), state.clone());
-    let listener = Arc::new(Mutex::new(listener));
-    let llm = LlmCache::global().instance.clone();
-    let llm = Arc::new(Mutex::new(llm));
-    let handler = Handler::new(
-        session_id,
-        sender.clone(),
-        listener.clone(),
-        state.clone(),
-        llm.clone(),
+    let vad = Arc::new(Mutex::new(VadCache::create_vad()));
+    let asr = Arc::new(Mutex::new(AsrCache::global().instance.clone()));
+    let close_connection_no_voice_time = config::get().logic().close_connection_no_voice_time();
+    let mut session = Session::new(
+        Box::new(DefaultListener::new(vad, asr.clone())),
+        Some(close_connection_no_voice_time),
     );
-    while let Some(Ok(msg)) = read.next().await {
-        let result = convert_to_frame(msg).await;
-        if result.is_break() {
-            if let Some(item) = result.break_value() {
-                if let Some(frame) = item {
-                    match frame {
-                        Frame::Close(message) => {
-                            tracing::info!(
-                                "close code = {},reason = {}",
-                                message.code,
-                                message.reason
-                            );
+    let mut output = session.output_frame().await;
+    tokio::spawn(async move {
+        while let Some(data) = output.next().await {
+            match data {
+                Ok(frame_result) => match frame_result {
+                    frame::FrameResult::HelloResult(hello_message) => {
+                        let result: String = serde_json::to_string(&hello_message)
+                            .expect("hello message to json failure");
+                        if write.send(Message::Text(result.into())).await.is_err() {
+                            info!("send hello message failure");
+                            break;
                         }
-                        _ => {}
+                    }
+                    frame::FrameResult::STTResult(stt_message) => {
+                        let result: String = serde_json::to_string(&stt_message)
+                            .expect("stt message to json failure");
+                        if write.send(Message::Text(result.into())).await.is_err() {
+                            info!("send stt message failure");
+                            break;
+                        }
+                    }
+                    frame::FrameResult::LLMResult(llm_message) => {
+                        let result: String = serde_json::to_string(&llm_message)
+                            .expect("llm message to json failure");
+                        if write.send(Message::Text(result.into())).await.is_err() {
+                            info!("send llm message failure");
+                            break;
+                        }
+                    }
+                    frame::FrameResult::TTSResult(tts_message) => {
+                        let result: String = serde_json::to_string(&tts_message)
+                            .expect("tts message to json failure");
+                        if write.send(Message::Text(result.into())).await.is_err() {
+                            info!("send tts message failure");
+                            break;
+                        }
+                    }
+                    frame::FrameResult::AudioResult(audio_message) => {
+                        let data = audio_message.data;
+                        if write.send(Message::Binary(data.into())).await.is_err() {
+                            info!("send audio data failure");
+                            break;
+                        }
+                    }
+                    frame::FrameResult::CloseResult => {
+                        let result = write.close().await;
+                        if result.is_err() {
+                            info!("write close failure");
+                            break;
+                        }
+                    }
+                },
+                Err(e) => {
+                    error!("{:?}", e);
+                    return;
+                }
+            }
+        }
+        let result = write.close().await;
+        if result.is_err() {
+            info!("write close failure");
+        }
+    });
+    tokio::spawn(async move {
+        while let Some(Ok(msg)) = read.next().await {
+            let result = convert_to_frame(msg).await;
+            if result.is_break() {
+                if let Some(item) = result.break_value() {
+                    match item {
+                        Some(frame) => match frame {
+                            frame::Frame::Close(close_message) => {
+                                info!("break value close message = {:?}", close_message);
+                                session.stop().await;
+                                return;
+                            }
+                            _ => {
+                                session.accept_frame(frame).await;
+                            }
+                        },
+                        None => {
+                            info!("break value none");
+                            session.stop().await;
+                            return;
+                        }
+                    }
+                }
+                return;
+            }
+            if result.is_continue() {
+                if let Some(item) = result.continue_value() {
+                    match item {
+                        Some(frame) => {
+                            match frame {
+                                frame::Frame::Abort(abort_message) => {
+                                    info!("abort message = {:?}", abort_message);
+                                    session.stop().await;
+                                }
+                                frame::Frame::Ping(_bytes) => {
+                                    // TODO: log session id
+                                    info!("ping");
+                                }
+                                frame::Frame::Pong(_bytes) => {
+                                    // TODO: log session id
+                                    info!("pong");
+                                }
+                                _ => {
+                                    session.accept_frame(frame).await;
+                                }
+                            }
+                        }
+                        None => {
+                            info!("unkonw continue message");
+                        }
                     }
                 }
             }
-            return;
         }
-        if result.is_continue() {
-            if let Some(item) = result.continue_value() {
-                match item {
-                    Some(frame) => match frame {
-                        Frame::Hello(message) => {
-                            handler.handle_hello(message);
-                        }
-                        Frame::Listen(message) => {
-                            handler.handle_listen(message);
-                        }
-                        Frame::UnknowText(utf8_bytes) => {
-                            tracing::warn!("unknow text = {}", utf8_bytes.to_string())
-                        }
-                        Frame::Voice(data) => {
-                            handler.handle_voice(data);
-                        }
-                        Frame::Abort(message) => {
-                            handler.handle_abort(message);
-                        }
-                        _ => {}
-                    },
-                    None => {
-                        tracing::info!("unkonw message");
-                    }
-                }
-            }
-        }
-    }
+    });
 }
 
 #[derive(Debug, PartialEq, Eq, ToSchema)]

@@ -195,7 +195,7 @@ async fn handle_chat(
             } else {
                 for c in text.chars() {
                     sentence.push(c);
-                    let regex = Regex::new(r"[。！？!?，、；,;]").unwrap();
+                    let regex = Regex::new(r"[。！？!?；;]").unwrap();
                     // Break a sentence
                     if regex.is_match(&c.to_string()) {
                         let text: String = sentence.clone().into_iter().collect();
@@ -224,12 +224,19 @@ async fn handle_chat(
         };
     }
 
+    let mut last_content = None;
     if let Some(rest) = tos
         .decode_rest()
         .map_err(|e| ModelError::Chat(format!("tensor decode rest error {}", e.to_string())))?
     {
         let text: String = sentence.clone().into_iter().collect();
         let text = format!("{text}{rest}");
+        last_content = Some(text);
+    } else if !sentence.is_empty() {
+        let result: String = sentence.clone().into_iter().collect();
+        last_content = Some(result);
+    }
+    if let Some(text) = last_content {
         if let Some(text) = filter(&text) {
             if let Err(e) = tx.send(Ok(text.clone())).await {
                 tracing::error!("chat send text error = {}", e);
@@ -237,8 +244,8 @@ async fn handle_chat(
                 tracing::info!("llm send text success, text = {}", text);
             }
         }
-        text_result.clear();
     }
+    text_result.clear();
 
     let dt = start_post_prompt.elapsed();
     tracing::info!(

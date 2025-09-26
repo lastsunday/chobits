@@ -5,26 +5,28 @@ use serde::{Deserialize, Serialize};
 pub struct TtsMessage {
     #[serde(flatten)]
     pub message: Message,
+    pub session_id: Option<String>,
     pub state: Option<TtsState>,
     pub text: Option<String>,
 }
 
 impl TtsMessage {
-    pub fn new(state: Option<TtsState>, text: Option<String>) -> Self {
+    pub fn new(session_id: Option<String>, state: Option<TtsState>, text: Option<String>) -> Self {
         Self {
             message: Message { mtype: Type::Tts },
+            session_id,
             state,
             text,
         }
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TtsState {
     Start,
-    Stop,
     SentenceStart,
     SentenceEnd,
+    Stop,
 }
 
 impl<'de> Deserialize<'de> for TtsState {

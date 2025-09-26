@@ -22,6 +22,8 @@ pub trait Asr: Send + Sync {
 #[derive(Debug, Clone)]
 pub struct RecognizerResult {
     pub text: String,
+    pub language: String,
+    pub prob: f32,
 }
 
 #[derive(Clone)]
@@ -41,8 +43,6 @@ impl AsrWhisper {
     ) -> Result<Self, ModelError> {
         let start = std::time::Instant::now();
         let device = device(false)?;
-        tracing::info!("loaded the model in {:?}", start.elapsed());
-        tracing::info!("model built");
         let config: Config =
             serde_json::from_str(&std::fs::read_to_string(config_path.clone()).map_err(|_e| {
                 ModelError::ModelFileNotFound(format!(
@@ -70,7 +70,8 @@ impl AsrWhisper {
         );
         let vb = unsafe { VarBuilder::from_mmaped_safetensors(&[model_path], m::DTYPE, &device)? };
         let model = Model::Normal(m::model::Whisper::load(&vb, config.clone())?);
-
+        tracing::info!("loaded the model in {:?}", start.elapsed());
+        tracing::info!("model built");
         Ok(Self {
             device: device.clone(),
             model,
@@ -115,13 +116,14 @@ impl Asr for AsrWhisper {
             tokenizer,
             seed,
             device,
-            language_token,
+            Some(language_token.clone().unwrap().0.clone()),
             task,
             timestamps,
             verbose,
         ) {
             Ok(mut dc) => {
                 let result = dc.run(&mel);
+                tracing::info!("result = {:?}", result);
                 match result {
                     Ok(result) => {
                         let text = result
@@ -130,7 +132,11 @@ impl Asr for AsrWhisper {
                                 return item.dr.text;
                             })
                             .collect::<String>();
-                        Ok(RecognizerResult { text })
+                        Ok(RecognizerResult {
+                            text,
+                            language: language_token.clone().unwrap().1.clone(),
+                            prob: language_token.clone().unwrap().2.clone(),
+                        })
                     }
                     Err(e) => {
                         return Err(ModelError::Decoder(format!(

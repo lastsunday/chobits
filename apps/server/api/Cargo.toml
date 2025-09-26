@@ -65,6 +65,11 @@ opus = { version = "0.3.0" }
 tokio-stream = { version = "0.1.17" }
 futures = { version = "0.3.31" }
 openssl = { version = "0.10.73", features = ["vendored"] }
+# audio start
+symphonia = { version = "0.5.4" }
+wavers = { version = "1.5.1" }
+ogg = { version = "0.9.2" }
+# audio end
 # llm start
 candle-core = { version = "0.9.1" }
 tokenizers = { version = "0.21.4", default-features = false, features = [
@@ -88,6 +93,7 @@ rand_distr = { version = "0.5.1" }
 kokoro-tts = { version = "0.2.8" }
 # tts end
 
+tracing-test = { version = "0.2.5" }
 entity = { path = "../entity" }
 migration = { path = "../migration" }
 service = { path = "../service" }

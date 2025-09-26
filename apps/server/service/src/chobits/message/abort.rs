@@ -6,11 +6,11 @@ pub struct AbortMessage {
     #[serde(flatten)]
     pub message: Message,
     pub session_id: Option<String>,
-    pub reason: String,
+    pub reason: Option<String>,
 }
 
 impl AbortMessage {
-    pub fn new(session_id: Option<String>, reason: String) -> Self {
+    pub fn new(session_id: Option<String>, reason: Option<String>) -> Self {
         Self {
             message: Message { mtype: Type::Abort },
             session_id,
