@@ -92,6 +92,9 @@ rand_distr = { version = "0.5.1" }
 # tts start
 kokoro-tts = { version = "0.2.8" }
 # tts end
+# mcp start
+rmcp = { version = "0.7.0" }
+# mcp end
 
 tracing-test = { version = "0.2.5" }
 entity = { path = "../entity" }

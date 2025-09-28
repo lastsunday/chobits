@@ -2,6 +2,7 @@ pub mod asr;
 pub mod common;
 pub mod frame;
 pub mod llm;
+pub mod mcp;
 pub mod message_converter;
 pub mod session;
 pub mod state;
@@ -26,6 +27,7 @@ use axum::{
 };
 use axum_extra::{TypedHeader, headers};
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
+use serde::Serialize;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
 use tracing::{error, info};
@@ -68,6 +70,15 @@ async fn ws_handler(
     })
 }
 
+pub async fn send_text<W, T>(write: &mut W, value: &T) -> bool
+where
+    W: Sink<Message> + Unpin + Send + 'static,
+    T: ?Sized + Serialize,
+{
+    let result: String = serde_json::to_string(value).expect("value to json failure");
+    write.send(Message::Text(result.into())).await.is_err()
+}
+
 pub async fn handle_socket<W, R>(mut write: W, mut read: R)
 where
     W: Sink<Message> + Unpin + Send + 'static,
@@ -83,37 +94,36 @@ where
     let mut output = session.output_frame().await;
     tokio::spawn(async move {
         while let Some(data) = output.next().await {
+            info!("{:?}", data);
             match data {
                 Ok(frame_result) => match frame_result {
-                    frame::FrameResult::HelloResult(hello_message) => {
-                        let result: String = serde_json::to_string(&hello_message)
-                            .expect("hello message to json failure");
-                        if write.send(Message::Text(result.into())).await.is_err() {
-                            info!("send hello message failure");
+                    frame::FrameResult::HelloResult(message) => {
+                        if send_text(&mut write, &message).await {
+                            info!("send hello data failure");
                             break;
                         }
                     }
-                    frame::FrameResult::STTResult(stt_message) => {
-                        let result: String = serde_json::to_string(&stt_message)
-                            .expect("stt message to json failure");
-                        if write.send(Message::Text(result.into())).await.is_err() {
-                            info!("send stt message failure");
+                    frame::FrameResult::STTResult(message) => {
+                        if send_text(&mut write, &message).await {
+                            info!("send stt data failure");
                             break;
                         }
                     }
-                    frame::FrameResult::LLMResult(llm_message) => {
-                        let result: String = serde_json::to_string(&llm_message)
-                            .expect("llm message to json failure");
-                        if write.send(Message::Text(result.into())).await.is_err() {
-                            info!("send llm message failure");
+                    frame::FrameResult::LLMResult(message) => {
+                        if send_text(&mut write, &message).await {
+                            info!("send llm data failure");
                             break;
                         }
                     }
-                    frame::FrameResult::TTSResult(tts_message) => {
-                        let result: String = serde_json::to_string(&tts_message)
-                            .expect("tts message to json failure");
-                        if write.send(Message::Text(result.into())).await.is_err() {
-                            info!("send tts message failure");
+                    frame::FrameResult::TTSResult(message) => {
+                        if send_text(&mut write, &message).await {
+                            info!("send tts data failure");
+                            break;
+                        }
+                    }
+                    frame::FrameResult::McpResult(message) => {
+                        if send_text(&mut write, &message).await {
+                            info!("send mcp request data failure");
                             break;
                         }
                     }

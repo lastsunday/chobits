@@ -6,6 +6,7 @@ pub mod close;
 pub mod hello;
 pub mod listen;
 pub mod llm;
+pub mod mcp;
 pub mod stt;
 pub mod tts;
 
@@ -23,6 +24,7 @@ pub enum Type {
     Stt,
     Llm,
     Abort,
+    Mcp,
 }
 
 impl<'de> Deserialize<'de> for Type {
@@ -43,6 +45,8 @@ impl<'de> Deserialize<'de> for Type {
             Ok(Self::Llm)
         } else if value == r#"abort"# {
             Ok(Self::Abort)
+        } else if value == r#"mcp"# {
+            Ok(Self::Mcp)
         } else {
             Err(serde::de::Error::custom(
                 "Expected hello,listen,tts,abort for type",
@@ -63,6 +67,7 @@ impl Serialize for Type {
             Type::Stt => r#"stt"#,
             Type::Llm => r#"llm"#,
             Type::Abort => r#"abort"#,
+            Type::Mcp => r#"mcp"#,
         })
     }
 }

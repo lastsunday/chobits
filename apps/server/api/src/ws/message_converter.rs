@@ -3,6 +3,7 @@ use axum::extract::ws::Message;
 use serde_json::Value;
 use service::chobits::message::{
     abort::AbortMessage, close::CloseMessage, hello::HelloMessage, listen::ListenMessage,
+    mcp::McpMessage,
 };
 use std::ops::ControlFlow;
 
@@ -37,6 +38,15 @@ pub async fn convert_to_frame(msg: Message) -> ControlFlow<Option<Frame>, Option
                                 match serde_json::from_slice::<AbortMessage>(t.as_bytes()) {
                                     Ok(message) => {
                                         return ControlFlow::Continue(Some(Frame::Abort(message)));
+                                    }
+                                    Err(_) => {
+                                        return ControlFlow::Continue(Some(Frame::UnknowText(t)));
+                                    }
+                                }
+                            } else if mtype == r#"mcp"# {
+                                match serde_json::from_slice::<McpMessage>(t.as_bytes()) {
+                                    Ok(message) => {
+                                        return ControlFlow::Continue(Some(Frame::Mcp(message)));
                                     }
                                     Err(_) => {
                                         return ControlFlow::Continue(Some(Frame::UnknowText(t)));

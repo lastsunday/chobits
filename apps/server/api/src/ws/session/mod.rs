@@ -2,6 +2,7 @@ use crate::config;
 use crate::ws::frame::{Frame, FrameError, FrameResult};
 use crate::ws::llm::llm_cache::LlmCache;
 use crate::ws::llm::{Llm, LlmQwen};
+use crate::ws::mcp::{McpClient, McpPhase};
 use crate::ws::session::listener::Listener;
 use crate::ws::tts::tts_cache::TtsCache;
 use crate::ws::tts::{Tts, TtsKokoro};
@@ -15,6 +16,7 @@ use service::chobits::message::audio::AudioMessage;
 use service::chobits::message::hello::{AudioParam, HelloMessage};
 use service::chobits::message::listen::ListenState;
 use service::chobits::message::llm::LlmMessage;
+use service::chobits::message::mcp::McpMessage;
 use service::chobits::message::stt::SttMessage;
 use service::chobits::message::tts::{TtsMessage, TtsState};
 use service::chobits::message::{AudioFormat, Transport};
@@ -38,6 +40,7 @@ pub struct Session<L> {
     phase: Phase,
     latest_activity_time: Arc<Mutex<Option<i64>>>,
     close_connection_no_voice_time: Option<i64>,
+    mcp_client: Option<Box<McpClient>>,
 }
 
 #[derive(Debug, Clone)]
@@ -67,6 +70,7 @@ where
             phase: Phase::Hello,
             latest_activity_time: Arc::new(Mutex::new(None)),
             close_connection_no_voice_time,
+            mcp_client: None,
         }
     }
 
@@ -127,11 +131,42 @@ where
     pub async fn accept_frame(&mut self, frame: Frame) {
         let phase = self.phase.clone();
         // info!("current phase = {:?}", phase.clone());
+        if let Frame::Mcp(message) = frame.clone() {
+            if let Some(mcp_client) = &self.mcp_client {
+                match mcp_client.phase {
+                    McpPhase::Initialize => {
+                        self.handle_mcp_initialize_result(&message).await;
+                        self.request_mcp_tools_list().await;
+                    }
+                    McpPhase::GetToolList => {
+                        let has_next = self.handle_mcp_tools_list_result(&message).await;
+                        if has_next {
+                            self.request_mcp_tools_list().await;
+                        } else {
+                            // TODO: llm tools list setting value
+                        }
+                    }
+                }
+            } else {
+                error!("mcp client is none");
+            }
+            return;
+        }
         match phase {
-            Phase::Hello => match frame {
+            Phase::Hello => match frame.clone() {
                 Frame::Hello(hello_message) => {
-                    self.handle_connect(hello_message).await;
+                    self.handle_connect(&hello_message).await;
                     self.phase = Phase::ListenDetect;
+                    if let Some(features) = &hello_message.features {
+                        let mut has_mcp = false;
+                        if let Some(mcp) = features.mcp {
+                            has_mcp = mcp;
+                        }
+                        if has_mcp {
+                            self.mcp_client = Some(Box::new(McpClient::new(Some(self.id.clone()))));
+                            self.request_mcp_initialize(&hello_message).await;
+                        }
+                    }
                 }
                 _ => {
                     error!(
@@ -237,9 +272,7 @@ where
                                                     let mode = listen_message.mmod;
                                                     let mut is_text_message = false;
                                                     if let Some(mode) = mode {
-                                                        if mode == service::chobits::message::listen::ListenMode::Manual {
-                                                            is_text_message = true;
-                                                        }
+                                                        is_text_message = mode == service::chobits::message::listen::ListenMode::Manual;
                                                     }
                                                     if is_text_message {
                                                         // text message handle
@@ -330,10 +363,8 @@ where
                                 if let Some(close_connection_no_voice_time) =
                                     self.close_connection_no_voice_time
                                 {
-                                    //connection timeout handle
                                     let offset_time =
                                         Local::now().timestamp_millis() - latest_activity_time;
-                                    // info!("offset_time = {}", offset_time);
                                     if offset_time >= close_connection_no_voice_time {
                                         self.stop().await;
                                     }
@@ -637,7 +668,57 @@ where
 
     pub async fn stop_round(&mut self) {}
 
-    async fn handle_connect(&mut self, hello_message: HelloMessage) {
+    async fn request_mcp_initialize(&mut self, _hello_message: &HelloMessage) {
+        let tx = self.output_tx.clone().unwrap();
+        if let Some(mcp_client) = &mut self.mcp_client {
+            // mcp request send
+            let result = tx
+                .send(Ok(FrameResult::McpResult(
+                    mcp_client.create_initialize_request().await,
+                )))
+                .await;
+            if result.is_err() {
+                info!("tx send mcp initialize reqeust failure");
+            }
+        } else {
+            panic!("mcp client is none");
+        }
+    }
+
+    async fn handle_mcp_initialize_result(&mut self, message: &McpMessage) {
+        if let Some(mcp_client) = &mut self.mcp_client {
+            mcp_client.handle_initialize_result(&message.payload).await;
+        } else {
+            panic!("mcp client is none");
+        }
+    }
+
+    async fn request_mcp_tools_list(&mut self) {
+        let tx = self.output_tx.clone().unwrap();
+        if let Some(mcp_client) = &mut self.mcp_client {
+            // mcp request send
+            let result = tx
+                .send(Ok(FrameResult::McpResult(
+                    mcp_client.create_tools_list_request().await,
+                )))
+                .await;
+            if result.is_err() {
+                info!("tx send mcp tools list reqeust failure");
+            }
+        } else {
+            panic!("mcp client is none");
+        }
+    }
+
+    async fn handle_mcp_tools_list_result(&mut self, message: &McpMessage) -> bool {
+        if let Some(mcp_client) = &mut self.mcp_client {
+            return mcp_client.handle_tools_list_result(&message.payload).await;
+        } else {
+            panic!("mcp client is none");
+        }
+    }
+
+    async fn handle_connect(&mut self, _hello_message: &HelloMessage) {
         let tx = self.output_tx.clone().unwrap();
         let audio_config = config::get().audio();
         let data = HelloMessage {
@@ -676,6 +757,8 @@ pub struct Round {
     pub tts_state: Arc<Mutex<Option<TtsState>>>,
     pub speaking: Arc<AtomicBool>,
     pub end: Arc<AtomicBool>,
+    // TODO:  tools call info
+    // tools_call:Vec<_>
 }
 
 #[derive(Debug)]
@@ -743,7 +826,7 @@ impl Round {
             if tx
                 .send(Ok(FrameResult::STTResult(SttMessage::new(
                     Some(session_id.clone()),
-                    Some(format!("{text}")),
+                    Some(text.to_string()),
                 ))))
                 .await
                 .is_err()
@@ -752,7 +835,7 @@ impl Round {
             }
             let llm = llm.lock().await;
             let tts = tts.lock().await;
-            let llm_output = llm.chat(system_prompt, format!("{text}"));
+            let llm_output = llm.chat(system_prompt, text.to_string());
             let mut tts_output = tts.output_stream(llm_output);
             let audio_config = config::get().audio();
             let delay = audio_config.output_frame_duration();
@@ -962,7 +1045,7 @@ mod tests {
         session.start().await;
         let mut output = session.output_frame().await;
         let join_handle = tokio::spawn(async move {
-            while let Some(data) = output.next().await {
+            if let Some(data) = output.next().await {
                 info!("{:?}", data);
                 match data {
                     Ok(frame_result) => match frame_result {
@@ -973,9 +1056,7 @@ mod tests {
                             panic!("unexpected frame result");
                         }
                     },
-                    Err(_) => {
-                        break;
-                    }
+                    Err(_) => {}
                 }
             }
             panic!("receive hello message error");
