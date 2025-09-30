@@ -46,7 +46,7 @@ async fn test_audio_encode_decode() {
     let len = pcm_data.len();
     let mut count = len / size;
     if len % size > 0 {
-        count = count + 1;
+        count += 1;
     }
     info!("count = {}", count);
     let mut audio: Vec<Vec<u8>> = Vec::new();

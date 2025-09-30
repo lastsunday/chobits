@@ -100,7 +100,7 @@ impl Asr for AsrWhisper {
         let timestamps = false;
         let verbose = false;
 
-        let mel = audio::pcm_to_mel(config, &samples, mel_filters);
+        let mel = audio::pcm_to_mel(config, samples, mel_filters);
         let mel_len = mel.len();
         let mel = Tensor::from_vec(
             mel,
@@ -116,7 +116,7 @@ impl Asr for AsrWhisper {
             tokenizer,
             seed,
             device,
-            Some(language_token.clone().unwrap().0.clone()),
+            Some(language_token.clone().unwrap().0),
             task,
             timestamps,
             verbose,
@@ -128,30 +128,18 @@ impl Asr for AsrWhisper {
                     Ok(result) => {
                         let text = result
                             .into_iter()
-                            .map(|item| {
-                                return item.dr.text;
-                            })
+                            .map(|item| item.dr.text)
                             .collect::<String>();
                         Ok(RecognizerResult {
                             text,
                             language: language_token.clone().unwrap().1.clone(),
-                            prob: language_token.clone().unwrap().2.clone(),
+                            prob: language_token.clone().unwrap().2,
                         })
                     }
-                    Err(e) => {
-                        return Err(ModelError::Decoder(format!(
-                            "decoder run error = {}",
-                            e.to_string()
-                        )));
-                    }
+                    Err(e) => Err(ModelError::Decoder(format!("decoder run error = {}", e))),
                 }
             }
-            Err(e) => {
-                return Err(ModelError::Decoder(format!(
-                    "decoder new error = {}",
-                    e.to_string()
-                )));
-            }
+            Err(e) => Err(ModelError::Decoder(format!("decoder new error = {}", e))),
         }
     }
 }

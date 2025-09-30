@@ -137,5 +137,5 @@ pub fn detect_language(
         tracing::info!("{language}: {p}")
     }
     let language = token_id(tokenizer, &format!("<|{}|>", probs[0].0.0))?;
-    Ok((language, probs[0].0.1.to_string(), probs[0].1.clone()))
+    Ok((language, probs[0].0.1.to_string(), *probs[0].1))
 }

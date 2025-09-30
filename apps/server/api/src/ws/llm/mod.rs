@@ -90,7 +90,7 @@ async fn handle_chat(
     let tokens = tos
         .tokenizer()
         .encode(prompt_str, true)
-        .map_err(|e| ModelError::Chat(format!("tokenizer encode error {}", e.to_string())))?;
+        .map_err(|e| ModelError::Chat(format!("tokenizer encode error {}", e)))?;
     let tokens = tokens.get_ids();
 
     // TODO:setting
@@ -109,27 +109,25 @@ async fn handle_chat(
     let start_prompt_processing = std::time::Instant::now();
 
     let input = Tensor::new(tokens, &device)
-        .map_err(|e| ModelError::Chat(format!("tensor create error {}", e.to_string())))?
+        .map_err(|e| ModelError::Chat(format!("tensor create error {}", e)))?
         .unsqueeze(0)
-        .map_err(|e| {
-            ModelError::Chat(format!("tensor create unsqueeze error {}", e.to_string()))
-        })?;
+        .map_err(|e| ModelError::Chat(format!("tensor create unsqueeze error {}", e)))?;
     let logits = model
         .forward(&input, 0)
-        .map_err(|e| ModelError::Chat(format!("model forward error {}", e.to_string())))?;
+        .map_err(|e| ModelError::Chat(format!("model forward error {}", e)))?;
     let logits = logits
         .squeeze(0)
-        .map_err(|e| ModelError::Chat(format!("tensor squeeze error {}", e.to_string())))?;
-    let mut next_token = logits_processor.sample(&logits).map_err(|e| {
-        ModelError::Chat(format!("tensor processor sample error {}", e.to_string()))
-    })?;
+        .map_err(|e| ModelError::Chat(format!("tensor squeeze error {}", e)))?;
+    let mut next_token = logits_processor
+        .sample(&logits)
+        .map_err(|e| ModelError::Chat(format!("tensor processor sample error {}", e)))?;
 
     let prompt_dt = start_prompt_processing.elapsed();
 
     all_tokens.push(next_token);
     if let Some(t) = tos
         .next_token(next_token)
-        .map_err(|e| ModelError::Chat(format!("tensor encoding error {}", e.to_string())))?
+        .map_err(|e| ModelError::Chat(format!("tensor encoding error {}", e)))?
     {
         text_result.push(t);
     }
@@ -138,26 +136,25 @@ async fn handle_chat(
         .tokenizer()
         .get_vocab(true)
         .get("<|im_end|>")
-        .ok_or_else(|| ModelError::Chat(format!("tensor can't get eos_token error ")))?;
+        .ok_or_else(|| ModelError::Chat("tensor can't get eos_token error ".to_string()))?;
 
     let start_post_prompt = std::time::Instant::now();
 
     let mut sampled = 0;
     let mut sentence_list: Vec<String> = Vec::new();
     let mut sentence: Vec<char> = Vec::new();
+    let regex = Regex::new(r"[。！？!?；;]").unwrap();
     for index in 0..to_sample {
         let input = Tensor::new(&[next_token], &device)
-            .map_err(|e| ModelError::Chat(format!("tensor create error {}", e.to_string())))?
+            .map_err(|e| ModelError::Chat(format!("tensor create error {}", e)))?
             .unsqueeze(0)
-            .map_err(|e| {
-                ModelError::Chat(format!("tensor create unsqueeze error {}", e.to_string()))
-            })?;
+            .map_err(|e| ModelError::Chat(format!("tensor create unsqueeze error {}", e)))?;
         let logits = model
             .forward(&input, tokens.len() + index)
-            .map_err(|e| ModelError::Chat(format!("model forward error {}", e.to_string())))?;
+            .map_err(|e| ModelError::Chat(format!("model forward error {}", e)))?;
         let logits = logits
             .squeeze(0)
-            .map_err(|e| ModelError::Chat(format!("tensor squeeze error {}", e.to_string())))?;
+            .map_err(|e| ModelError::Chat(format!("tensor squeeze error {}", e)))?;
         let logits = {
             let start_at = all_tokens.len().saturating_sub(repeat_last_n);
             candle_transformers::utils::apply_repeat_penalty(
@@ -165,20 +162,15 @@ async fn handle_chat(
                 repeat_penalty,
                 &all_tokens[start_at..],
             )
-            .map_err(|e| {
-                ModelError::Chat(format!(
-                    "tensor apply repeat penalty error {}",
-                    e.to_string()
-                ))
-            })?
+            .map_err(|e| ModelError::Chat(format!("tensor apply repeat penalty error {}", e)))?
         };
-        next_token = logits_processor.sample(&logits).map_err(|e| {
-            ModelError::Chat(format!("tensor processor sample error {}", e.to_string()))
-        })?;
+        next_token = logits_processor
+            .sample(&logits)
+            .map_err(|e| ModelError::Chat(format!("tensor processor sample error {}", e)))?;
         all_tokens.push(next_token);
         if let Some(t) = tos
             .next_token(next_token)
-            .map_err(|e| ModelError::Chat(format!("tensor encoding error {}", e.to_string())))?
+            .map_err(|e| ModelError::Chat(format!("tensor encoding error {}", e)))?
         {
             text_result.push(t);
             let text: String = text_result.clone().into_iter().collect();
@@ -193,9 +185,8 @@ async fn handle_chat(
                     skip_think = true;
                 }
             } else {
-                for c in text.chars() {
+                text.chars().for_each(|c| {
                     sentence.push(c);
-                    let regex = Regex::new(r"[。！？!?；;]").unwrap();
                     // Break a sentence
                     if regex.is_match(&c.to_string()) {
                         let text: String = sentence.clone().into_iter().collect();
@@ -204,7 +195,7 @@ async fn handle_chat(
                             sentence_list.push(text);
                         }
                     }
-                }
+                });
                 text_result.clear();
             }
         }
@@ -227,7 +218,7 @@ async fn handle_chat(
     let mut last_content = None;
     if let Some(rest) = tos
         .decode_rest()
-        .map_err(|e| ModelError::Chat(format!("tensor decode rest error {}", e.to_string())))?
+        .map_err(|e| ModelError::Chat(format!("tensor decode rest error {}", e)))?
     {
         let text: String = sentence.clone().into_iter().collect();
         let text = format!("{text}{rest}");
@@ -236,13 +227,13 @@ async fn handle_chat(
         let result: String = sentence.clone().into_iter().collect();
         last_content = Some(result);
     }
-    if let Some(text) = last_content {
-        if let Some(text) = filter(&text) {
-            if let Err(e) = tx.send(Ok(text.clone())).await {
-                tracing::error!("chat send text error = {}", e);
-            } else {
-                tracing::info!("llm send text success, text = {}", text);
-            }
+    if let Some(text) = last_content
+        && let Some(text) = filter(&text)
+    {
+        if let Err(e) = tx.send(Ok(text.clone())).await {
+            tracing::error!("chat send text error = {}", e);
+        } else {
+            tracing::info!("llm send text success, text = {}", text);
         }
     }
     text_result.clear();
@@ -275,10 +266,9 @@ impl Llm for LlmQwen {
             block_on(async move {
                 if let Err(e) =
                     handle_chat(system_prompt, text, tokenizer, model, device, tx.clone()).await
+                    && let Err(e) = tx.send(Err(e)).await
                 {
-                    if let Err(e) = tx.send(Err(e)).await {
-                        tracing::error!("chat llmError send error = {}", e);
-                    };
+                    tracing::error!("chat llmError send error = {}", e);
                 };
                 drop(tx);
             })

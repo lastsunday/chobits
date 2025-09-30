@@ -178,31 +178,31 @@ where
                 }
                 return;
             }
-            if result.is_continue() {
-                if let Some(item) = result.continue_value() {
-                    match item {
-                        Some(frame) => {
-                            match frame {
-                                frame::Frame::Abort(abort_message) => {
-                                    info!("abort message = {:?}", abort_message);
-                                    session.stop().await;
-                                }
-                                frame::Frame::Ping(_bytes) => {
-                                    // TODO: log session id
-                                    info!("ping");
-                                }
-                                frame::Frame::Pong(_bytes) => {
-                                    // TODO: log session id
-                                    info!("pong");
-                                }
-                                _ => {
-                                    session.accept_frame(frame).await;
-                                }
+            if result.is_continue()
+                && let Some(item) = result.continue_value()
+            {
+                match item {
+                    Some(frame) => {
+                        match frame {
+                            frame::Frame::Abort(abort_message) => {
+                                info!("abort message = {:?}", abort_message);
+                                session.stop().await;
+                            }
+                            frame::Frame::Ping(_bytes) => {
+                                // TODO: log session id
+                                info!("ping");
+                            }
+                            frame::Frame::Pong(_bytes) => {
+                                // TODO: log session id
+                                info!("pong");
+                            }
+                            _ => {
+                                session.accept_frame(frame).await;
                             }
                         }
-                        None => {
-                            info!("unkonw continue message");
-                        }
+                    }
+                    None => {
+                        info!("unkonw continue message");
                     }
                 }
             }

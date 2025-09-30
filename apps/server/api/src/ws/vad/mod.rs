@@ -87,11 +87,11 @@ impl Vad for VadSilero {
         let mut state = State {
             frame_size,
             sample_rate: Tensor::new(sample_rate, device)
-                .map_err(|e| ModelError::Tensor(format!("tensor sample rate {}", e.to_string())))?,
+                .map_err(|e| ModelError::Tensor(format!("tensor sample rate {}", e)))?,
             state: Tensor::zeros((2, 1, 128), DType::F32, device)
-                .map_err(|e| ModelError::Tensor(format!("tensor state {}", e.to_string())))?,
+                .map_err(|e| ModelError::Tensor(format!("tensor state {}", e)))?,
             context: Tensor::zeros((1, context_size), DType::F32, device)
-                .map_err(|e| ModelError::Tensor(format!("context {}", e.to_string())))?,
+                .map_err(|e| ModelError::Tensor(format!("context {}", e)))?,
         };
         let mut res = vec![];
         if samples.len() < state.frame_size {
@@ -103,16 +103,16 @@ impl Vad for VadSilero {
             device,
         )?;
         let chunk = Tensor::from_vec(samples.clone(), (1, state.frame_size), device)
-            .map_err(|e| ModelError::Tensor(format!("from vec error {}", e.to_string())))?;
+            .map_err(|e| ModelError::Tensor(format!("from vec error {}", e)))?;
         let chunk = Tensor::cat(&[&state.context, &chunk], 1)
-            .map_err(|e| ModelError::Tensor(format!("cat error {}", e.to_string())))?;
+            .map_err(|e| ModelError::Tensor(format!("cat error {}", e)))?;
         let inputs = std::collections::HashMap::from_iter([
             ("input".to_string(), chunk),
             ("sr".to_string(), state.sample_rate.clone()),
             ("state".to_string(), state.state.clone()),
         ]);
         let out = candle_onnx::simple_eval(model, inputs)
-            .map_err(|e| ModelError::Tensor(format!("simple eval {}", e.to_string())))?;
+            .map_err(|e| ModelError::Tensor(format!("simple eval {}", e)))?;
         let out_names = &model.graph.as_ref().unwrap().output;
         let output = out.get(&out_names[0].name).unwrap().clone();
         state.state = out.get(&out_names[1].name).unwrap().clone();
@@ -133,7 +133,7 @@ impl Vad for VadSilero {
                 self.clear().await;
             }
 
-            if self.prediction_list.len() > 0 {
+            if !self.prediction_list.is_empty() {
                 self.samples.append(&mut samples.clone());
             }
 
@@ -144,18 +144,15 @@ impl Vad for VadSilero {
                     self.start = self.total_accept_waveform_samples_len;
                 }
             }
+        } else if prediction >= threshold {
+            self.samples.append(&mut samples.clone());
         } else {
-            if prediction >= threshold {
+            if self.is_speech && self.current_silence_duration <= self.min_silence_duration {
                 self.samples.append(&mut samples.clone());
             } else {
-                if self.is_speech && self.current_silence_duration <= self.min_silence_duration {
-                    self.samples.append(&mut samples.clone());
-                } else {
-                    self.clear().await;
-                }
-                self.current_silence_duration +=
-                    (samples.len() as f32 / sample_rate as f32) as f32 * 1000.0;
+                self.clear().await;
             }
+            self.current_silence_duration += (samples.len() as f32 / sample_rate as f32) * 1000.0;
         }
         // info!("vad len = {}", self.prediction_list.len());
         self.total_accept_waveform_samples_len += samples.len() as i32;
@@ -166,10 +163,7 @@ impl Vad for VadSilero {
         //TODO: get one samples list
         let samples = self.samples.to_vec();
         let start = self.start;
-        SpeechSegment {
-            start: start,
-            samples: samples,
-        }
+        SpeechSegment { start, samples }
     }
 
     async fn is_empty(&mut self) -> bool {

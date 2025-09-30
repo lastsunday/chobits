@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use futures::{Stream, executor::block_on};
 use tokio::sync::Mutex;
-use tokio::sync::mpsc::{Sender, channel};
+use tokio::sync::mpsc::channel;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -47,16 +47,15 @@ fn tts(text: String) -> impl Stream<Item = String> + Unpin + Send + 'static {
 }
 
 async fn llm(
-    state: Arc<Mutex<State>>,
+    _state: Arc<Mutex<State>>,
     text: String,
 ) -> impl Stream<Item = String> + Unpin + Send + 'static {
     let (tx, rx) = channel::<String>(5);
     thread::spawn(move || {
         block_on(async move {
-            for mut count in 1..6 {
+            for count in 1..6 {
                 thread::sleep(Duration::from_millis(100));
                 let _ = tx.send(format!("{} [LLM]->{}", text.clone(), count)).await;
-                count = count + 1;
             }
             drop(tx);
         })
@@ -65,13 +64,13 @@ async fn llm(
 }
 
 async fn ws_text(text: String) -> String {
-    return format!("{} [WS](Text)->", text).to_string();
+    format!("{} [WS](Text)->", text).to_string()
 }
 
-async fn asr(audio: String) -> String {
-    return format!("{} [ASR]->", audio).to_string();
-}
-
-async fn vad(audio: String) -> String {
-    return format!("{} [VAD]->", audio).to_string();
-}
+// async fn asr(audio: String) -> String {
+//     format!("{} [ASR]->", audio).to_string()
+// }
+//
+// async fn vad(audio: String) -> String {
+//     format!("{} [VAD]->", audio).to_string()
+// }
