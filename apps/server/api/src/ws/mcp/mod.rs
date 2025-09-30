@@ -146,3 +146,22 @@ impl McpClient {
         false
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use tracing_test::traced_test;
+
+    #[tokio::test]
+    #[traced_test]
+    #[ignore]
+    ///
+    ///
+    /// Shell command:
+    /// ``` shell
+    /// cargo test --features cuda --package api --lib -- ws::mcp::tests::test_mcp_device --ignored --show-output
+    /// ```
+    async fn test_mcp_device() {
+        //  TODO:
+        todo!();
+    }
+}

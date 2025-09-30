@@ -1,36 +1,28 @@
 use crate::config;
 use crate::ws::frame::{Frame, FrameError, FrameResult};
 use crate::ws::llm::llm_cache::LlmCache;
-use crate::ws::llm::{Llm, LlmQwen};
 use crate::ws::mcp::{McpClient, McpPhase};
 use crate::ws::session::listener::Listener;
+use crate::ws::session::round::{Command, Round};
 use crate::ws::tts::tts_cache::TtsCache;
-use crate::ws::tts::{Tts, TtsKokoro};
-use crate::ws::util::llm::{EMOJI_MAP, analyze_emotion};
-use anyhow::Context;
 use chrono::Local;
 use core::result::Result;
 use framework::id::gen_id;
-use futures::{Stream, StreamExt};
-use service::chobits::message::audio::AudioMessage;
+use futures::Stream;
 use service::chobits::message::hello::{AudioParam, HelloMessage};
 use service::chobits::message::listen::ListenState;
-use service::chobits::message::llm::LlmMessage;
 use service::chobits::message::mcp::McpMessage;
-use service::chobits::message::stt::SttMessage;
-use service::chobits::message::tts::{TtsMessage, TtsState};
 use service::chobits::message::{AudioFormat, Transport};
 use std::collections::VecDeque;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Instant;
+use std::sync::atomic::Ordering;
 use tokio::sync::mpsc::{Sender, channel};
 use tokio::sync::{Mutex, Notify};
-use tokio::time::{Duration, sleep};
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{error, info, instrument};
 
 pub mod listener;
+pub mod round;
 
 pub struct Session<L> {
     pub id: String,
@@ -359,15 +351,15 @@ where
                             self.update_latest_activity_time().await;
                         } else {
                             let latest_activity_time = self.get_latest_activity_time().await;
-                            if let Some(latest_activity_time) = latest_activity_time {
-                                if let Some(close_connection_no_voice_time) =
-                                    self.close_connection_no_voice_time
-                                {
-                                    let offset_time =
-                                        Local::now().timestamp_millis() - latest_activity_time;
-                                    if offset_time >= close_connection_no_voice_time {
-                                        self.stop().await;
-                                    }
+                            if let (
+                                Some(latest_activity_time),
+                                Some(close_connection_no_voice_time),
+                            ) = (latest_activity_time, self.close_connection_no_voice_time)
+                            {
+                                let offset_time =
+                                    Local::now().timestamp_millis() - latest_activity_time;
+                                if offset_time >= close_connection_no_voice_time {
+                                    self.stop().await;
                                 }
                             }
                         }
@@ -567,17 +559,17 @@ where
                             self.update_latest_activity_time().await;
                         } else {
                             let latest_activity_time = self.get_latest_activity_time().await;
-                            if let Some(latest_activity_time) = latest_activity_time {
-                                if let Some(close_connection_no_voice_time) =
-                                    self.close_connection_no_voice_time
-                                {
-                                    //connection timeout handle
-                                    let offset_time =
-                                        Local::now().timestamp_millis() - latest_activity_time;
-                                    // info!("offset_time = {}", offset_time);
-                                    if offset_time >= close_connection_no_voice_time {
-                                        self.stop().await;
-                                    }
+                            if let (
+                                Some(latest_activity_time),
+                                Some(close_connection_no_voice_time),
+                            ) = (latest_activity_time, self.close_connection_no_voice_time)
+                            {
+                                //connection timeout handle
+                                let offset_time =
+                                    Local::now().timestamp_millis() - latest_activity_time;
+                                // info!("offset_time = {}", offset_time);
+                                if offset_time >= close_connection_no_voice_time {
+                                    self.stop().await;
                                 }
                             }
                         }
@@ -747,278 +739,9 @@ where
     }
 }
 
-pub struct Round {
-    pub parent_id: String,
-    pub id: String,
-    tx: Sender<Result<FrameResult, FrameError>>,
-    stop: Arc<AtomicBool>,
-    llm: Arc<Mutex<Box<LlmQwen>>>,
-    tts: Arc<Mutex<Box<TtsKokoro>>>,
-    pub tts_state: Arc<Mutex<Option<TtsState>>>,
-    pub speaking: Arc<AtomicBool>,
-    pub end: Arc<AtomicBool>,
-    // TODO:  tools call info
-    // tools_call:Vec<_>
-}
-
-#[derive(Debug)]
-pub enum Command {
-    Chat(String),
-    Wake(String),
-    ListenUnclear(String),
-}
-
-impl Round {
-    pub fn new(
-        parent_id: String,
-        tx: Sender<Result<FrameResult, FrameError>>,
-        llm: Arc<Mutex<Box<LlmQwen>>>,
-        tts: Arc<Mutex<Box<TtsKokoro>>>,
-    ) -> Self {
-        Self {
-            parent_id,
-            id: gen_id(),
-            tx,
-            stop: Arc::new(AtomicBool::new(false)),
-            llm,
-            tts,
-            tts_state: Arc::new(Mutex::new(None)),
-            speaking: Arc::new(AtomicBool::new(false)),
-            end: Arc::new(AtomicBool::new(false)),
-        }
-    }
-
-    #[instrument(skip(self), name="Round start",fields(id = %self.id,parent_id = %self.parent_id))]
-    pub async fn start(&self) {
-        info!("start");
-    }
-
-    pub async fn accept_command(&mut self, command: Command) {
-        match command {
-            Command::Chat(text) => {
-                let system_prompt = config::get().logic().system_prompt().to_string();
-                self.llm_tts_handle(text, system_prompt).await;
-            }
-            Command::Wake(text) => {
-                let system_prompt = config::get().logic().system_wake_prompt().to_string();
-                self.llm_tts_handle(text, system_prompt).await;
-            }
-            Command::ListenUnclear(text) => {
-                let system_prompt = config::get()
-                    .logic()
-                    .system_listen_unclear_prompt()
-                    .to_string();
-                self.llm_tts_handle(text, system_prompt).await;
-            }
-        }
-    }
-
-    async fn llm_tts_handle(&mut self, text: String, system_prompt: String) {
-        let tx = self.tx.clone();
-        let stop_me = self.stop.clone();
-        let session_id = self.parent_id.clone();
-        let llm = self.llm.clone();
-        let tts = self.tts.clone();
-        let tts_state_clone = self.tts_state.clone();
-        let speaking = self.speaking.clone();
-        let end = self.end.clone();
-        tokio::spawn(async move {
-            if tx
-                .send(Ok(FrameResult::STTResult(SttMessage::new(
-                    Some(session_id.clone()),
-                    Some(text.to_string()),
-                ))))
-                .await
-                .is_err()
-            {
-                info!("send stt result failure");
-            }
-            let llm = llm.lock().await;
-            let tts = tts.lock().await;
-            let llm_output = llm.chat(system_prompt, text.to_string());
-            let mut tts_output = tts.output_stream(llm_output);
-            let audio_config = config::get().audio();
-            let delay = audio_config.output_frame_duration();
-            let mut latest_time = Instant::now() + Duration::from_millis(delay);
-            // pre buffer count
-            let pre_buffer_frame_count: u64 = 6;
-            let mut send_frame_count: u64 = 0;
-            let speaking = speaking.clone();
-            let stop_me = stop_me.clone();
-            while let Some(result) = tts_output.next().await {
-                match result {
-                    Ok(result) => {
-                        if stop_me.load(Ordering::Relaxed) {
-                            break;
-                        }
-                        let text = result.text;
-                        let emotion = analyze_emotion(&text);
-                        let session_id = session_id.clone();
-                        let tx = tx.clone();
-                        let text = text.clone();
-                        let audio_data = result.audio;
-                        let tts_state_clone = tts_state_clone.clone();
-                        let speaking = speaking.clone();
-                        let stop_me_by_tts_packet = stop_me.clone();
-                        let result = async move || -> Result<(), anyhow::Error> {
-                            //llm
-                            tx.send(Ok(FrameResult::LLMResult(LlmMessage::new(
-                                Some(session_id.to_string()),
-                                Some(emotion.to_string()),
-                                Some(EMOJI_MAP.get(emotion).map_or(r#"😶"#, |v| v).to_string()),
-                            ))))
-                            .await
-                            .context("send llm result failure")?;
-                            //tts
-                            tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                                Some(session_id.to_string()),
-                                Some(TtsState::Start),
-                                None,
-                            ))))
-                            .await
-                            .context("send stt result start failure")?;
-                            let tts_state = tts_state_clone.clone();
-                            let mut tts_state = tts_state.lock().await;
-                            *tts_state = Some(TtsState::Start);
-                            drop(tts_state);
-                            tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                                Some(session_id.to_string()),
-                                Some(TtsState::SentenceStart),
-                                Some(text.to_string()),
-                            ))))
-                            .await
-                            .context("send stt result sentence start failure")?;
-                            let tts_state = tts_state_clone.clone();
-                            let mut tts_state = tts_state.lock().await;
-                            *tts_state = Some(TtsState::SentenceStart);
-                            drop(tts_state);
-                            //audio
-                            //real time send audio
-                            let mut data = audio_data.into_iter();
-                            speaking.store(true, Ordering::Relaxed);
-                            info!("set speaking = true");
-                            info!("send audio frame start");
-                            while let Some(packet) = data.next() {
-                                if stop_me_by_tts_packet.load(Ordering::Relaxed) {
-                                    break;
-                                }
-                                let now = Instant::now();
-                                let offset = (now - latest_time).as_millis() as u64;
-                                let mut actual_delay: u64 = 0;
-                                if offset < delay {
-                                    actual_delay = delay - offset;
-                                }
-                                if send_frame_count >= pre_buffer_frame_count && actual_delay > 0 {
-                                    sleep(Duration::from_millis(actual_delay)).await;
-                                }
-                                latest_time = Instant::now();
-                                tx.send(Ok(FrameResult::AudioResult(AudioMessage::new(
-                                    Some(session_id.to_string()),
-                                    packet,
-                                ))))
-                                .await
-                                .context("send audio result failure")?;
-                                send_frame_count += 1;
-                            }
-                            info!("send audio frame end");
-                            speaking.store(false, Ordering::Relaxed);
-                            info!("set speaking = false");
-                            tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                                Some(session_id.to_string()),
-                                Some(TtsState::SentenceEnd),
-                                None,
-                            ))))
-                            .await
-                            .context("send stt result sentence end failure")?;
-                            let tts_state = tts_state_clone.clone();
-                            let mut tts_state = tts_state.lock().await;
-                            *tts_state = Some(TtsState::SentenceEnd);
-                            drop(tts_state);
-                            tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                                Some(session_id.to_string()),
-                                Some(TtsState::Stop),
-                                None,
-                            ))))
-                            .await
-                            .context("send stt result start failure")?;
-                            let tts_state = tts_state_clone.clone();
-                            let mut tts_state = tts_state.lock().await;
-                            *tts_state = Some(TtsState::Stop);
-                            drop(tts_state);
-                            Ok(())
-                        }()
-                        .await;
-                        if let Err(e) = result {
-                            error!("{:?}", e);
-                            stop_me.store(true, Ordering::Relaxed);
-                            break;
-                        }
-                    }
-                    Err(e) => {
-                        error!("{:?}", e);
-                        stop_me.store(true, Ordering::Relaxed);
-                        break;
-                    }
-                }
-            }
-            if stop_me.load(Ordering::Relaxed) {
-                let tts_state = tts_state_clone.lock().await;
-                match tts_state.as_ref() {
-                    Some(tts_state) => {
-                        let result = async move || -> Result<(), anyhow::Error> {
-                            info!("{:?}", tts_state);
-                            if tts_state > &TtsState::Start {
-                                tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                                    Some(session_id.to_string()),
-                                    Some(TtsState::SentenceStart),
-                                    None,
-                                ))))
-                                .await
-                                .context("send stt result sentence start failure")?;
-                            }
-                            if tts_state > &TtsState::SentenceStart {
-                                tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                                    Some(session_id.to_string()),
-                                    Some(TtsState::SentenceEnd),
-                                    None,
-                                ))))
-                                .await
-                                .context("send stt result sentence end failure")?;
-                            }
-                            if tts_state > &TtsState::SentenceEnd {
-                                tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                                    Some(session_id.to_string()),
-                                    Some(TtsState::Stop),
-                                    None,
-                                ))))
-                                .await
-                                .context("send stt result stop failure")?;
-                            }
-                            Ok(())
-                        }()
-                        .await;
-                        if let Err(e) = result {
-                            error!("{:?}", e)
-                        }
-                    }
-                    None => {}
-                }
-            }
-            end.store(true, Ordering::Relaxed);
-            info!("round setting end = true");
-        });
-    }
-
-    #[instrument(skip(self), name="Round stop",fields(id = %self.id,parent_id = %self.parent_id))]
-    pub async fn stop(&self) {
-        info!("stop");
-        self.stop.store(true, Ordering::Relaxed);
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use std::cmp;
+    use std::{cmp, sync::atomic::AtomicBool, time::Duration};
 
     use crate::ws::{
         asr::asr_cache::AsrCache, llm::llm_cache::LlmCache, session::listener::DefaultListener,
@@ -1031,7 +754,9 @@ mod tests {
     use service::chobits::message::{
         hello::HelloMessage,
         listen::{ListenMessage, ListenMode},
+        tts::TtsState,
     };
+    use tokio::time::sleep;
     use tokio_stream::StreamExt;
     use tracing_test::traced_test;
 
@@ -1045,18 +770,14 @@ mod tests {
         session.start().await;
         let mut output = session.output_frame().await;
         let join_handle = tokio::spawn(async move {
-            if let Some(data) = output.next().await {
-                info!("{:?}", data);
-                match data {
-                    Ok(frame_result) => match frame_result {
-                        FrameResult::HelloResult(_hello_message) => {
-                            return;
-                        }
-                        _ => {
-                            panic!("unexpected frame result");
-                        }
-                    },
-                    Err(_) => {}
+            if let Some(Ok(frame_result)) = output.next().await {
+                match frame_result {
+                    FrameResult::HelloResult(_hello_message) => {
+                        return;
+                    }
+                    _ => {
+                        panic!("unexpected frame result");
+                    }
                 }
             }
             panic!("receive hello message error");
@@ -1093,7 +814,7 @@ mod tests {
             sample_rate
         );
 
-        /// the follow code is output wav file to test
+        // the follow code is output wav file to test
         // use wavers::{AudioSample, ConvertSlice, ConvertTo, Samples, read, write};
         // let fp = "./decode_pcm_data.wav";
         // let sr: i32 = 16000;
@@ -1114,7 +835,7 @@ mod tests {
         let len = pcm_data.len();
         let mut count = len / size;
         if len % size > 0 {
-            count = count + 1;
+            count += 1;
         }
         info!("count = {}", count);
         let mut audio: Vec<Vec<u8>> = Vec::new();
@@ -1141,14 +862,13 @@ mod tests {
                         FrameResult::STTResult(_stt_message) => {}
                         FrameResult::LLMResult(_llm_message) => {}
                         FrameResult::TTSResult(tts_message) => {
-                            let state = tts_message.state;
-                            if let Some(state) = state {
-                                if TtsState::Stop == state {
-                                    return;
-                                }
+                            if let Some(state) = tts_message.state
+                                && TtsState::Stop == state
+                            {
+                                return;
                             }
                         }
-                        FrameResult::AudioResult(audio_message) => {}
+                        FrameResult::AudioResult(_audio_message) => {}
                         _ => {
                             panic!("unexpected frame result");
                         }
@@ -1173,7 +893,7 @@ mod tests {
             .await;
         for n in 0..audio.len() {
             session
-                .accept_frame(Frame::Voice(Bytes::copy_from_slice(&audio.get(n).unwrap())))
+                .accept_frame(Frame::Voice(Bytes::copy_from_slice(audio.get(n).unwrap())))
                 .await;
         }
         session
@@ -1210,7 +930,7 @@ mod tests {
             sample_rate
         );
 
-        /// the follow code is output wav file to test
+        // the follow code is output wav file to test
         // use wavers::{AudioSample, ConvertSlice, ConvertTo, Samples, read, write};
         // let fp = "./decode_pcm_data.wav";
         // let sr: i32 = 16000;
@@ -1231,7 +951,7 @@ mod tests {
         let len = pcm_data.len();
         let mut count = len / size;
         if len % size > 0 {
-            count = count + 1;
+            count += 1;
         }
         info!("count = {}", count);
         let mut audio: Vec<Vec<u8>> = Vec::new();
@@ -1262,18 +982,18 @@ mod tests {
                         FrameResult::LLMResult(_llm_message) => {}
                         FrameResult::TTSResult(tts_message) => {
                             let state = tts_message.state;
-                            if let Some(state) = state {
-                                if TtsState::Stop == state {
-                                    count = count + 1;
-                                    next_step.store(true, Ordering::Relaxed);
-                                    //when next round tts stop after wake tts round
-                                    if count >= 2 {
-                                        return;
-                                    }
+                            if let Some(state) = state
+                                && TtsState::Stop == state
+                            {
+                                count += 1;
+                                next_step.store(true, Ordering::Relaxed);
+                                //when next round tts stop after wake tts round
+                                if count >= 2 {
+                                    return;
                                 }
                             }
                         }
-                        FrameResult::AudioResult(audio_message) => {}
+                        FrameResult::AudioResult(_audio_message) => {}
                         _ => {
                             panic!("unexpected frame result");
                         }
@@ -1292,7 +1012,7 @@ mod tests {
             .await;
         for n in 0..audio.len() {
             session
-                .accept_frame(Frame::Voice(Bytes::copy_from_slice(&audio.get(n).unwrap())))
+                .accept_frame(Frame::Voice(Bytes::copy_from_slice(audio.get(n).unwrap())))
                 .await;
         }
         session
@@ -1319,7 +1039,7 @@ mod tests {
         info!("after next step");
         for n in 0..audio.len() {
             session
-                .accept_frame(Frame::Voice(Bytes::copy_from_slice(&audio.get(n).unwrap())))
+                .accept_frame(Frame::Voice(Bytes::copy_from_slice(audio.get(n).unwrap())))
                 .await;
         }
         join_handle.await.unwrap();
@@ -1350,7 +1070,7 @@ mod tests {
             sample_rate
         );
 
-        /// the follow code is output wav file to test
+        // the follow code is output wav file to test
         // use wavers::{AudioSample, ConvertSlice, ConvertTo, Samples, read, write};
         // let fp = "./decode_pcm_data.wav";
         // let sr: i32 = 16000;
@@ -1371,7 +1091,7 @@ mod tests {
         let len = pcm_data.len();
         let mut count = len / size;
         if len % size > 0 {
-            count = count + 1;
+            count += 1;
         }
         info!("count = {}", count);
         let mut audio: Vec<Vec<u8>> = Vec::new();
@@ -1400,17 +1120,17 @@ mod tests {
                         FrameResult::LLMResult(_llm_message) => {}
                         FrameResult::TTSResult(tts_message) => {
                             let state = tts_message.state;
-                            if let Some(state) = state {
-                                if TtsState::Stop == state {
-                                    count = count + 1;
-                                    //when next round tts stop after wake tts round
-                                    if count >= 2 {
-                                        return;
-                                    }
+                            if let Some(state) = state
+                                && TtsState::Stop == state
+                            {
+                                count += 1;
+                                //when next round tts stop after wake tts round
+                                if count >= 2 {
+                                    return;
                                 }
                             }
                         }
-                        FrameResult::AudioResult(audio_message) => {}
+                        FrameResult::AudioResult(_audio_message) => {}
                         _ => {
                             panic!("unexpected frame result");
                         }
@@ -1429,7 +1149,7 @@ mod tests {
             .await;
         for n in 0..audio.len() {
             session
-                .accept_frame(Frame::Voice(Bytes::copy_from_slice(&audio.get(n).unwrap())))
+                .accept_frame(Frame::Voice(Bytes::copy_from_slice(audio.get(n).unwrap())))
                 .await;
         }
         session
@@ -1449,7 +1169,7 @@ mod tests {
             .await;
         for n in 0..audio.len() {
             session
-                .accept_frame(Frame::Voice(Bytes::copy_from_slice(&audio.get(n).unwrap())))
+                .accept_frame(Frame::Voice(Bytes::copy_from_slice(audio.get(n).unwrap())))
                 .await;
         }
         join_handle.await.unwrap();
@@ -1476,13 +1196,13 @@ mod tests {
                         FrameResult::LLMResult(_llm_message) => {}
                         FrameResult::TTSResult(tts_message) => {
                             let state = tts_message.state;
-                            if let Some(state) = state {
-                                if TtsState::Stop == state {
-                                    return;
-                                }
+                            if let Some(state) = state
+                                && TtsState::Stop == state
+                            {
+                                return;
                             }
                         }
-                        FrameResult::AudioResult(audio_message) => {}
+                        FrameResult::AudioResult(_audio_message) => {}
                         _ => {
                             panic!("unexpected frame result");
                         }
@@ -1532,17 +1252,17 @@ mod tests {
                         FrameResult::LLMResult(_llm_message) => {}
                         FrameResult::TTSResult(tts_message) => {
                             let state = tts_message.state;
-                            if let Some(state) = state {
-                                if TtsState::Stop == state {
-                                    count = count + 1;
-                                    //when next round tts stop after wake tts round
-                                    if count >= 2 {
-                                        return;
-                                    }
+                            if let Some(state) = state
+                                && TtsState::Stop == state
+                            {
+                                count += 1;
+                                //when next round tts stop after wake tts round
+                                if count >= 2 {
+                                    return;
                                 }
                             }
                         }
-                        FrameResult::AudioResult(audio_message) => {}
+                        FrameResult::AudioResult(_audio_message) => {}
                         _ => {
                             panic!("unexpected frame result");
                         }
@@ -1577,6 +1297,165 @@ mod tests {
             .await;
         join_handle.await.unwrap();
         session.stop().await;
+    }
+
+    #[tokio::test]
+    #[traced_test]
+    #[ignore]
+    /// mcp flow and listen voice by realtime mode and output the asr text result
+    ///
+    /// Shell command:
+    /// ``` shell
+    /// cargo test --features cuda --package api --lib -- ws::session::tests::test_mcp_flow_listen_realtime --ignored --show-output
+    /// ```
+    /// 1. [Device -> Server] hello request
+    /// 2. [Server -> Device] hello response
+    /// 3.1.1. [Server -> Device] mcp initialize request
+    /// 3.1.2. [Device -> Server] mcp initialize response
+    /// 3.1.3. [Server -> Device] mcp tools list request
+    /// 3.1.4. [Device -> Server] mcp tools list response
+    /// 3.2.1. [Device -> Server] voice request
+    /// 3.2.2. [Device -> Server] detect wake request
+    /// 4.1.1. [Device -> Server] listen start reqeust
+    /// 4.1.2. [Device -> Server] voice request (loop forever)
+    /// 4.2.0.1. [Server] vad
+    /// 4.2.0.2. [Server] asr
+    /// 4.2.0.3. [Server] llm (user input replace by wake word)
+    /// 4.2.1. [Server -> Device] llm text response (for detect wake word)
+    /// 4.2.2. [Server -> Device] tts response (for detect wake wake word)
+    /// 5.1.0.1. [Server] vad
+    /// 5.1.0.2. [Server] asr
+    /// 5.1.0.3. [Server] llm
+    /// 5.1.0.4. [Server -> Device] mcp call tool(for device call)
+    /// 5.1.0.5. [Device -> Server] mcp call response
+    /// 5.1.0.6. [Server] llm
+    /// 5.1.1. [Server -> Device] llm text response
+    /// 5.1.2. [Server -> Device] tts response
+    async fn test_mcp_flow_listen_realtime() {
+        // TODO:
+        use std::path::PathBuf;
+
+        let wav_file: PathBuf = [
+            env!("CARGO_MANIFEST_DIR"),
+            "resources",
+            "test",
+            "samples_jfk.wav",
+        ]
+        .iter()
+        .collect();
+        info!("{}", wav_file.display());
+        let (pcm_data, sample_rate) = pcm_decode(wav_file).unwrap();
+        info!(
+            "pcm_data len = {},sample_rate = {}",
+            pcm_data.len(),
+            sample_rate
+        );
+
+        // the follow code is output wav file to test
+        // use wavers::{AudioSample, ConvertSlice, ConvertTo, Samples, read, write};
+        // let fp = "./decode_pcm_data.wav";
+        // let sr: i32 = 16000;
+        // write(fp, &pcm_data, sr, 1);
+
+        const ENCODE_SAMPLE_RATE: u32 = 16000;
+        let mut encoder = opus::Encoder::new(
+            ENCODE_SAMPLE_RATE,
+            opus::Channels::Mono,
+            opus::Application::Audio,
+        )
+        .unwrap();
+
+        // 16000Hz * 1 channel * 60 ms / 1000 = 960
+        const MONO_60MS: usize = ENCODE_SAMPLE_RATE as usize * 60 / 1000;
+        let size = MONO_60MS;
+        info!("size = {}", size);
+        let len = pcm_data.len();
+        let mut count = len / size;
+        if len % size > 0 {
+            count += 1;
+        }
+        info!("count = {}", count);
+        let mut audio: Vec<Vec<u8>> = Vec::new();
+
+        for n in 0..count {
+            let start = n * size;
+            let end = cmp::min((n + 1) * size, len);
+            let packet = encoder
+                .encode_vec_float(&pcm_data[start..end], size)
+                .unwrap();
+            audio.push(packet);
+        }
+
+        let mut session = create_session().await;
+        let session_id = session.id.clone();
+        session.start().await;
+        let mut output = session.output_frame().await;
+        let join_handle = tokio::spawn(async move {
+            let mut count = 0;
+            while let Some(data) = output.next().await {
+                info!("session id = {}, data = {:?}", session_id, data);
+                match data {
+                    Ok(frame_result) => match frame_result {
+                        FrameResult::HelloResult(_hello_message) => {}
+                        FrameResult::STTResult(_stt_message) => {}
+                        FrameResult::LLMResult(_llm_message) => {}
+                        FrameResult::TTSResult(tts_message) => {
+                            let state = tts_message.state;
+                            if let Some(state) = state
+                                && TtsState::Stop == state
+                            {
+                                count += 1;
+                                //when next round tts stop after wake tts round
+                                if count >= 2 {
+                                    return;
+                                }
+                            }
+                        }
+                        FrameResult::AudioResult(_audio_message) => {}
+                        _ => {
+                            panic!("unexpected frame result");
+                        }
+                    },
+                    Err(_) => {
+                        break;
+                    }
+                }
+            }
+            panic!("receive hello message error");
+        });
+        session
+            .accept_frame(Frame::Hello(HelloMessage {
+                ..Default::default()
+            }))
+            .await;
+        for n in 0..audio.len() {
+            session
+                .accept_frame(Frame::Voice(Bytes::copy_from_slice(audio.get(n).unwrap())))
+                .await;
+        }
+        session
+            .accept_frame(Frame::Listen(ListenMessage {
+                state: ListenState::Detect,
+                mmod: None,
+                text: Some(String::from("Hello")),
+                ..Default::default()
+            }))
+            .await;
+        session
+            .accept_frame(Frame::Listen(ListenMessage {
+                state: ListenState::Start,
+                mmod: Some(ListenMode::RealTime),
+                ..Default::default()
+            }))
+            .await;
+        for n in 0..audio.len() {
+            session
+                .accept_frame(Frame::Voice(Bytes::copy_from_slice(audio.get(n).unwrap())))
+                .await;
+        }
+        join_handle.await.unwrap();
+        session.stop().await;
+        todo!();
     }
 
     async fn create_session() -> Session<impl Listener> {

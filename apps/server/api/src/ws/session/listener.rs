@@ -80,59 +80,56 @@ where
         if self.state == ListenState::Idle {
             self.state = ListenState::Listening(false);
         }
-        match self.state {
-            ListenState::Listening(_) => {
-                let data = data.to_vec();
-                let temp_voice_data = self.temp_voice_data.clone();
-                let voice_data = self.voice_data.clone();
-                let vad = self.vad.clone();
-                let audio_config = config::get().audio();
-                let sample_rate: u32 = audio_config.input_sample_rate();
-                let channel = audio_config.input_channel();
-                let frame_duration = audio_config.input_frame_duration();
-                // 16000Hz * 1 channel * 60 ms / 1000 = 960 samples -> frameSize
-                let frame_size =
-                    ((sample_rate as u64 * channel as u64 * frame_duration) / 1000) as usize;
-                let mut samples = vec![0f32; frame_size];
-                let len = self
-                    .decoder
-                    .decode_float(&data, &mut samples, false)
-                    .unwrap();
-                let mut temp_voice_data = temp_voice_data.lock().await;
-                temp_voice_data.append(&mut samples[..len].to_vec());
-                let mut vad = vad.lock().await;
-                let window_size = 512;
-                while temp_voice_data.len() > window_size {
-                    let window: Vec<f32> = temp_voice_data.drain(..window_size).collect();
-                    if let Err(e) = vad.accept_waveform(window.to_vec()).await {
-                        tracing::error!("accept_waveform error = {}", e.to_string());
-                        return;
-                    }
-                    if vad.is_speech().await {
-                        self.state = ListenState::Listening(true);
-                        self.latest_speaking_time = Some(Local::now().timestamp_millis());
-                        let mut segment = vad.front().await;
-                        vad.pop().await;
-                        let mut voice_data = voice_data.lock().await;
-                        voice_data.append(&mut segment.samples);
-                        // let start_sec = (segment.start as f32) / sample_rate as f32;
-                        // let duration_sec = (voice_data.len() as f32) / sample_rate as f32;
-                        // tracing::info!("start={}s duration={}s", start_sec, duration_sec);
-                    }
+        if let ListenState::Listening(_) = self.state {
+            let data = data.to_vec();
+            let temp_voice_data = self.temp_voice_data.clone();
+            let voice_data = self.voice_data.clone();
+            let vad = self.vad.clone();
+            let audio_config = config::get().audio();
+            let sample_rate: u32 = audio_config.input_sample_rate();
+            let channel = audio_config.input_channel();
+            let frame_duration = audio_config.input_frame_duration();
+            // 16000Hz * 1 channel * 60 ms / 1000 = 960 samples -> frameSize
+            let frame_size =
+                ((sample_rate as u64 * channel as u64 * frame_duration) / 1000) as usize;
+            let mut samples = vec![0f32; frame_size];
+            let len = self
+                .decoder
+                .decode_float(&data, &mut samples, false)
+                .unwrap();
+            let mut temp_voice_data = temp_voice_data.lock().await;
+            temp_voice_data.append(&mut samples[..len].to_vec());
+            let mut vad = vad.lock().await;
+            let window_size = 512;
+            while temp_voice_data.len() > window_size {
+                let window: Vec<f32> = temp_voice_data.drain(..window_size).collect();
+                if let Err(e) = vad.accept_waveform(window.to_vec()).await {
+                    tracing::error!("accept_waveform error = {}", e.to_string());
+                    return;
+                }
+                if vad.is_speech().await {
+                    self.state = ListenState::Listening(true);
+                    self.latest_speaking_time = Some(Local::now().timestamp_millis());
+                    let mut segment = vad.front().await;
+                    vad.pop().await;
+                    let mut voice_data = voice_data.lock().await;
+                    voice_data.append(&mut segment.samples);
+                    // let start_sec = (segment.start as f32) / sample_rate as f32;
+                    // let duration_sec = (voice_data.len() as f32) / sample_rate as f32;
+                    // tracing::info!("start={}s duration={}s", start_sec, duration_sec);
                 }
             }
-            _ => {}
         }
-        if let Some(silence_voice_timeout) = self.silence_voice_timeout {
-            if let Some(latest_speaking_time) = self.latest_speaking_time {
-                let offset_time = Local::now().timestamp_millis() - latest_speaking_time;
-                if offset_time >= silence_voice_timeout {
-                    info!(
-                        "offset_time = {},silence_voice_timeout = {}",
-                        offset_time, silence_voice_timeout
-                    );
-                    self.state = ListenState::End;
-                }
+        if let (Some(silence_voice_timeout), Some(latest_speaking_time)) =
+            (self.silence_voice_timeout, self.latest_speaking_time)
+        {
+            let offset_time = Local::now().timestamp_millis() - latest_speaking_time;
+            if offset_time >= silence_voice_timeout {
+                info!(
+                    "offset_time = {},silence_voice_timeout = {}",
+                    offset_time, silence_voice_timeout
+                );
+                self.state = ListenState::End;
             }
         }
     }
