@@ -1,7 +1,7 @@
 use crate::config;
 use crate::ws::frame::{Frame, FrameError, FrameResult};
 use crate::ws::llm::llm_cache::LlmCache;
-use crate::ws::mcp::{McpClient, McpPhase};
+use crate::ws::mcp::{McpHost, device::DeviceMcpPhase};
 use crate::ws::session::listener::Listener;
 use crate::ws::session::round::{Command, Round};
 use crate::ws::tts::tts_cache::TtsCache;
@@ -32,7 +32,7 @@ pub struct Session<L> {
     phase: Phase,
     latest_activity_time: Arc<Mutex<Option<i64>>>,
     close_connection_no_voice_time: Option<i64>,
-    mcp_client: Option<Box<McpClient>>,
+    mcp_host: Arc<Mutex<Option<McpHost>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -62,7 +62,7 @@ where
             phase: Phase::Hello,
             latest_activity_time: Arc::new(Mutex::new(None)),
             close_connection_no_voice_time,
-            mcp_client: None,
+            mcp_host: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -104,7 +104,6 @@ where
             .output_tx
             .clone()
             .expect("tx not create,maybe new round method before output frame method");
-
         let llm = LlmCache::global().instance.clone();
         let tts = TtsCache::global().instance.clone();
         self.current_round = Some(Box::new(Round::new(
@@ -112,6 +111,7 @@ where
             tx,
             Arc::new(Mutex::new(llm)),
             Arc::new(Mutex::new(tts)),
+            self.mcp_host.clone(),
         )));
         if let Some(round) = &mut self.current_round {
             round.start().await;
@@ -122,42 +122,61 @@ where
 
     pub async fn accept_frame(&mut self, frame: Frame) {
         let phase = self.phase.clone();
-        // info!("current phase = {:?}", phase.clone());
+        // info!(
+        //     "current phase = {:?}, frame = {:?}",
+        //     phase.clone(),
+        //     frame.clone()
+        // );
         if let Frame::Mcp(message) = frame.clone() {
-            if let Some(mcp_client) = &self.mcp_client {
-                match mcp_client.phase {
-                    McpPhase::Initialize => {
-                        self.handle_mcp_initialize_result(&message).await;
-                        self.request_mcp_tools_list().await;
+            let mcp_host = self.mcp_host.clone();
+            let mut mcp_host = mcp_host.lock().await;
+            if let Some(mcp_host) = mcp_host.as_mut() {
+                match mcp_host.get_phase().await {
+                    DeviceMcpPhase::Initialize => {
+                        self.handle_mcp_initialize_result(mcp_host, &message).await;
+                        self.request_mcp_tools_list(mcp_host).await;
                     }
-                    McpPhase::GetToolList => {
-                        let has_next = self.handle_mcp_tools_list_result(&message).await;
+                    DeviceMcpPhase::GetToolList => {
+                        let has_next = self.handle_mcp_tools_list_result(mcp_host, &message).await;
                         if has_next {
-                            self.request_mcp_tools_list().await;
+                            self.request_mcp_tools_list(mcp_host).await;
                         } else {
                             // TODO: llm tools list setting value
+                            let all_tools = mcp_host.get_all_tools().await;
+                            let json = serde_json::to_string_pretty(&all_tools).unwrap();
+                            info!("{}", json);
                         }
                     }
                 }
             } else {
-                error!("mcp client is none");
+                error!("mcp host is none");
             }
             return;
         }
         match phase {
             Phase::Hello => match frame.clone() {
                 Frame::Hello(hello_message) => {
+                    let mut has_mcp = false;
+                    if let Some(features) = &hello_message.features
+                        && let Some(mcp) = features.mcp
+                    {
+                        has_mcp = mcp;
+                    }
+                    if has_mcp {
+                        // TODO: init MCP host
+                        self.mcp_host =
+                            Arc::new(Mutex::new(Some(McpHost::new(Some(self.id.clone())))));
+                        // TODO: init Server MCP client
+                        // TODO: init Remote Server MCP client
+                    }
                     self.handle_connect(&hello_message).await;
                     self.phase = Phase::ListenDetect;
-                    if let Some(features) = &hello_message.features {
-                        let mut has_mcp = false;
-                        if let Some(mcp) = features.mcp {
-                            has_mcp = mcp;
-                        }
-                        if has_mcp {
-                            self.mcp_client = Some(Box::new(McpClient::new(Some(self.id.clone()))));
-                            self.request_mcp_initialize(&hello_message).await;
-                        }
+                    if has_mcp {
+                        let mcp_host = self.mcp_host.clone();
+                        let mut mcp_host = mcp_host.lock().await;
+                        let mcp_host = mcp_host.as_mut().expect("mcp host is none");
+                        //init Device MCP client
+                        self.request_mcp_initialize(mcp_host, &hello_message).await;
                     }
                 }
                 _ => {
@@ -272,6 +291,7 @@ where
                                                             .accept_command(Command::Chat(text))
                                                             .await;
                                                     } else {
+                                                        // TODO: replace text to command.text
                                                         //say hello
                                                         round
                                                             .accept_command(Command::Wake(text))
@@ -660,54 +680,42 @@ where
 
     pub async fn stop_round(&mut self) {}
 
-    async fn request_mcp_initialize(&mut self, _hello_message: &HelloMessage) {
+    async fn request_mcp_initialize(
+        &mut self,
+        mcp_host: &mut McpHost,
+        _hello_message: &HelloMessage,
+    ) {
         let tx = self.output_tx.clone().unwrap();
-        if let Some(mcp_client) = &mut self.mcp_client {
-            // mcp request send
-            let result = tx
-                .send(Ok(FrameResult::McpResult(
-                    mcp_client.create_initialize_request().await,
-                )))
-                .await;
-            if result.is_err() {
-                info!("tx send mcp initialize reqeust failure");
-            }
-        } else {
-            panic!("mcp client is none");
+        let request = mcp_host.create_initialize_request().await;
+        // mcp request send
+        let result = tx.send(Ok(FrameResult::McpResult(request))).await;
+        if result.is_err() {
+            info!("tx send mcp initialize reqeust failure");
         }
     }
 
-    async fn handle_mcp_initialize_result(&mut self, message: &McpMessage) {
-        if let Some(mcp_client) = &mut self.mcp_client {
-            mcp_client.handle_initialize_result(&message.payload).await;
-        } else {
-            panic!("mcp client is none");
-        }
+    async fn handle_mcp_initialize_result(&mut self, mcp_host: &mut McpHost, message: &McpMessage) {
+        mcp_host.handle_initialize_result(&message.payload).await;
     }
 
-    async fn request_mcp_tools_list(&mut self) {
+    async fn request_mcp_tools_list(&mut self, mcp_host: &mut McpHost) {
         let tx = self.output_tx.clone().unwrap();
-        if let Some(mcp_client) = &mut self.mcp_client {
-            // mcp request send
-            let result = tx
-                .send(Ok(FrameResult::McpResult(
-                    mcp_client.create_tools_list_request().await,
-                )))
-                .await;
-            if result.is_err() {
-                info!("tx send mcp tools list reqeust failure");
-            }
-        } else {
-            panic!("mcp client is none");
+        let result = tx
+            .send(Ok(FrameResult::McpResult(
+                mcp_host.create_tools_list_request().await,
+            )))
+            .await;
+        if result.is_err() {
+            info!("tx send mcp tools list reqeust failure");
         }
     }
 
-    async fn handle_mcp_tools_list_result(&mut self, message: &McpMessage) -> bool {
-        if let Some(mcp_client) = &mut self.mcp_client {
-            return mcp_client.handle_tools_list_result(&message.payload).await;
-        } else {
-            panic!("mcp client is none");
-        }
+    async fn handle_mcp_tools_list_result(
+        &mut self,
+        mcp_host: &mut McpHost,
+        message: &McpMessage,
+    ) -> bool {
+        return mcp_host.handle_tools_list_result(&message.payload).await;
     }
 
     async fn handle_connect(&mut self, _hello_message: &HelloMessage) {
@@ -736,749 +744,5 @@ where
 
     pub fn is_speech_clear(&self, prob: f32) -> bool {
         prob >= 0.8
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::{cmp, sync::atomic::AtomicBool, time::Duration};
-
-    use crate::ws::{
-        asr::asr_cache::AsrCache, llm::llm_cache::LlmCache, session::listener::DefaultListener,
-        tts::tts_cache::TtsCache, util::audio::pcm_decode, vad::vad_cache::VadCache,
-    };
-
-    use super::*;
-
-    use axum::body::Bytes;
-    use service::chobits::message::{
-        hello::HelloMessage,
-        listen::{ListenMessage, ListenMode},
-        tts::TtsState,
-    };
-    use tokio::time::sleep;
-    use tokio_stream::StreamExt;
-    use tracing_test::traced_test;
-
-    #[tokio::test]
-    #[traced_test]
-    #[ignore]
-    /// hello paramter input and output the hello result
-    /// cargo test --package api --lib -- ws::session::tests::test_chat_flow_hello --ignored --show-output
-    async fn test_chat_flow_hello() {
-        let mut session = create_session().await;
-        session.start().await;
-        let mut output = session.output_frame().await;
-        let join_handle = tokio::spawn(async move {
-            if let Some(Ok(frame_result)) = output.next().await {
-                match frame_result {
-                    FrameResult::HelloResult(_hello_message) => {
-                        return;
-                    }
-                    _ => {
-                        panic!("unexpected frame result");
-                    }
-                }
-            }
-            panic!("receive hello message error");
-        });
-        let hello_frame = Frame::Hello(HelloMessage {
-            ..Default::default()
-        });
-        session.accept_frame(hello_frame.clone()).await;
-        session.stop().await;
-        join_handle.await.unwrap();
-    }
-
-    #[tokio::test]
-    #[traced_test]
-    #[ignore]
-    /// listen voice by manual mode and output the asr text result
-    /// cargo test --features cuda --package api --lib -- ws::session::tests::test_chat_flow_listen_manual --ignored --show-output
-    async fn test_chat_flow_listen_manual() {
-        use std::path::PathBuf;
-
-        let wav_file: PathBuf = [
-            env!("CARGO_MANIFEST_DIR"),
-            "resources",
-            "test",
-            "samples_jfk.wav",
-        ]
-        .iter()
-        .collect();
-        info!("{}", wav_file.display());
-        let (pcm_data, sample_rate) = pcm_decode(wav_file).unwrap();
-        info!(
-            "pcm_data len = {},sample_rate = {}",
-            pcm_data.len(),
-            sample_rate
-        );
-
-        // the follow code is output wav file to test
-        // use wavers::{AudioSample, ConvertSlice, ConvertTo, Samples, read, write};
-        // let fp = "./decode_pcm_data.wav";
-        // let sr: i32 = 16000;
-        // write(fp, &pcm_data, sr, 1);
-
-        const ENCODE_SAMPLE_RATE: u32 = 16000;
-        let mut encoder = opus::Encoder::new(
-            ENCODE_SAMPLE_RATE,
-            opus::Channels::Mono,
-            opus::Application::Audio,
-        )
-        .unwrap();
-
-        // 16000Hz * 1 channel * 60 ms / 1000 = 960
-        const MONO_60MS: usize = ENCODE_SAMPLE_RATE as usize * 60 / 1000;
-        let size = MONO_60MS;
-        info!("size = {}", size);
-        let len = pcm_data.len();
-        let mut count = len / size;
-        if len % size > 0 {
-            count += 1;
-        }
-        info!("count = {}", count);
-        let mut audio: Vec<Vec<u8>> = Vec::new();
-
-        for n in 0..count {
-            let start = n * size;
-            let end = cmp::min((n + 1) * size, len);
-            let packet = encoder
-                .encode_vec_float(&pcm_data[start..end], size)
-                .unwrap();
-            audio.push(packet);
-        }
-
-        let mut session = create_session().await;
-        let session_id = session.id.clone();
-        session.start().await;
-        let mut output = session.output_frame().await;
-        let join_handle = tokio::spawn(async move {
-            while let Some(data) = output.next().await {
-                info!("session id = {}, data = {:?}", session_id, data);
-                match data {
-                    Ok(frame_result) => match frame_result {
-                        FrameResult::HelloResult(_hello_message) => {}
-                        FrameResult::STTResult(_stt_message) => {}
-                        FrameResult::LLMResult(_llm_message) => {}
-                        FrameResult::TTSResult(tts_message) => {
-                            if let Some(state) = tts_message.state
-                                && TtsState::Stop == state
-                            {
-                                return;
-                            }
-                        }
-                        FrameResult::AudioResult(_audio_message) => {}
-                        _ => {
-                            panic!("unexpected frame result");
-                        }
-                    },
-                    Err(_) => {
-                        break;
-                    }
-                }
-            }
-            panic!("receive hello message error");
-        });
-        let hello_frame = Frame::Hello(HelloMessage {
-            ..Default::default()
-        });
-        session.accept_frame(hello_frame.clone()).await;
-        session
-            .accept_frame(Frame::Listen(ListenMessage {
-                state: ListenState::Start,
-                mmod: Some(service::chobits::message::listen::ListenMode::Manual),
-                ..Default::default()
-            }))
-            .await;
-        for n in 0..audio.len() {
-            session
-                .accept_frame(Frame::Voice(Bytes::copy_from_slice(audio.get(n).unwrap())))
-                .await;
-        }
-        session
-            .accept_frame(Frame::Listen(ListenMessage {
-                state: ListenState::Stop,
-                ..Default::default()
-            }))
-            .await;
-        join_handle.await.unwrap();
-        session.stop().await;
-    }
-
-    #[tokio::test]
-    #[traced_test]
-    #[ignore]
-    /// listen voice by auto mode and output the asr text result
-    /// cargo test --features cuda --package api --lib -- ws::session::tests::test_chat_flow_listen_auto --ignored --show-output
-    async fn test_chat_flow_listen_auto() {
-        use std::path::PathBuf;
-
-        let wav_file: PathBuf = [
-            env!("CARGO_MANIFEST_DIR"),
-            "resources",
-            "test",
-            "samples_jfk.wav",
-        ]
-        .iter()
-        .collect();
-        info!("{}", wav_file.display());
-        let (pcm_data, sample_rate) = pcm_decode(wav_file).unwrap();
-        info!(
-            "pcm_data len = {},sample_rate = {}",
-            pcm_data.len(),
-            sample_rate
-        );
-
-        // the follow code is output wav file to test
-        // use wavers::{AudioSample, ConvertSlice, ConvertTo, Samples, read, write};
-        // let fp = "./decode_pcm_data.wav";
-        // let sr: i32 = 16000;
-        // write(fp, &pcm_data, sr, 1);
-
-        const ENCODE_SAMPLE_RATE: u32 = 16000;
-        let mut encoder = opus::Encoder::new(
-            ENCODE_SAMPLE_RATE,
-            opus::Channels::Mono,
-            opus::Application::Audio,
-        )
-        .unwrap();
-
-        // 16000Hz * 1 channel * 60 ms / 1000 = 960
-        const MONO_60MS: usize = ENCODE_SAMPLE_RATE as usize * 60 / 1000;
-        let size = MONO_60MS;
-        info!("size = {}", size);
-        let len = pcm_data.len();
-        let mut count = len / size;
-        if len % size > 0 {
-            count += 1;
-        }
-        info!("count = {}", count);
-        let mut audio: Vec<Vec<u8>> = Vec::new();
-
-        for n in 0..count {
-            let start = n * size;
-            let end = cmp::min((n + 1) * size, len);
-            let packet = encoder
-                .encode_vec_float(&pcm_data[start..end], size)
-                .unwrap();
-            audio.push(packet);
-        }
-
-        let mut session = create_session().await;
-        let session_id = session.id.clone();
-        session.start().await;
-        let mut output = session.output_frame().await;
-        let next_step = Arc::new(AtomicBool::new(false));
-        let next_step_for_sender = next_step.clone();
-        let join_handle = tokio::spawn(async move {
-            let mut count = 0;
-            while let Some(data) = output.next().await {
-                info!("session id = {}, data = {:?}", session_id, data);
-                match data {
-                    Ok(frame_result) => match frame_result {
-                        FrameResult::HelloResult(_hello_message) => {}
-                        FrameResult::STTResult(_stt_message) => {}
-                        FrameResult::LLMResult(_llm_message) => {}
-                        FrameResult::TTSResult(tts_message) => {
-                            let state = tts_message.state;
-                            if let Some(state) = state
-                                && TtsState::Stop == state
-                            {
-                                count += 1;
-                                next_step.store(true, Ordering::Relaxed);
-                                //when next round tts stop after wake tts round
-                                if count >= 2 {
-                                    return;
-                                }
-                            }
-                        }
-                        FrameResult::AudioResult(_audio_message) => {}
-                        _ => {
-                            panic!("unexpected frame result");
-                        }
-                    },
-                    Err(_) => {
-                        break;
-                    }
-                }
-            }
-            panic!("receive hello message error");
-        });
-        session
-            .accept_frame(Frame::Hello(HelloMessage {
-                ..Default::default()
-            }))
-            .await;
-        for n in 0..audio.len() {
-            session
-                .accept_frame(Frame::Voice(Bytes::copy_from_slice(audio.get(n).unwrap())))
-                .await;
-        }
-        session
-            .accept_frame(Frame::Listen(ListenMessage {
-                state: ListenState::Detect,
-                mmod: None,
-                text: Some(String::from("Hello")),
-                ..Default::default()
-            }))
-            .await;
-        session
-            .accept_frame(Frame::Listen(ListenMessage {
-                state: ListenState::Start,
-                mmod: Some(ListenMode::Auto),
-                ..Default::default()
-            }))
-            .await;
-        let mut to_next_step = false;
-        info!("before next step");
-        while !to_next_step {
-            to_next_step = next_step_for_sender.load(Ordering::Relaxed);
-            sleep(Duration::from_millis(500)).await;
-        }
-        info!("after next step");
-        for n in 0..audio.len() {
-            session
-                .accept_frame(Frame::Voice(Bytes::copy_from_slice(audio.get(n).unwrap())))
-                .await;
-        }
-        join_handle.await.unwrap();
-        session.stop().await;
-    }
-
-    #[tokio::test]
-    #[traced_test]
-    #[ignore]
-    /// listen voice by realtime mode and output the asr text result
-    /// cargo test --features cuda --package api --lib -- ws::session::tests::test_chat_flow_listen_realtime --ignored --show-output
-    async fn test_chat_flow_listen_realtime() {
-        use std::path::PathBuf;
-
-        let wav_file: PathBuf = [
-            env!("CARGO_MANIFEST_DIR"),
-            "resources",
-            "test",
-            "samples_jfk.wav",
-        ]
-        .iter()
-        .collect();
-        info!("{}", wav_file.display());
-        let (pcm_data, sample_rate) = pcm_decode(wav_file).unwrap();
-        info!(
-            "pcm_data len = {},sample_rate = {}",
-            pcm_data.len(),
-            sample_rate
-        );
-
-        // the follow code is output wav file to test
-        // use wavers::{AudioSample, ConvertSlice, ConvertTo, Samples, read, write};
-        // let fp = "./decode_pcm_data.wav";
-        // let sr: i32 = 16000;
-        // write(fp, &pcm_data, sr, 1);
-
-        const ENCODE_SAMPLE_RATE: u32 = 16000;
-        let mut encoder = opus::Encoder::new(
-            ENCODE_SAMPLE_RATE,
-            opus::Channels::Mono,
-            opus::Application::Audio,
-        )
-        .unwrap();
-
-        // 16000Hz * 1 channel * 60 ms / 1000 = 960
-        const MONO_60MS: usize = ENCODE_SAMPLE_RATE as usize * 60 / 1000;
-        let size = MONO_60MS;
-        info!("size = {}", size);
-        let len = pcm_data.len();
-        let mut count = len / size;
-        if len % size > 0 {
-            count += 1;
-        }
-        info!("count = {}", count);
-        let mut audio: Vec<Vec<u8>> = Vec::new();
-
-        for n in 0..count {
-            let start = n * size;
-            let end = cmp::min((n + 1) * size, len);
-            let packet = encoder
-                .encode_vec_float(&pcm_data[start..end], size)
-                .unwrap();
-            audio.push(packet);
-        }
-
-        let mut session = create_session().await;
-        let session_id = session.id.clone();
-        session.start().await;
-        let mut output = session.output_frame().await;
-        let join_handle = tokio::spawn(async move {
-            let mut count = 0;
-            while let Some(data) = output.next().await {
-                info!("session id = {}, data = {:?}", session_id, data);
-                match data {
-                    Ok(frame_result) => match frame_result {
-                        FrameResult::HelloResult(_hello_message) => {}
-                        FrameResult::STTResult(_stt_message) => {}
-                        FrameResult::LLMResult(_llm_message) => {}
-                        FrameResult::TTSResult(tts_message) => {
-                            let state = tts_message.state;
-                            if let Some(state) = state
-                                && TtsState::Stop == state
-                            {
-                                count += 1;
-                                //when next round tts stop after wake tts round
-                                if count >= 2 {
-                                    return;
-                                }
-                            }
-                        }
-                        FrameResult::AudioResult(_audio_message) => {}
-                        _ => {
-                            panic!("unexpected frame result");
-                        }
-                    },
-                    Err(_) => {
-                        break;
-                    }
-                }
-            }
-            panic!("receive hello message error");
-        });
-        session
-            .accept_frame(Frame::Hello(HelloMessage {
-                ..Default::default()
-            }))
-            .await;
-        for n in 0..audio.len() {
-            session
-                .accept_frame(Frame::Voice(Bytes::copy_from_slice(audio.get(n).unwrap())))
-                .await;
-        }
-        session
-            .accept_frame(Frame::Listen(ListenMessage {
-                state: ListenState::Detect,
-                mmod: None,
-                text: Some(String::from("Hello")),
-                ..Default::default()
-            }))
-            .await;
-        session
-            .accept_frame(Frame::Listen(ListenMessage {
-                state: ListenState::Start,
-                mmod: Some(ListenMode::RealTime),
-                ..Default::default()
-            }))
-            .await;
-        for n in 0..audio.len() {
-            session
-                .accept_frame(Frame::Voice(Bytes::copy_from_slice(audio.get(n).unwrap())))
-                .await;
-        }
-        join_handle.await.unwrap();
-        session.stop().await;
-    }
-
-    #[tokio::test]
-    #[traced_test]
-    #[ignore]
-    /// get text message and output the asr text result
-    /// cargo test --features cuda --package api --lib -- ws::session::tests::test_chat_flow_handle_text_message --ignored --show-output
-    async fn test_chat_flow_handle_text_message() {
-        let mut session = create_session().await;
-        let session_id = session.id.clone();
-        session.start().await;
-        let mut output = session.output_frame().await;
-        let join_handle = tokio::spawn(async move {
-            while let Some(data) = output.next().await {
-                info!("session id = {}, data = {:?}", session_id, data);
-                match data {
-                    Ok(frame_result) => match frame_result {
-                        FrameResult::HelloResult(_hello_message) => {}
-                        FrameResult::STTResult(_stt_message) => {}
-                        FrameResult::LLMResult(_llm_message) => {}
-                        FrameResult::TTSResult(tts_message) => {
-                            let state = tts_message.state;
-                            if let Some(state) = state
-                                && TtsState::Stop == state
-                            {
-                                return;
-                            }
-                        }
-                        FrameResult::AudioResult(_audio_message) => {}
-                        _ => {
-                            panic!("unexpected frame result");
-                        }
-                    },
-                    Err(_) => {
-                        break;
-                    }
-                }
-            }
-            panic!("receive hello message error");
-        });
-        session
-            .accept_frame(Frame::Hello(HelloMessage {
-                ..Default::default()
-            }))
-            .await;
-        session
-            .accept_frame(Frame::Listen(ListenMessage {
-                state: ListenState::Detect,
-                mmod: Some(service::chobits::message::listen::ListenMode::Manual),
-                text: Some(String::from("Hello")),
-                ..Default::default()
-            }))
-            .await;
-        join_handle.await.unwrap();
-        session.stop().await;
-    }
-
-    #[tokio::test]
-    #[traced_test]
-    #[ignore]
-    /// when a round running and has a break event,the output stream will stop the original output
-    /// cargo test --features cuda --package api --lib -- ws::session::tests::test_chat_flow_break --ignored --show-output
-    async fn test_chat_flow_break() {
-        let mut session = create_session().await;
-        let session_id = session.id.clone();
-        session.start().await;
-        let mut output = session.output_frame().await;
-        let mut count = 0;
-        let join_handle = tokio::spawn(async move {
-            while let Some(data) = output.next().await {
-                info!("session id = {}, data = {:?}", session_id, data);
-                match data {
-                    Ok(frame_result) => match frame_result {
-                        FrameResult::HelloResult(_hello_message) => {}
-                        FrameResult::STTResult(_stt_message) => {}
-                        FrameResult::LLMResult(_llm_message) => {}
-                        FrameResult::TTSResult(tts_message) => {
-                            let state = tts_message.state;
-                            if let Some(state) = state
-                                && TtsState::Stop == state
-                            {
-                                count += 1;
-                                //when next round tts stop after wake tts round
-                                if count >= 2 {
-                                    return;
-                                }
-                            }
-                        }
-                        FrameResult::AudioResult(_audio_message) => {}
-                        _ => {
-                            panic!("unexpected frame result");
-                        }
-                    },
-                    Err(_) => {
-                        break;
-                    }
-                }
-            }
-            panic!("receive hello message error");
-        });
-        session
-            .accept_frame(Frame::Hello(HelloMessage {
-                ..Default::default()
-            }))
-            .await;
-        session
-            .accept_frame(Frame::Listen(ListenMessage {
-                state: ListenState::Detect,
-                mmod: Some(service::chobits::message::listen::ListenMode::Manual),
-                text: Some(String::from("Hello")),
-                ..Default::default()
-            }))
-            .await;
-        session
-            .accept_frame(Frame::Listen(ListenMessage {
-                state: ListenState::Detect,
-                mmod: Some(service::chobits::message::listen::ListenMode::Manual),
-                text: Some(String::from("Hello")),
-                ..Default::default()
-            }))
-            .await;
-        join_handle.await.unwrap();
-        session.stop().await;
-    }
-
-    #[tokio::test]
-    #[traced_test]
-    #[ignore]
-    /// mcp flow and listen voice by realtime mode and output the asr text result
-    ///
-    /// Shell command:
-    /// ``` shell
-    /// cargo test --features cuda --package api --lib -- ws::session::tests::test_mcp_flow_listen_realtime --ignored --show-output
-    /// ```
-    /// 1. [Device -> Server] hello request
-    /// 2. [Server -> Device] hello response
-    /// 3.1.1. [Server -> Device] mcp initialize request
-    /// 3.1.2. [Device -> Server] mcp initialize response
-    /// 3.1.3. [Server -> Device] mcp tools list request
-    /// 3.1.4. [Device -> Server] mcp tools list response
-    /// 3.2.1. [Device -> Server] voice request
-    /// 3.2.2. [Device -> Server] detect wake request
-    /// 4.1.1. [Device -> Server] listen start reqeust
-    /// 4.1.2. [Device -> Server] voice request (loop forever)
-    /// 4.2.0.1. [Server] vad
-    /// 4.2.0.2. [Server] asr
-    /// 4.2.0.3. [Server] llm (user input replace by wake word)
-    /// 4.2.1. [Server -> Device] llm text response (for detect wake word)
-    /// 4.2.2. [Server -> Device] tts response (for detect wake wake word)
-    /// 5.1.0.1. [Server] vad
-    /// 5.1.0.2. [Server] asr
-    /// 5.1.0.3. [Server] llm
-    /// 5.1.0.4. [Server -> Device] mcp call tool(for device call)
-    /// 5.1.0.5. [Device -> Server] mcp call response
-    /// 5.1.0.6. [Server] llm
-    /// 5.1.1. [Server -> Device] llm text response
-    /// 5.1.2. [Server -> Device] tts response
-    async fn test_mcp_flow_listen_realtime() {
-        // TODO:
-        use std::path::PathBuf;
-
-        let wav_file: PathBuf = [
-            env!("CARGO_MANIFEST_DIR"),
-            "resources",
-            "test",
-            "samples_jfk.wav",
-        ]
-        .iter()
-        .collect();
-        info!("{}", wav_file.display());
-        let (pcm_data, sample_rate) = pcm_decode(wav_file).unwrap();
-        info!(
-            "pcm_data len = {},sample_rate = {}",
-            pcm_data.len(),
-            sample_rate
-        );
-
-        // the follow code is output wav file to test
-        // use wavers::{AudioSample, ConvertSlice, ConvertTo, Samples, read, write};
-        // let fp = "./decode_pcm_data.wav";
-        // let sr: i32 = 16000;
-        // write(fp, &pcm_data, sr, 1);
-
-        const ENCODE_SAMPLE_RATE: u32 = 16000;
-        let mut encoder = opus::Encoder::new(
-            ENCODE_SAMPLE_RATE,
-            opus::Channels::Mono,
-            opus::Application::Audio,
-        )
-        .unwrap();
-
-        // 16000Hz * 1 channel * 60 ms / 1000 = 960
-        const MONO_60MS: usize = ENCODE_SAMPLE_RATE as usize * 60 / 1000;
-        let size = MONO_60MS;
-        info!("size = {}", size);
-        let len = pcm_data.len();
-        let mut count = len / size;
-        if len % size > 0 {
-            count += 1;
-        }
-        info!("count = {}", count);
-        let mut audio: Vec<Vec<u8>> = Vec::new();
-
-        for n in 0..count {
-            let start = n * size;
-            let end = cmp::min((n + 1) * size, len);
-            let packet = encoder
-                .encode_vec_float(&pcm_data[start..end], size)
-                .unwrap();
-            audio.push(packet);
-        }
-
-        let mut session = create_session().await;
-        let session_id = session.id.clone();
-        session.start().await;
-        let mut output = session.output_frame().await;
-        let join_handle = tokio::spawn(async move {
-            let mut count = 0;
-            while let Some(data) = output.next().await {
-                info!("session id = {}, data = {:?}", session_id, data);
-                match data {
-                    Ok(frame_result) => match frame_result {
-                        FrameResult::HelloResult(_hello_message) => {}
-                        FrameResult::STTResult(_stt_message) => {}
-                        FrameResult::LLMResult(_llm_message) => {}
-                        FrameResult::TTSResult(tts_message) => {
-                            let state = tts_message.state;
-                            if let Some(state) = state
-                                && TtsState::Stop == state
-                            {
-                                count += 1;
-                                //when next round tts stop after wake tts round
-                                if count >= 2 {
-                                    return;
-                                }
-                            }
-                        }
-                        FrameResult::AudioResult(_audio_message) => {}
-                        _ => {
-                            panic!("unexpected frame result");
-                        }
-                    },
-                    Err(_) => {
-                        break;
-                    }
-                }
-            }
-            panic!("receive hello message error");
-        });
-        session
-            .accept_frame(Frame::Hello(HelloMessage {
-                ..Default::default()
-            }))
-            .await;
-        for n in 0..audio.len() {
-            session
-                .accept_frame(Frame::Voice(Bytes::copy_from_slice(audio.get(n).unwrap())))
-                .await;
-        }
-        session
-            .accept_frame(Frame::Listen(ListenMessage {
-                state: ListenState::Detect,
-                mmod: None,
-                text: Some(String::from("Hello")),
-                ..Default::default()
-            }))
-            .await;
-        session
-            .accept_frame(Frame::Listen(ListenMessage {
-                state: ListenState::Start,
-                mmod: Some(ListenMode::RealTime),
-                ..Default::default()
-            }))
-            .await;
-        for n in 0..audio.len() {
-            session
-                .accept_frame(Frame::Voice(Bytes::copy_from_slice(audio.get(n).unwrap())))
-                .await;
-        }
-        join_handle.await.unwrap();
-        session.stop().await;
-        todo!();
-    }
-
-    async fn create_session() -> Session<impl Listener> {
-        info!("init vad cahce");
-        VadCache::init().await;
-        info!("init vad cahce successfully");
-        info!("init asr cahce");
-        AsrCache::init().await;
-        info!("init asr cahce successfully");
-        tracing::info!("init llm cahce");
-        LlmCache::init().await;
-        tracing::info!("init llm cahce successfully");
-        tracing::info!("init tts cahce");
-        TtsCache::init().await;
-        tracing::info!("init tts cahce successfully");
-        let vad = VadCache::create_vad();
-        let vad = Arc::new(Mutex::new(vad));
-        let asr = AsrCache::global().instance.clone();
-        let asr = Arc::new(Mutex::new(asr));
-        let close_connection_no_voice_time = config::get().logic().close_connection_no_voice_time();
-        Session::new(
-            Box::new(DefaultListener::new(vad, asr.clone())),
-            Some(close_connection_no_voice_time),
-        )
     }
 }

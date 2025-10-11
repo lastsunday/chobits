@@ -1,6 +1,7 @@
 use crate::config;
 use crate::ws::frame::{FrameError, FrameResult};
 use crate::ws::llm::{Llm, LlmQwen};
+use crate::ws::mcp::McpHost;
 use crate::ws::tts::{Tts, TtsKokoro};
 use crate::ws::util::llm::{EMOJI_MAP, analyze_emotion};
 use anyhow::Context;
@@ -29,8 +30,7 @@ pub struct Round {
     pub tts_state: Arc<Mutex<Option<TtsState>>>,
     pub speaking: Arc<AtomicBool>,
     pub end: Arc<AtomicBool>,
-    // TODO:  tools call info
-    // tools_call:Vec<_>
+    mcp_host: Arc<Mutex<Option<McpHost>>>,
 }
 
 #[derive(Debug)]
@@ -46,6 +46,7 @@ impl Round {
         tx: Sender<Result<FrameResult, FrameError>>,
         llm: Arc<Mutex<Box<LlmQwen>>>,
         tts: Arc<Mutex<Box<TtsKokoro>>>,
+        mcp_host: Arc<Mutex<Option<McpHost>>>,
     ) -> Self {
         Self {
             parent_id,
@@ -57,6 +58,7 @@ impl Round {
             tts_state: Arc::new(Mutex::new(None)),
             speaking: Arc::new(AtomicBool::new(false)),
             end: Arc::new(AtomicBool::new(false)),
+            mcp_host,
         }
     }
 
@@ -69,6 +71,16 @@ impl Round {
         match command {
             Command::Chat(text) => {
                 let system_prompt = config::get().logic().system_prompt().to_string();
+                // TODO: HOST MCP
+                // TODO: MCP client tools list setting
+                let mut all_tools = Vec::new();
+                let mcp_host = self.mcp_host.clone();
+                let mcp_host = mcp_host.lock().await;
+                if let Some(mcp_host) = mcp_host.as_ref() {
+                    all_tools = mcp_host.get_all_tools().await;
+                }
+                info!("{:?}", all_tools);
+                // TODO: MCP client call tool
                 self.llm_tts_handle(text, system_prompt).await;
             }
             Command::Wake(text) => {

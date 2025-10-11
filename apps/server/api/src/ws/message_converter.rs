@@ -6,12 +6,13 @@ use service::chobits::message::{
     mcp::McpMessage,
 };
 use std::ops::ControlFlow;
+use tracing::debug;
 
 pub async fn convert_to_frame(msg: Message) -> ControlFlow<Option<Frame>, Option<Frame>> {
     match msg {
         Message::Text(t) => match serde_json::from_slice::<Value>(t.as_bytes()) {
             Ok(json) => {
-                tracing::info!("is object = {},data = {}", json.is_object(), json);
+                debug!("is object = {},data = {}", json.is_object(), json);
                 if json.is_object() {
                     match json.get("type") {
                         Some(mtype) => {
