@@ -5,7 +5,6 @@ pub mod llm;
 pub mod mcp;
 pub mod message_converter;
 pub mod session;
-pub mod state;
 pub mod tts;
 pub mod util;
 pub mod vad;
