@@ -2,17 +2,17 @@ use super::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ListenMessage {
+pub struct ListenMessage<'a> {
     #[serde(flatten)]
     pub message: Message,
-    pub session_id: Option<String>,
+    pub session_id: Option<&'a str>,
     pub state: ListenState,
     #[serde(rename = "mode")]
     pub mmod: Option<ListenMode>,
-    pub text: Option<String>,
+    pub text: Option<&'a str>,
 }
 
-impl Default for ListenMessage {
+impl<'a> Default for ListenMessage<'a> {
     fn default() -> Self {
         Self {
             message: Message {

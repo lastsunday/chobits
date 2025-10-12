@@ -22,7 +22,6 @@ mod tests {
         tts::tts_cache::TtsCache,
         vad::vad_cache::VadCache,
     };
-    use axum::body::Bytes;
     use service::chobits::message::{
         hello::HelloMessage,
         listen::{ListenMessage, ListenMode, ListenState},
@@ -58,7 +57,7 @@ mod tests {
         let hello_frame = Frame::Hello(HelloMessage {
             ..Default::default()
         });
-        session.accept_frame(hello_frame.clone()).await;
+        session.accept_frame(&hello_frame).await;
         session.stop().await;
         join_handle.await.unwrap();
     }
@@ -156,9 +155,9 @@ mod tests {
         let hello_frame = Frame::Hello(HelloMessage {
             ..Default::default()
         });
-        session.accept_frame(hello_frame.clone()).await;
+        session.accept_frame(&hello_frame).await;
         session
-            .accept_frame(Frame::Listen(ListenMessage {
+            .accept_frame(&Frame::Listen(ListenMessage {
                 state: ListenState::Start,
                 mmod: Some(service::chobits::message::listen::ListenMode::Manual),
                 ..Default::default()
@@ -166,11 +165,13 @@ mod tests {
             .await;
         for n in 0..audio.len() {
             session
-                .accept_frame(Frame::Voice(Bytes::copy_from_slice(audio.get(n).unwrap())))
+                .accept_frame(&Frame::Voice {
+                    data: audio.get(n).unwrap(),
+                })
                 .await;
         }
         session
-            .accept_frame(Frame::Listen(ListenMessage {
+            .accept_frame(&Frame::Listen(ListenMessage {
                 state: ListenState::Stop,
                 ..Default::default()
             }))
@@ -279,25 +280,27 @@ mod tests {
             panic!("receive hello message error");
         });
         session
-            .accept_frame(Frame::Hello(HelloMessage {
+            .accept_frame(&Frame::Hello(HelloMessage {
                 ..Default::default()
             }))
             .await;
         for n in 0..audio.len() {
             session
-                .accept_frame(Frame::Voice(Bytes::copy_from_slice(audio.get(n).unwrap())))
+                .accept_frame(&Frame::Voice {
+                    data: audio.get(n).unwrap(),
+                })
                 .await;
         }
         session
-            .accept_frame(Frame::Listen(ListenMessage {
+            .accept_frame(&Frame::Listen(ListenMessage {
                 state: ListenState::Detect,
                 mmod: None,
-                text: Some(String::from("Hello")),
+                text: Some("Hello"),
                 ..Default::default()
             }))
             .await;
         session
-            .accept_frame(Frame::Listen(ListenMessage {
+            .accept_frame(&Frame::Listen(ListenMessage {
                 state: ListenState::Start,
                 mmod: Some(ListenMode::Auto),
                 ..Default::default()
@@ -312,7 +315,9 @@ mod tests {
         info!("after next step");
         for n in 0..audio.len() {
             session
-                .accept_frame(Frame::Voice(Bytes::copy_from_slice(audio.get(n).unwrap())))
+                .accept_frame(&Frame::Voice {
+                    data: audio.get(n).unwrap(),
+                })
                 .await;
         }
         join_handle.await.unwrap();
@@ -416,25 +421,27 @@ mod tests {
             panic!("receive hello message error");
         });
         session
-            .accept_frame(Frame::Hello(HelloMessage {
+            .accept_frame(&Frame::Hello(HelloMessage {
                 ..Default::default()
             }))
             .await;
         for n in 0..audio.len() {
             session
-                .accept_frame(Frame::Voice(Bytes::copy_from_slice(audio.get(n).unwrap())))
+                .accept_frame(&Frame::Voice {
+                    data: audio.get(n).unwrap(),
+                })
                 .await;
         }
         session
-            .accept_frame(Frame::Listen(ListenMessage {
+            .accept_frame(&Frame::Listen(ListenMessage {
                 state: ListenState::Detect,
                 mmod: None,
-                text: Some(String::from("Hello")),
+                text: Some("Hello"),
                 ..Default::default()
             }))
             .await;
         session
-            .accept_frame(Frame::Listen(ListenMessage {
+            .accept_frame(&Frame::Listen(ListenMessage {
                 state: ListenState::Start,
                 mmod: Some(ListenMode::RealTime),
                 ..Default::default()
@@ -442,7 +449,9 @@ mod tests {
             .await;
         for n in 0..audio.len() {
             session
-                .accept_frame(Frame::Voice(Bytes::copy_from_slice(audio.get(n).unwrap())))
+                .accept_frame(&Frame::Voice {
+                    data: audio.get(n).unwrap(),
+                })
                 .await;
         }
         join_handle.await.unwrap();
@@ -488,15 +497,15 @@ mod tests {
             panic!("receive hello message error");
         });
         session
-            .accept_frame(Frame::Hello(HelloMessage {
+            .accept_frame(&Frame::Hello(HelloMessage {
                 ..Default::default()
             }))
             .await;
         session
-            .accept_frame(Frame::Listen(ListenMessage {
+            .accept_frame(&Frame::Listen(ListenMessage {
                 state: ListenState::Detect,
                 mmod: Some(service::chobits::message::listen::ListenMode::Manual),
-                text: Some(String::from("Hello")),
+                text: Some("Hello"),
                 ..Default::default()
             }))
             .await;
@@ -548,23 +557,23 @@ mod tests {
             panic!("receive hello message error");
         });
         session
-            .accept_frame(Frame::Hello(HelloMessage {
+            .accept_frame(&Frame::Hello(HelloMessage {
                 ..Default::default()
             }))
             .await;
         session
-            .accept_frame(Frame::Listen(ListenMessage {
+            .accept_frame(&Frame::Listen(ListenMessage {
                 state: ListenState::Detect,
                 mmod: Some(service::chobits::message::listen::ListenMode::Manual),
-                text: Some(String::from("Hello")),
+                text: Some("Hello"),
                 ..Default::default()
             }))
             .await;
         session
-            .accept_frame(Frame::Listen(ListenMessage {
+            .accept_frame(&Frame::Listen(ListenMessage {
                 state: ListenState::Detect,
                 mmod: Some(service::chobits::message::listen::ListenMode::Manual),
-                text: Some(String::from("Hello")),
+                text: Some("Hello"),
                 ..Default::default()
             }))
             .await;
@@ -766,25 +775,27 @@ mod tests {
             panic!("receive hello message error");
         });
         session
-            .accept_frame(Frame::Hello(HelloMessage {
+            .accept_frame(&Frame::Hello(HelloMessage {
                 ..Default::default()
             }))
             .await;
         for n in 0..audio.len() {
             session
-                .accept_frame(Frame::Voice(Bytes::copy_from_slice(audio.get(n).unwrap())))
+                .accept_frame(&Frame::Voice {
+                    data: audio.get(n).unwrap(),
+                })
                 .await;
         }
         session
-            .accept_frame(Frame::Listen(ListenMessage {
+            .accept_frame(&Frame::Listen(ListenMessage {
                 state: ListenState::Detect,
                 mmod: None,
-                text: Some(String::from("Hello")),
+                text: Some("Hello"),
                 ..Default::default()
             }))
             .await;
         session
-            .accept_frame(Frame::Listen(ListenMessage {
+            .accept_frame(&Frame::Listen(ListenMessage {
                 state: ListenState::Start,
                 mmod: Some(ListenMode::RealTime),
                 ..Default::default()
@@ -792,7 +803,9 @@ mod tests {
             .await;
         for n in 0..audio.len() {
             session
-                .accept_frame(Frame::Voice(Bytes::copy_from_slice(audio.get(n).unwrap())))
+                .accept_frame(&Frame::Voice {
+                    data: audio.get(n).unwrap(),
+                })
                 .await;
         }
         join_handle.await.unwrap();

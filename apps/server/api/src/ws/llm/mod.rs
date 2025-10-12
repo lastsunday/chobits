@@ -73,9 +73,9 @@ impl LlmQwen {
     }
 }
 
-async fn handle_chat(
-    system_prompt: String,
-    text: String,
+async fn handle_chat<'a>(
+    system_prompt: &'a str,
+    text: &'a str,
     tokenizer: Tokenizer,
     mut model: Qwen3,
     device: Device,
@@ -264,8 +264,15 @@ impl Llm for LlmQwen {
         let (tx, rx) = channel::<core::result::Result<String, ModelError>>(10);
         thread::spawn(move || {
             block_on(async move {
-                if let Err(e) =
-                    handle_chat(system_prompt, text, tokenizer, model, device, tx.clone()).await
+                if let Err(e) = handle_chat(
+                    system_prompt.as_str(),
+                    text.as_str(),
+                    tokenizer,
+                    model,
+                    device,
+                    tx.clone(),
+                )
+                .await
                     && let Err(e) = tx.send(Err(e)).await
                 {
                     tracing::error!("chat llmError send error = {}", e);

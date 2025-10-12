@@ -155,7 +155,7 @@ where
     });
     tokio::spawn(async move {
         while let Some(Ok(msg)) = read.next().await {
-            let result = convert_to_frame(msg).await;
+            let result = convert_to_frame(&msg).await;
             if result.is_break() {
                 if let Some(item) = result.break_value() {
                     match item {
@@ -166,7 +166,7 @@ where
                                 return;
                             }
                             _ => {
-                                session.accept_frame(frame).await;
+                                session.accept_frame(&frame).await;
                             }
                         },
                         None => {
@@ -188,16 +188,16 @@ where
                                 info!("abort message = {:?}", abort_message);
                                 session.stop().await;
                             }
-                            frame::Frame::Ping(_bytes) => {
+                            frame::Frame::Ping { data } => {
                                 // TODO: log session id
-                                info!("ping");
+                                info!("ping,len = {}", data.len());
                             }
-                            frame::Frame::Pong(_bytes) => {
+                            frame::Frame::Pong { data } => {
                                 // TODO: log session id
-                                info!("pong");
+                                info!("pong,len = {}", data.len());
                             }
                             _ => {
-                                session.accept_frame(frame).await;
+                                session.accept_frame(&frame).await;
                             }
                         }
                     }

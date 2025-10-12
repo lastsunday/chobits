@@ -1,4 +1,3 @@
-use axum::{body::Bytes, extract::ws::Utf8Bytes};
 use service::chobits::message::{
     abort::AbortMessage,
     audio::AudioMessage,
@@ -12,15 +11,15 @@ use service::chobits::message::{
 };
 
 #[derive(Debug, Clone)]
-pub enum Frame {
+pub enum Frame<'a> {
     Hello(HelloMessage),
-    Listen(ListenMessage),
-    UnknowText(Utf8Bytes),
-    Voice(Bytes),
-    Abort(AbortMessage),
-    Ping(Bytes),
-    Pong(Bytes),
-    Close(CloseMessage),
+    Listen(ListenMessage<'a>),
+    UnknowText { data: &'a [u8] },
+    Voice { data: &'a [u8] },
+    Abort(AbortMessage<'a>),
+    Ping { data: &'a [u8] },
+    Pong { data: &'a [u8] },
+    Close(CloseMessage<'a>),
     Mcp(McpMessage),
 }
 

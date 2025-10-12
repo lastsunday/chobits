@@ -34,10 +34,10 @@ pub struct Round {
 }
 
 #[derive(Debug)]
-pub enum Command {
-    Chat(String),
-    Wake(String),
-    ListenUnclear(String),
+pub enum Command<'a> {
+    Chat { text: &'a str },
+    Wake { text: &'a str },
+    ListenUnclear { text: &'a str },
 }
 
 impl Round {
@@ -67,10 +67,10 @@ impl Round {
         info!("start");
     }
 
-    pub async fn accept_command(&mut self, command: Command) {
+    pub async fn accept_command<'a>(&mut self, command: Command<'a>) {
         match command {
-            Command::Chat(text) => {
-                let system_prompt = config::get().logic().system_prompt().to_string();
+            Command::Chat { text } => {
+                let system_prompt = config::get().logic().system_prompt();
                 // TODO: HOST MCP
                 // TODO: MCP client tools list setting
                 let mut all_tools = Vec::new();
@@ -83,21 +83,18 @@ impl Round {
                 // TODO: MCP client call tool
                 self.llm_tts_handle(text, system_prompt).await;
             }
-            Command::Wake(text) => {
-                let system_prompt = config::get().logic().system_wake_prompt().to_string();
+            Command::Wake { text } => {
+                let system_prompt = config::get().logic().system_wake_prompt();
                 self.llm_tts_handle(text, system_prompt).await;
             }
-            Command::ListenUnclear(text) => {
-                let system_prompt = config::get()
-                    .logic()
-                    .system_listen_unclear_prompt()
-                    .to_string();
+            Command::ListenUnclear { text } => {
+                let system_prompt = config::get().logic().system_listen_unclear_prompt();
                 self.llm_tts_handle(text, system_prompt).await;
             }
         }
     }
 
-    async fn llm_tts_handle(&mut self, text: String, system_prompt: String) {
+    async fn llm_tts_handle<'a>(&mut self, text: &'a str, system_prompt: &'a str) {
         let tx = self.tx.clone();
         let stop_me = self.stop.clone();
         let session_id = self.parent_id.clone();
@@ -106,6 +103,8 @@ impl Round {
         let tts_state_clone = self.tts_state.clone();
         let speaking = self.speaking.clone();
         let end = self.end.clone();
+        let text = String::from(text);
+        let system_prompt = String::from(system_prompt);
         tokio::spawn(async move {
             if tx
                 .send(Ok(FrameResult::STTResult(SttMessage::new(
@@ -119,7 +118,7 @@ impl Round {
             }
             let llm = llm.lock().await;
             let tts = tts.lock().await;
-            let llm_output = llm.chat(system_prompt, text.to_string());
+            let llm_output = llm.chat(system_prompt, text);
             let mut tts_output = tts.output_stream(llm_output);
             let audio_config = config::get().audio();
             let delay = audio_config.output_frame_duration();
