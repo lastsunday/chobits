@@ -73,9 +73,7 @@ where
 
     #[instrument(skip(self), name="Session stop" fields(id = %self.id))]
     pub async fn stop(&mut self) {
-        if let Some(round) = &mut self.current_round {
-            round.stop().await;
-        }
+        self.stop_round().await;
         let tx = self.output_tx.clone().unwrap();
         let result = tx.send(Ok(FrameResult::CloseResult)).await;
         if result.is_err() {
@@ -87,9 +85,7 @@ where
     #[instrument(skip(self), name="Session new round",fields(id = %self.id))]
     pub async fn new_round(&mut self) {
         info!("new round");
-        if let Some(round) = &mut self.current_round {
-            round.stop().await;
-        }
+        self.stop_round().await;
         let tx = self
             .output_tx
             .clone()
@@ -110,7 +106,11 @@ where
         }
     }
 
-    pub async fn stop_round(&mut self) {}
+    pub async fn stop_round(&mut self) {
+        if let Some(round) = &mut self.current_round {
+            round.stop().await;
+        }
+    }
 
     pub async fn accept_frame<'a>(&mut self, frame: &Frame<'a>) {
         let phase = self.phase.clone();
