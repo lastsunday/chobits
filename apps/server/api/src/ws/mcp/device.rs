@@ -2,9 +2,11 @@ use std::sync::atomic::{AtomicI64, Ordering};
 
 use rmcp::model::{
     ClientCapabilities, ConstString, Implementation, InitializeRequest, InitializeRequestParam,
-    InitializeResult, JsonRpcMessage, JsonRpcRequest, JsonRpcVersion2_0, ListToolsRequest,
-    ListToolsResult, PaginatedRequestParam, ProtocolVersion, Request, RequestId, Tool, object,
+    InitializeResult, JsonObject, JsonRpcMessage, JsonRpcRequest, JsonRpcVersion2_0,
+    ListToolsRequest, ListToolsResult, PaginatedRequestParam, ProtocolVersion, Request, RequestId,
+    Tool, object,
 };
+use serde::Serialize;
 use service::chobits::message::mcp::McpRequest;
 use tracing::{error, info};
 
@@ -36,8 +38,7 @@ impl DeviceMcpClient {
     }
 
     pub async fn create_initialize_request(&mut self) -> McpRequest {
-        let id = self.request_id.fetch_add(1, Ordering::Relaxed);
-        let id = RequestId::Number(id);
+        let id = RequestId::Number(self.request_id.fetch_add(1, Ordering::Relaxed));
         self.current_request_id = Some(id.clone());
         let request = InitializeRequest::new(InitializeRequestParam {
             protocol_version: ProtocolVersion::V_2025_06_18,
@@ -93,22 +94,19 @@ impl DeviceMcpClient {
     }
 
     pub async fn create_tools_list_request(&mut self) -> McpRequest {
-        let id = self.request_id.fetch_add(1, Ordering::Relaxed);
-        let id = RequestId::Number(id);
+        let id = RequestId::Number(self.request_id.fetch_add(1, Ordering::Relaxed));
         self.current_request_id = Some(id.clone());
         let request = ListToolsRequest::with_param(PaginatedRequestParam {
             cursor: self.next_cursor.clone(),
         });
-        let method = request.method.as_str().to_string();
-        let params = object(serde_json::to_value(request.params).unwrap());
         McpRequest::new(
             self.session_id.clone(),
             JsonRpcRequest {
                 jsonrpc: JsonRpcVersion2_0,
                 id,
                 request: Request {
-                    method,
-                    params,
+                    method: request.method.as_str().to_string(),
+                    params: to_json_object(request.params),
                     ..Default::default()
                 },
             },
@@ -145,4 +143,11 @@ impl DeviceMcpClient {
         }
         false
     }
+}
+
+fn to_json_object<T>(value: T) -> JsonObject
+where
+    T: Serialize,
+{
+    object(serde_json::to_value(value).unwrap())
 }

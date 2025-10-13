@@ -4,7 +4,7 @@ mod tests {
         cmp,
         sync::{
             Arc,
-            atomic::{AtomicBool, Ordering},
+            atomic::{AtomicBool, AtomicI64, Ordering},
         },
         time::Duration,
     };
@@ -22,9 +22,15 @@ mod tests {
         tts::tts_cache::TtsCache,
         vad::vad_cache::VadCache,
     };
+    use rmcp::model::{
+        Icon, Implementation, InitializeResult, JsonObject, JsonRpcMessage, JsonRpcResponse,
+        JsonRpcVersion2_0, ListToolsResult, ProtocolVersion, RequestId, ServerCapabilities, object,
+    };
+    use serde::Serialize;
     use service::chobits::message::{
-        hello::HelloMessage,
+        hello::{Feature, HelloMessage},
         listen::{ListenMessage, ListenMode, ListenState},
+        mcp::McpMessage,
         tts::TtsState,
     };
     use tokio::{sync::Mutex, time::sleep};
@@ -41,25 +47,16 @@ mod tests {
         let mut session = create_session().await;
         session.start().await;
         let mut output = session.output_frame().await;
-        let join_handle = tokio::spawn(async move {
-            if let Some(Ok(frame_result)) = output.next().await {
-                match frame_result {
-                    FrameResult::HelloResult(_hello_message) => {
-                        return;
-                    }
-                    _ => {
-                        panic!("unexpected frame result");
-                    }
-                }
-            }
-            panic!("receive hello message error");
-        });
-        let hello_frame = Frame::Hello(HelloMessage {
-            ..Default::default()
-        });
-        session.accept_frame(&hello_frame).await;
+        session
+            .accept_frame(&Frame::Hello(HelloMessage {
+                ..Default::default()
+            }))
+            .await;
+        assert!(matches!(
+            output.next().await.unwrap().unwrap(),
+            FrameResult::HelloResult(..)
+        ));
         session.stop().await;
-        join_handle.await.unwrap();
     }
 
     #[tokio::test]
@@ -125,6 +122,7 @@ mod tests {
         let session_id = session.id.clone();
         session.start().await;
         let mut output = session.output_frame().await;
+        // TODO: need refactor,remove tokio::spawn
         let join_handle = tokio::spawn(async move {
             while let Some(data) = output.next().await {
                 info!("session id = {}, data = {:?}", session_id, data);
@@ -245,6 +243,7 @@ mod tests {
         let mut output = session.output_frame().await;
         let next_step = Arc::new(AtomicBool::new(false));
         let next_step_for_sender = next_step.clone();
+        // TODO: need refactor,remove tokio::spawn
         let join_handle = tokio::spawn(async move {
             let mut count = 0;
             while let Some(data) = output.next().await {
@@ -387,6 +386,7 @@ mod tests {
         let session_id = session.id.clone();
         session.start().await;
         let mut output = session.output_frame().await;
+        // TODO: need refactor,remove tokio::spawn
         let join_handle = tokio::spawn(async move {
             let mut count = 0;
             while let Some(data) = output.next().await {
@@ -468,6 +468,7 @@ mod tests {
         let session_id = session.id.clone();
         session.start().await;
         let mut output = session.output_frame().await;
+        // TODO: need refactor,remove tokio::spawn
         let join_handle = tokio::spawn(async move {
             while let Some(data) = output.next().await {
                 info!("session id = {}, data = {:?}", session_id, data);
@@ -524,6 +525,7 @@ mod tests {
         session.start().await;
         let mut output = session.output_frame().await;
         let mut count = 0;
+        // TODO: need refactor,remove tokio::spawn
         let join_handle = tokio::spawn(async move {
             while let Some(data) = output.next().await {
                 info!("session id = {}, data = {:?}", session_id, data);
@@ -614,8 +616,7 @@ mod tests {
     /// 5.1.1. [Server -> Device] llm text response
     /// 5.1.2. [Server -> Device] tts response
     async fn test_mcp_flow_listen_realtime() {
-        // TODO: device mcp response
-        let _device_mcp_response: &'static str = r#"
+        let device_mcp_tools_list_response: &'static str = r#"
 [
   {
     "name": "self.get_device_status",
@@ -737,80 +738,96 @@ mod tests {
             audio.push(packet);
         }
 
+        let request_id = AtomicI64::new(0);
         let mut session = create_session().await;
-        let session_id = session.id.clone();
         session.start().await;
+        // let session_id = session.id.clone();
         let mut output = session.output_frame().await;
-        let join_handle = tokio::spawn(async move {
-            let mut count = 0;
-            while let Some(data) = output.next().await {
-                info!("session id = {}, data = {:?}", session_id, data);
-                match data {
-                    Ok(frame_result) => match frame_result {
-                        FrameResult::HelloResult(_hello_message) => {}
-                        FrameResult::STTResult(_stt_message) => {}
-                        FrameResult::LLMResult(_llm_message) => {}
-                        FrameResult::TTSResult(tts_message) => {
-                            let state = tts_message.state;
-                            if let Some(state) = state
-                                && TtsState::Stop == state
-                            {
-                                count += 1;
-                                //when next round tts stop after wake tts round
-                                if count >= 2 {
-                                    return;
-                                }
-                            }
-                        }
-                        FrameResult::AudioResult(_audio_message) => {}
-                        _ => {
-                            panic!("unexpected frame result");
-                        }
-                    },
-                    Err(_) => {
-                        break;
-                    }
-                }
-            }
-            panic!("receive hello message error");
-        });
         session
             .accept_frame(&Frame::Hello(HelloMessage {
+                features: Some(Feature {
+                    mcp: Some(true),
+                    aec: None,
+                }),
                 ..Default::default()
             }))
             .await;
-        for n in 0..audio.len() {
-            session
-                .accept_frame(&Frame::Voice {
-                    data: audio.get(n).unwrap(),
-                })
-                .await;
+        assert!(matches!(
+            output.next().await.unwrap().unwrap(),
+            FrameResult::HelloResult(..)
+        ));
+        let frame_result = output.next().await.unwrap().unwrap();
+        assert!(matches!(frame_result, FrameResult::McpResult(..)));
+        if let FrameResult::McpResult(request) = frame_result {
+            assert_eq!(request.payload.request.method, "initialize");
         }
         session
-            .accept_frame(&Frame::Listen(ListenMessage {
-                state: ListenState::Detect,
-                mmod: None,
-                text: Some("Hello"),
-                ..Default::default()
-            }))
+            .accept_frame(&Frame::Mcp(McpMessage::new(to_json_rpc_response(
+                request_id.fetch_add(1, Ordering::Relaxed),
+                InitializeResult {
+                    protocol_version: ProtocolVersion::default(),
+                    capabilities: ServerCapabilities::default(),
+                    server_info: Implementation {
+                        name: "icon-server".to_string(),
+                        title: None,
+                        version: "2.0.0".to_string(),
+                        icons: Some(vec![Icon {
+                            src: "https://example.com/server.png".to_string(),
+                            mime_type: Some("image/png".to_string()),
+                            sizes: None,
+                        }]),
+                        website_url: Some("https://docs.example.com".to_string()),
+                    },
+                    instructions: None,
+                },
+            ))))
             .await;
-        session
-            .accept_frame(&Frame::Listen(ListenMessage {
-                state: ListenState::Start,
-                mmod: Some(ListenMode::RealTime),
-                ..Default::default()
-            }))
-            .await;
-        for n in 0..audio.len() {
-            session
-                .accept_frame(&Frame::Voice {
-                    data: audio.get(n).unwrap(),
-                })
-                .await;
+        let frame_result = output.next().await.unwrap().unwrap();
+        assert!(matches!(frame_result, FrameResult::McpResult(..)));
+        if let FrameResult::McpResult(request) = frame_result {
+            assert_eq!(request.payload.request.method, "tools/list");
         }
-        join_handle.await.unwrap();
+        session
+            .accept_frame(&Frame::Mcp(McpMessage::new(to_json_rpc_response(
+                request_id.fetch_add(1, Ordering::Relaxed),
+                ListToolsResult {
+                    next_cursor: None,
+                    tools: serde_json::from_str(device_mcp_tools_list_response).unwrap(),
+                },
+            ))))
+            .await;
+        // for n in 0..audio.len() {
+        //     session
+        //         .accept_frame(&Frame::Voice {
+        //             data: audio.get(n).unwrap(),
+        //         })
+        //         .await;
+        // }
+        // session
+        //     .accept_frame(&Frame::Listen(ListenMessage {
+        //         state: ListenState::Detect,
+        //         mmod: None,
+        //         text: Some("Hello"),
+        //         ..Default::default()
+        //     }))
+        //     .await;
+        // session
+        //     .accept_frame(&Frame::Listen(ListenMessage {
+        //         state: ListenState::Start,
+        //         mmod: Some(ListenMode::RealTime),
+        //         ..Default::default()
+        //     }))
+        //     .await;
+        // for n in 0..audio.len() {
+        //     session
+        //         .accept_frame(&Frame::Voice {
+        //             data: audio.get(n).unwrap(),
+        //         })
+        //         .await;
+        // }
+        // join_handle.await.unwrap();
         session.stop().await;
-        todo!();
+        todo!()
     }
 
     async fn create_session() -> Session<impl Listener> {
@@ -835,5 +852,23 @@ mod tests {
             Box::new(DefaultListener::new(vad, asr.clone())),
             Some(close_connection_no_voice_time),
         )
+    }
+
+    fn to_json_rpc_response<T>(id: i64, result: T) -> JsonRpcMessage
+    where
+        T: Serialize,
+    {
+        JsonRpcMessage::Response(JsonRpcResponse {
+            jsonrpc: JsonRpcVersion2_0,
+            id: RequestId::Number(id),
+            result: to_json_object(result),
+        })
+    }
+
+    fn to_json_object<T>(value: T) -> JsonObject
+    where
+        T: Serialize,
+    {
+        object(serde_json::to_value(value).unwrap())
     }
 }

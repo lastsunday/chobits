@@ -17,6 +17,8 @@ where
                         self.request_mcp_tools_list(mcp_host).await;
                     } else {
                         // TODO:end of get deivce mcp tools list
+                        // let tools_list = mcp_host.get_all_tools().await;
+                        // info!("{:?}", tools_list);
                     }
                 }
             }
