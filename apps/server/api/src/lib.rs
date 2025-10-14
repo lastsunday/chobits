@@ -41,7 +41,7 @@ use utoipa_scalar::{Scalar, Servable as ScalarServable};
 use framework::auth::Jwt;
 
 use crate::ws::asr::asr_cache::AsrCache;
-use crate::ws::llm::llm_cache::LlmCache;
+use crate::ws::llm::LlmFactory;
 use crate::ws::tts::tts_cache::TtsCache;
 use crate::ws::vad::vad_cache::VadCache;
 
@@ -74,9 +74,9 @@ async fn start() -> anyhow::Result<()> {
     tracing::info!("init asr cahce");
     AsrCache::init().await;
     tracing::info!("init asr cahce successfully");
-    tracing::info!("init llm cahce");
-    LlmCache::init().await;
-    tracing::info!("init llm cahce successfully");
+    tracing::info!("init llm factory");
+    LlmFactory::init().await;
+    tracing::info!("init llm factory successfully");
     // state
     let state = AppState { conn };
     // router

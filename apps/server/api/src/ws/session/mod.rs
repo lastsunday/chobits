@@ -1,6 +1,6 @@
 use crate::config;
 use crate::ws::frame::{Frame, FrameError, FrameResult};
-use crate::ws::llm::llm_cache::LlmCache;
+use crate::ws::llm::LlmFactory;
 use crate::ws::mcp::{McpHost, device::DeviceMcpPhase};
 use crate::ws::session::listener::Listener;
 use crate::ws::session::round::{Command, Round};
@@ -90,7 +90,7 @@ where
             .output_tx
             .clone()
             .expect("tx not create,maybe new round method before output frame method");
-        let llm = LlmCache::global().instance.clone();
+        let llm = LlmFactory::global().get_llm();
         let tts = TtsCache::global().instance.clone();
         self.current_round = Some(Box::new(Round::new(
             self.id.clone(),

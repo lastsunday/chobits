@@ -9,12 +9,14 @@ mod tests {
         time::Duration,
     };
 
-    use api::{config, ws::util::audio::pcm_decode};
+    use api::{
+        config,
+        ws::{llm::LlmFactory, util::audio::pcm_decode},
+    };
 
     use api::ws::{
         asr::asr_cache::AsrCache,
         frame::{Frame, FrameResult},
-        llm::llm_cache::LlmCache,
         session::{
             Session,
             listener::{DefaultListener, Listener},
@@ -837,9 +839,9 @@ mod tests {
         info!("init asr cahce");
         AsrCache::init().await;
         info!("init asr cahce successfully");
-        tracing::info!("init llm cahce");
-        LlmCache::init().await;
-        tracing::info!("init llm cahce successfully");
+        tracing::info!("init llm factory");
+        LlmFactory::init().await;
+        tracing::info!("init llm factory successfully");
         tracing::info!("init tts cahce");
         TtsCache::init().await;
         tracing::info!("init tts cahce successfully");

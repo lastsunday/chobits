@@ -25,7 +25,7 @@ pub struct Round {
     pub id: String,
     tx: Sender<Result<FrameResult, FrameError>>,
     stop: Arc<AtomicBool>,
-    llm: Arc<Mutex<Box<dyn Llm>>>,
+    llm: Arc<Box<dyn Llm>>,
     tts: Arc<Mutex<Box<TtsKokoro>>>,
     pub tts_state: Arc<Mutex<Option<TtsState>>>,
     pub speaking: Arc<AtomicBool>,
@@ -44,7 +44,7 @@ impl Round {
     pub fn new(
         parent_id: String,
         tx: Sender<Result<FrameResult, FrameError>>,
-        llm: Arc<Mutex<Box<dyn Llm>>>,
+        llm: Arc<Box<dyn Llm>>,
         tts: Arc<Mutex<Box<TtsKokoro>>>,
         mcp_host: Arc<Mutex<Option<McpHost>>>,
     ) -> Self {
@@ -116,7 +116,6 @@ impl Round {
             {
                 info!("send stt result failure");
             }
-            let llm = llm.lock().await;
             let tts = tts.lock().await;
             let llm_output = llm.chat(system_prompt, text);
             let mut tts_output = tts.output_stream(llm_output);
