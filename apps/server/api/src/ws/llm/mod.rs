@@ -1,4 +1,3 @@
-pub mod model;
 pub mod models;
 
 use crate::config;
