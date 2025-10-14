@@ -1,14 +1,18 @@
-use crate::{config, ws::llm::LlmQwen};
-use std::sync::OnceLock;
+use tokio::sync::Mutex;
+
+use super::Llm;
+use super::models::LlmQwen;
+use crate::config;
+use std::sync::{Arc, OnceLock};
 
 static INSTANCE: OnceLock<LlmCache> = OnceLock::new();
 
 pub struct LlmCache {
-    pub instance: Box<LlmQwen>,
+    pub instance: Arc<Mutex<Box<dyn Llm>>>,
 }
 
 impl LlmCache {
-    pub fn new(instance: Box<LlmQwen>) -> Self {
+    pub fn new(instance: Arc<Mutex<Box<dyn Llm>>>) -> Self {
         Self { instance }
     }
 
@@ -20,7 +24,7 @@ impl LlmCache {
             llm_config.tokens().to_string(),
         )
         .unwrap();
-        INSTANCE.get_or_init(|| -> Self { Self::new(Box::new(llm)) })
+        INSTANCE.get_or_init(|| -> Self { Self::new(Arc::new(Mutex::new(Box::new(llm)))) })
     }
 
     pub fn global() -> &'static LlmCache {

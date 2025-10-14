@@ -1,6 +1,6 @@
 use crate::config;
 use crate::ws::frame::{FrameError, FrameResult};
-use crate::ws::llm::{Llm, LlmQwen};
+use crate::ws::llm::Llm;
 use crate::ws::mcp::McpHost;
 use crate::ws::tts::{Tts, TtsKokoro};
 use crate::ws::util::llm::{EMOJI_MAP, analyze_emotion};
@@ -25,7 +25,7 @@ pub struct Round {
     pub id: String,
     tx: Sender<Result<FrameResult, FrameError>>,
     stop: Arc<AtomicBool>,
-    llm: Arc<Mutex<Box<LlmQwen>>>,
+    llm: Arc<Mutex<Box<dyn Llm>>>,
     tts: Arc<Mutex<Box<TtsKokoro>>>,
     pub tts_state: Arc<Mutex<Option<TtsState>>>,
     pub speaking: Arc<AtomicBool>,
@@ -44,7 +44,7 @@ impl Round {
     pub fn new(
         parent_id: String,
         tx: Sender<Result<FrameResult, FrameError>>,
-        llm: Arc<Mutex<Box<LlmQwen>>>,
+        llm: Arc<Mutex<Box<dyn Llm>>>,
         tts: Arc<Mutex<Box<TtsKokoro>>>,
         mcp_host: Arc<Mutex<Option<McpHost>>>,
     ) -> Self {

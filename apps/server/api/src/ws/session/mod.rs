@@ -95,7 +95,7 @@ where
         self.current_round = Some(Box::new(Round::new(
             self.id.clone(),
             tx,
-            Arc::new(Mutex::new(llm)),
+            llm,
             Arc::new(Mutex::new(tts)),
             self.mcp_host.clone(),
         )));
