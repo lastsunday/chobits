@@ -1,44 +1,81 @@
+pub mod client;
 pub mod models;
 
 use crate::config;
-use crate::ws::common::ModelError;
-use futures::Stream;
-use models::LlmQwen;
-use std::pin::Pin;
+use async_trait::async_trait;
+use rig::{
+    completion::{CompletionError, CompletionRequest, CompletionResponse},
+    streaming::StreamingCompletionResponse,
+};
 use std::sync::{Arc, OnceLock};
 
-pub trait Llm: Send + Sync {
-    fn chat(
+#[async_trait]
+pub trait Model: Send + Sync {
+    async fn completion(
         &self,
-        system_prompt: String,
-        text: String,
-    ) -> Pin<Box<dyn Stream<Item = Result<String, ModelError>> + Send>>;
+        request: CompletionRequest,
+    ) -> Result<CompletionResponse<rig::providers::openai::CompletionResponse>, CompletionError>;
+
+    async fn stream(
+        &self,
+        request: CompletionRequest,
+    ) -> Result<
+        StreamingCompletionResponse<rig::providers::openai::streaming::StreamingCompletionResponse>,
+        CompletionError,
+    >;
+}
+
+#[derive(Default, Clone)]
+pub struct DummyModel {}
+
+#[async_trait]
+impl Model for DummyModel {
+    async fn completion(
+        &self,
+        _request: CompletionRequest,
+    ) -> Result<CompletionResponse<rig::providers::openai::CompletionResponse>, CompletionError>
+    {
+        todo!()
+    }
+
+    async fn stream(
+        &self,
+        _request: CompletionRequest,
+    ) -> Result<
+        StreamingCompletionResponse<rig::providers::openai::streaming::StreamingCompletionResponse>,
+        CompletionError,
+    > {
+        todo!()
+    }
 }
 
 static INSTANCE: OnceLock<LlmFactory> = OnceLock::new();
 
 pub struct LlmFactory {
-    default_llm: Arc<Box<dyn Llm>>,
+    default_client: Arc<client::Client>,
 }
 
 impl LlmFactory {
-    pub fn new(default_llm: Arc<Box<dyn Llm>>) -> Self {
-        Self { default_llm }
+    pub fn new(default_client: Arc<client::Client>) -> Self {
+        Self { default_client }
     }
 
     pub async fn init() -> &'static Self {
         let app_config = config::get();
         let llm_config = app_config.llm();
-        let llm = LlmQwen::new(
+        let llm = models::qwen3::LlmQwen::new(
             llm_config.model().to_string(),
             llm_config.tokens().to_string(),
         )
         .unwrap();
-        INSTANCE.get_or_init(|| -> Self { Self::new(Arc::new(Box::new(llm))) })
+        let client = client::ClientBuilder::new()
+            .with_client(Arc::new(Box::new(llm)))
+            .build();
+        INSTANCE.get_or_init(|| -> Self { Self::new(Arc::new(client)) })
     }
 
-    pub fn get_llm(&self) -> Arc<Box<dyn Llm>> {
-        self.default_llm.clone()
+    pub fn get_client(&self) -> Arc<client::Client> {
+        self.default_client.clone()
     }
 
     pub fn global() -> &'static LlmFactory {

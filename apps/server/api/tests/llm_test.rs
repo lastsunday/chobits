@@ -11,7 +11,7 @@ mod tests {
     /// cargo test --test llm_test --features cuda -- tests::test_llm_chat --ignored --show-output
     async fn test_llm_chat() {
         LlmFactory::init().await;
-        let llm = LlmFactory::global().get_llm();
+        let llm = LlmFactory::global().get_client();
         let mut output = llm.chat("你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等并且数字使用中文字代替。".to_string()
             ,String::from("静夜思的内容"));
         let mut result = Vec::new();
@@ -36,7 +36,7 @@ mod tests {
     /// cargo test --test llm_test --features cuda -- tests::test_llm_short_question --ignored --show-output
     async fn test_llm_short_question() {
         LlmFactory::init().await;
-        let llm = LlmFactory::global().get_llm();
+        let llm = LlmFactory::global().get_client();
         let mut output = llm.chat("你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等并且数字使用中文字代替。".to_string()
             ,String::from("1+1="));
         let mut result = Vec::new();

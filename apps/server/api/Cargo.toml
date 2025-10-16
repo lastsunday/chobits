@@ -65,6 +65,7 @@ opus = { version = "0.3.0" }
 tokio-stream = { version = "0.1.17" }
 futures = { version = "0.3.31" }
 openssl = { version = "0.10.73", features = ["vendored"] }
+async-trait = { version = "0.1.89" }
 # audio start
 symphonia = { version = "0.5.4" }
 wavers = { version = "1.5.1" }
@@ -83,6 +84,7 @@ intel-mkl-src = { version = "0.8.1", features = [
 ], optional = true }
 accelerate-src = { version = "0.3.2", optional = true }
 candle-onnx = { version = "0.9.1" }
+rig-core = { version = "0.22.0" }
 # llm end
 # asr start
 byteorder = { version = "1.4.3" }

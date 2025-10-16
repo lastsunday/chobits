@@ -2,6 +2,7 @@ use candle_core::{
     Device, Error, Result,
     utils::{cuda_is_available, metal_is_available},
 };
+use rig::completion::CompletionError;
 
 pub fn device(cpu: bool) -> Result<Device> {
     if cpu {
@@ -49,6 +50,8 @@ pub enum ModelError {
     ModelInitFailure(String),
     #[error("token init failure path = {0}")]
     TokenInitFailure(String),
+    #[error("model completion failure = {0}")]
+    ModelCompletionError(String),
     #[error("chat failure msg = {0}")]
     Chat(String),
     #[error("tensor error msg = {0}")]
@@ -62,5 +65,17 @@ pub enum ModelError {
 impl From<Error> for ModelError {
     fn from(value: Error) -> Self {
         ModelError::Tensor(value.to_string())
+    }
+}
+
+impl From<CompletionError> for ModelError {
+    fn from(value: CompletionError) -> Self {
+        ModelError::ModelCompletionError(value.to_string())
+    }
+}
+
+impl From<ModelError> for CompletionError {
+    fn from(value: ModelError) -> Self {
+        CompletionError::ResponseError(value.to_string())
     }
 }
