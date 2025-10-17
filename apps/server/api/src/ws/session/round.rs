@@ -8,6 +8,9 @@ use anyhow::Context;
 use core::result::Result;
 use framework::id::gen_id;
 use futures::StreamExt;
+use rig::OneOrMany;
+use rig::completion::CompletionRequest;
+use rig::message::{Message, Text, UserContent};
 use service::chobits::message::audio::AudioMessage;
 use service::chobits::message::llm::LlmMessage;
 use service::chobits::message::stt::SttMessage;
@@ -105,6 +108,19 @@ impl Round {
         let end = self.end.clone();
         let text = String::from(text);
         let system_prompt = String::from(system_prompt);
+        let chat_history = OneOrMany::<Message>::one(Message::User {
+            content: OneOrMany::<UserContent>::one(UserContent::Text(Text { text: text.clone() })),
+        });
+        let request = CompletionRequest {
+            preamble: Some(system_prompt),
+            chat_history,
+            documents: vec![],
+            tools: vec![],
+            temperature: Some(0.8),
+            max_tokens: Some(999),
+            tool_choice: None,
+            additional_params: None,
+        };
         tokio::spawn(async move {
             if tx
                 .send(Ok(FrameResult::STTResult(SttMessage::new(
@@ -117,7 +133,7 @@ impl Round {
                 info!("send stt result failure");
             }
             let tts = tts.lock().await;
-            let llm_output = llm.chat(system_prompt, text);
+            let llm_output = llm.chat(request);
             let mut tts_output = tts.output_stream(llm_output);
             let audio_config = config::get().audio();
             let delay = audio_config.output_frame_duration();

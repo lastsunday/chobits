@@ -93,7 +93,7 @@ fn convert_request_to_prompt(request: &CompletionRequest) -> String {
                     }
                 }
             }
-            Message::Assistant { id, content } => {
+            Message::Assistant { id: _, content } => {
                 let items = content.iter();
                 for item in items {
                     match item {
@@ -138,8 +138,8 @@ async fn handle(
     let tokens = tokens.get_ids();
 
     // TODO:setting
-    let to_sample = 999;
-    let temperature = 0.8;
+    let to_sample = request.max_tokens.unwrap_or(999) as usize;
+    let temperature = request.temperature.unwrap_or(0.8);
     let seed = 299792458;
     let repeat_last_n = 64;
     let repeat_penalty = 1.1;

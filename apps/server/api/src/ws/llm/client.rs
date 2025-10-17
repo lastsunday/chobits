@@ -6,12 +6,7 @@ use crate::ws::{
 };
 use futures::StreamExt;
 use futures::{Stream, executor::block_on};
-use rig::{
-    OneOrMany,
-    completion::CompletionRequest,
-    message::{Message, Text, UserContent},
-    streaming::StreamedAssistantContent,
-};
+use rig::{completion::CompletionRequest, streaming::StreamedAssistantContent};
 use tokio::sync::mpsc::channel;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::error;
@@ -28,22 +23,8 @@ impl Client {
 
     pub fn chat(
         &self,
-        system_prompt: String,
-        text: String,
+        request: CompletionRequest,
     ) -> impl Stream<Item = core::result::Result<String, ModelError>> + Unpin + Send + 'static {
-        let chat_history = OneOrMany::<Message>::one(Message::User {
-            content: OneOrMany::<UserContent>::one(UserContent::Text(Text { text })),
-        });
-        let request = CompletionRequest {
-            preamble: Some(system_prompt),
-            chat_history,
-            documents: vec![],
-            tools: vec![],
-            temperature: None,
-            max_tokens: None,
-            tool_choice: None,
-            additional_params: None,
-        };
         let (tx, rx) = channel::<core::result::Result<String, ModelError>>(10);
         let model = self.model.clone();
         thread::spawn(move || {
