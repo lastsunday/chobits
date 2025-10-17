@@ -4,25 +4,25 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-sea-orm = { version = "1.1.12", features = [
+sea-orm = { version = "1.1.17", features = [
   "sqlx-postgres",
   "sqlx-sqlite",
   "runtime-tokio-rustls",
   "macros",
   "debug-print",
 ] }
-anyhow = { version = "1.0.98" }
+anyhow = { version = "1.0.100" }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 ssh-key = { version = "0.6.7", features = ["getrandom", "ed25519"] }
-chrono = "0.4.41"
-testcontainers = "0.24.0"
-testcontainers-modules = { version = "0.12.1", features = ["postgres"] }
-uuid = { version = "1.17.0", features = ["v4"] }
-tokio = { version = "1.45.1", features = ["full"] }
+chrono = "0.4.42"
+testcontainers = "0.25.0"
+testcontainers-modules = { version = "0.13.0", features = ["postgres"] }
+uuid = { version = "1.18.1", features = ["v4"] }
+tokio = { version = "1.48.0", features = ["full"] }
 num_cpus = { version = "1.17.0" }
-serde = { version = "1.0.219", features = ["derive"] }
-rmcp = { version = "0.7.0" }
+serde = { version = "1.0.228", features = ["derive"] }
+rmcp = { version = "0.8.1" }
 migration = { path = "../migration" }
 entity = { path = "../entity" }
 framework = { path = "../framework" }
