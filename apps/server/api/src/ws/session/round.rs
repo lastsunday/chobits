@@ -2,6 +2,7 @@ use crate::config;
 use crate::ws::frame::{FrameError, FrameResult};
 use crate::ws::llm::client::Client;
 use crate::ws::mcp::McpHost;
+use crate::ws::session::History;
 use crate::ws::tts::{Tts, TtsKokoro};
 use crate::ws::util::llm::{EMOJI_MAP, analyze_emotion};
 use anyhow::Context;
@@ -34,6 +35,7 @@ pub struct Round {
     pub speaking: Arc<AtomicBool>,
     pub end: Arc<AtomicBool>,
     mcp_host: Arc<Mutex<Option<McpHost>>>,
+    history: Arc<Mutex<History>>,
 }
 
 #[derive(Debug)]
@@ -50,6 +52,7 @@ impl Round {
         llm: Arc<Client>,
         tts: Arc<Mutex<Box<TtsKokoro>>>,
         mcp_host: Arc<Mutex<Option<McpHost>>>,
+        history: Arc<Mutex<History>>,
     ) -> Self {
         Self {
             parent_id,
@@ -62,6 +65,7 @@ impl Round {
             speaking: Arc::new(AtomicBool::new(false)),
             end: Arc::new(AtomicBool::new(false)),
             mcp_host,
+            history,
         }
     }
 
@@ -73,7 +77,7 @@ impl Round {
     pub async fn accept_command<'a>(&mut self, command: Command<'a>) {
         match command {
             Command::Chat { text } => {
-                let system_prompt = config::get().logic().system_prompt();
+                // let system_prompt = config::get().logic().system_prompt();
                 // TODO: HOST MCP
                 // TODO: MCP client tools list setting
                 let mut all_tools = Vec::new();
@@ -84,20 +88,22 @@ impl Round {
                 }
                 info!("{:?}", all_tools);
                 // TODO: MCP client call tool
-                self.llm_tts_handle(text, system_prompt).await;
+                self.llm_tts_handle(text).await;
             }
             Command::Wake { text } => {
-                let system_prompt = config::get().logic().system_wake_prompt();
-                self.llm_tts_handle(text, system_prompt).await;
+                // let system_prompt = config::get().logic().system_wake_prompt();
+                // TODO: add wake tip to text?
+                self.llm_tts_handle(text).await;
             }
             Command::ListenUnclear { text } => {
-                let system_prompt = config::get().logic().system_listen_unclear_prompt();
-                self.llm_tts_handle(text, system_prompt).await;
+                // let system_prompt = config::get().logic().system_listen_unclear_prompt();
+                // TODO: add unclear tip to text?
+                self.llm_tts_handle(text).await;
             }
         }
     }
 
-    async fn llm_tts_handle<'a>(&mut self, text: &'a str, system_prompt: &'a str) {
+    async fn llm_tts_handle(&mut self, text: &str) {
         let tx = self.tx.clone();
         let stop_me = self.stop.clone();
         let session_id = self.parent_id.clone();
@@ -106,21 +112,8 @@ impl Round {
         let tts_state_clone = self.tts_state.clone();
         let speaking = self.speaking.clone();
         let end = self.end.clone();
+        let history = self.history.clone();
         let text = String::from(text);
-        let system_prompt = String::from(system_prompt);
-        let chat_history = OneOrMany::<Message>::one(Message::User {
-            content: OneOrMany::<UserContent>::one(UserContent::Text(Text { text: text.clone() })),
-        });
-        let request = CompletionRequest {
-            preamble: Some(system_prompt),
-            chat_history,
-            documents: vec![],
-            tools: vec![],
-            temperature: Some(0.8),
-            max_tokens: Some(999),
-            tool_choice: None,
-            additional_params: None,
-        };
         tokio::spawn(async move {
             if tx
                 .send(Ok(FrameResult::STTResult(SttMessage::new(
@@ -133,6 +126,30 @@ impl Round {
                 info!("send stt result failure");
             }
             let tts = tts.lock().await;
+            let mut history = history.lock().await;
+            history.chat_history.push(Message::User {
+                content: OneOrMany::one(UserContent::Text(Text { text })),
+            });
+            let chat_history = {
+                if history.chat_history.len() > 1 {
+                    OneOrMany::<Message>::many(history.chat_history.clone()).unwrap()
+                } else if !history.chat_history.is_empty() {
+                    OneOrMany::<Message>::one(history.chat_history.first().unwrap().clone())
+                } else {
+                    panic!("chat history len is empty")
+                }
+            };
+            let request = CompletionRequest {
+                preamble: history.preamble.clone(),
+                chat_history,
+                documents: vec![],
+                tools: vec![],
+                temperature: Some(0.8),
+                max_tokens: Some(999),
+                tool_choice: None,
+                additional_params: None,
+            };
+            drop(history);
             let llm_output = llm.chat(request);
             let mut tts_output = tts.output_stream(llm_output);
             let audio_config = config::get().audio();
@@ -150,11 +167,14 @@ impl Round {
                             break;
                         }
                         let text = result.text;
+                        // TODO: add llm response text to chat history
+                        // TODO: consider all llm text? tts output text?(tts output in one message item?)
                         let emotion = analyze_emotion(&text);
                         let session_id = session_id.clone();
                         let tx = tx.clone();
                         let text = text.clone();
                         let audio_data = result.audio;
+                        // TODO: save text and tts with session id,round id to database
                         let tts_state_clone = tts_state_clone.clone();
                         let speaking = speaking.clone();
                         let stop_me_by_tts_packet = stop_me.clone();
@@ -299,6 +319,8 @@ impl Round {
                     }
                 }
             }
+            // TODO: add llm text to chat history
+            // TODO: save chat history to database?
             end.store(true, Ordering::Relaxed);
             info!("round setting end = true");
         });

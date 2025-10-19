@@ -9,6 +9,7 @@ use chrono::Local;
 use core::result::Result;
 use framework::id::gen_id;
 use futures::Stream;
+use rig::message::Message;
 use service::chobits::message::hello::{AudioParam, HelloMessage};
 use service::chobits::message::listen::ListenState;
 use service::chobits::message::mcp::McpMessage;
@@ -33,6 +34,7 @@ pub struct Session<L> {
     latest_activity_time: Arc<Mutex<Option<i64>>>,
     close_connection_no_voice_time: Option<i64>,
     mcp_host: Arc<Mutex<Option<McpHost>>>,
+    history: Arc<Mutex<History>>,
 }
 
 #[derive(Debug, Clone)]
@@ -49,11 +51,17 @@ pub enum ListenMode {
     RealTime,
 }
 
+pub struct History {
+    pub preamble: Option<String>,
+    pub chat_history: Vec<Message>,
+}
+
 impl<L> Session<L>
 where
     L: Listener + Send,
 {
     pub fn new(listener: Box<L>, close_connection_no_voice_time: Option<i64>) -> Self {
+        let system_prompt = config::get().logic().system_prompt();
         Self {
             id: gen_id(),
             current_round: None,
@@ -62,6 +70,10 @@ where
             phase: Phase::Hello,
             latest_activity_time: Arc::new(Mutex::new(None)),
             close_connection_no_voice_time,
+            history: Arc::new(Mutex::new(History {
+                preamble: Some(system_prompt.to_string()),
+                chat_history: vec![],
+            })),
             mcp_host: Arc::new(Mutex::new(None)),
         }
     }
@@ -98,6 +110,7 @@ where
             llm,
             Arc::new(Mutex::new(tts)),
             self.mcp_host.clone(),
+            self.history.clone(),
         )));
         if let Some(round) = &mut self.current_round {
             round.start().await;

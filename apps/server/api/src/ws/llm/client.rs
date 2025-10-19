@@ -2,11 +2,16 @@ use std::{sync::Arc, thread};
 
 use crate::ws::{
     common::ModelError,
-    llm::{DummyModel, Model},
+    llm::{DummyModel, Model, chat::Chat},
 };
 use futures::StreamExt;
 use futures::{Stream, executor::block_on};
-use rig::{completion::CompletionRequest, streaming::StreamedAssistantContent};
+use rig::{
+    completion::CompletionRequest,
+    message::{Reasoning, ToolCall},
+    providers::openai::StreamingCompletionResponse,
+    streaming::StreamedAssistantContent,
+};
 use tokio::sync::mpsc::channel;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::error;
@@ -29,24 +34,36 @@ impl Client {
         let model = self.model.clone();
         thread::spawn(move || {
             block_on(async move {
-                let stream = model.stream(request).await;
-                match stream {
+                let mut chat = Chat::new();
+                let response = model.stream(request).await;
+                match response {
                     Ok(mut stream) => {
                         // TODO:
                         while let Some(value) = stream.next().await {
                             match value {
-                                Ok(value) => {
-                                    match value {
-                                        StreamedAssistantContent::Text(text) => {
-                                            let e = tx.send(Ok(text.text)).await;
-                                            if let Err(e) = e {
-                                                error!("{:?}", e);
-                                            }
-                                        }
-                                        _ => {
-                                            // TODO:
+                                Ok(StreamedAssistantContent::Text(text)) => {
+                                    let sentence_list = chat.accept_text(&text.text);
+                                    let sentence_iter = sentence_list.iter();
+                                    for sentence in sentence_iter {
+                                        let e = tx.send(Ok(sentence.to_string())).await;
+                                        if let Err(e) = e {
+                                            error!("{:?}", e);
                                         }
                                     }
+                                }
+                                Ok(StreamedAssistantContent::Final(
+                                    StreamingCompletionResponse { .. },
+                                )) => {
+                                    // TODO:
+                                }
+                                Ok(StreamedAssistantContent::ToolCall(ToolCall { .. })) => {
+                                    // TODO:
+                                }
+                                Ok(StreamedAssistantContent::Reasoning(Reasoning {
+                                    reasoning: _,
+                                    ..
+                                })) => {
+                                    // TODO:
                                 }
                                 Err(e) => {
                                     let e = tx.send(Err(e.into())).await;
@@ -62,6 +79,14 @@ impl Client {
                         if let Err(e) = e {
                             error!("{:?}", e);
                         }
+                    }
+                }
+                let sentence_list = chat.accept_final();
+                let sentence_iter = sentence_list.iter();
+                for sentence in sentence_iter {
+                    let e = tx.send(Ok(sentence.to_string())).await;
+                    if let Err(e) = e {
+                        error!("{:?}", e);
                     }
                 }
                 drop(tx);

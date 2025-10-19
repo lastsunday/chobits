@@ -1,26 +1,4 @@
-use fancy_regex::Regex;
 use std::{collections::HashMap, sync::LazyLock};
-
-use std::sync::OnceLock;
-
-fn regex() -> &'static Vec<Regex> {
-    static REGEX: OnceLock<Vec<Regex>> = OnceLock::new();
-    REGEX.get_or_init(|| {
-        vec![
-            Regex::new(r"\n").unwrap(),
-            Regex::new(r"\*\*").unwrap(),
-            Regex::new(r"```.*?```").unwrap(),
-            Regex::new(r"^#+\s*").unwrap(),
-            Regex::new(r"(\*\*|__)(.*?)\1").unwrap(),
-            Regex::new(r"(\*|_)(?=\S)(.*?)(?<=\S)\1").unwrap(),
-            Regex::new(r"!\[.*?\]\(.*?\)").unwrap(),
-            Regex::new(r"\[(.*?)\]\(.*?\)").unwrap(),
-            Regex::new(r"^\s*>+\s*").unwrap(),
-            Regex::new(r"^\s*[*+-]\s*").unwrap(),
-            Regex::new(r"\$\$.*?\$\$").unwrap(),
-        ]
-    })
-}
 
 pub static EMOJI_MAP: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
     let mut map: HashMap<&str, &str> = HashMap::new();
@@ -52,19 +30,4 @@ pub static EMOJI_MAP: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
 pub fn analyze_emotion(_text: &str) -> &str {
     // TODO: use llm to analyze emotion
     r##"happy"##
-}
-
-pub fn filter_think(text: &str) -> Option<String> {
-    let regex = regex::Regex::new(r"(<think>[\s\S]*</think>[\s]*)([\s\S]*)").unwrap();
-    let (_full, [_think, content]) = regex.captures(text).map(|caps| caps.extract())?;
-    Some(content.to_string())
-}
-
-pub fn filter(text: &str) -> Option<String> {
-    let mut content = String::from(text);
-    let regex = regex().iter();
-    for r in regex {
-        content = String::from(r.replace_all(&content, ""));
-    }
-    Some(content.trim().to_string())
 }

@@ -9,8 +9,7 @@ pub mod quantized;
 use super::token_output_stream::TokenOutputStream;
 use crate::ws::{
     common::{ModelError, device, format_size},
-    llm::Model,
-    util::llm::{filter, filter_think},
+    llm::{Model, models::token_converter::TokenConverter},
 };
 use async_trait::async_trait;
 use candle_core::{Device, Tensor, quantized::gguf_file};
@@ -18,14 +17,15 @@ use candle_transformers::generation::{LogitsProcessor, Sampling};
 use futures::{SinkExt, executor::block_on};
 use futures_channel::mpsc::{Sender, channel};
 use quantized::ModelWeights as Qwen3;
-use regex::Regex;
 use rig::{
     completion::{CompletionError, CompletionRequest, CompletionResponse},
     message::{AssistantContent, Message, UserContent},
+    providers::openai::Usage,
     streaming::{RawStreamingChoice, StreamingCompletionResponse},
 };
 use std::thread;
 use tokenizers::Tokenizer;
+use tracing::{error, info};
 
 #[derive(Clone)]
 pub struct LlmQwen {
@@ -49,7 +49,7 @@ impl LlmQwen {
                 total_size_in_bytes +=
                     elem_count * tensor.ggml_dtype.type_size() / tensor.ggml_dtype.block_size();
             }
-            tracing::info!(
+            info!(
                 "loaded {:?} tensors ({}) in {:.2}s",
                 model.tensor_infos.len(),
                 &format_size(total_size_in_bytes),
@@ -58,7 +58,7 @@ impl LlmQwen {
             Qwen3::from_gguf(model, &mut file, &device)
                 .map_err(|_e| ModelError::ModelInitFailure(model_path.clone()))?
         };
-        tracing::info!("model built");
+        info!("model built");
         let tokenizer = Tokenizer::from_file(token_path.clone())
             .map_err(|_e| ModelError::TokenInitFailure(token_path.clone()))?;
         Ok(Self {
@@ -129,7 +129,7 @@ async fn handle(
 ) -> Result<(), CompletionError> {
     let mut tos = TokenOutputStream::new(tokenizer);
     let prompt_str = convert_request_to_prompt(request);
-    tracing::info!("formatted prompt: {}", &prompt_str);
+    info!("formatted prompt: {}", &prompt_str);
 
     let tokens = tos
         .tokenizer()
@@ -145,8 +145,7 @@ async fn handle(
     let repeat_penalty = 1.1;
 
     let mut all_tokens = vec![];
-    let mut text_result = Vec::new();
-    let mut skip_think = false;
+    let mut token_converter = TokenConverter::new();
 
     let mut logits_processor = LogitsProcessor::from_sampling(seed, Sampling::All { temperature });
 
@@ -173,7 +172,12 @@ async fn handle(
         .next_token(next_token)
         .map_err(|e| ModelError::Chat(format!("tensor encoding error {}", e)))?
     {
-        text_result.push(t);
+        let messages = token_converter.accept_text(&t);
+        for message in messages.iter() {
+            if let Err(e) = tx.send(Ok(message.clone())).await {
+                error!("send text error = {}", e);
+            }
+        }
     }
 
     let eos_token = *tos
@@ -185,9 +189,6 @@ async fn handle(
     let start_post_prompt = std::time::Instant::now();
 
     let mut sampled = 0;
-    let mut sentence_list: Vec<String> = Vec::new();
-    let mut sentence: Vec<char> = Vec::new();
-    let regex = Regex::new(r"[。！？!?；;]").unwrap();
     for index in 0..to_sample {
         let input = Tensor::new(&[next_token], &device)
             .map_err(|e| ModelError::Chat(format!("tensor create error {}", e)))?
@@ -211,90 +212,60 @@ async fn handle(
         next_token = logits_processor
             .sample(&logits)
             .map_err(|e| ModelError::Chat(format!("tensor processor sample error {}", e)))?;
+
         all_tokens.push(next_token);
+
         if let Some(t) = tos
             .next_token(next_token)
             .map_err(|e| ModelError::Chat(format!("tensor encoding error {}", e)))?
         {
-            text_result.push(t);
-
-            let text: String = text_result.clone().into_iter().collect();
-            if !skip_think {
-                if text.contains("</think>") {
-                    if let Some(text) = filter_think(&text) {
-                        text_result.clear();
-                        for c in text.chars() {
-                            sentence.push(c);
-                        }
-                    }
-                    skip_think = true;
+            let messages = token_converter.accept_text(&t);
+            for message in messages.iter() {
+                if let Err(e) = tx.send(Ok(message.clone())).await {
+                    error!("send text error = {}", e);
+                    break;
                 }
-            } else {
-                text.chars().for_each(|c| {
-                    sentence.push(c);
-                    // Break a sentence
-                    if regex.is_match(&c.to_string()) {
-                        let text: String = sentence.clone().into_iter().collect();
-                        sentence.clear();
-                        if let Some(text) = filter(&text) {
-                            sentence_list.push(text);
-                        }
-                    }
-                });
-                text_result.clear();
             }
         }
-        for text in sentence_list.clone() {
-            let message = RawStreamingChoice::Message(text.clone());
-            if let Err(e) = tx.send(Ok(message)).await {
-                tracing::error!("chat send text error = {}", e);
-                break;
-            } else {
-                tracing::info!("llm send text success, text = {}", text);
-            }
-        }
-        sentence_list.clear();
-        text_result.clear();
         sampled += 1;
         if next_token == eos_token {
             break;
         };
     }
 
-    let mut last_content = None;
     if let Some(rest) = tos
         .decode_rest()
         .map_err(|e| ModelError::Chat(format!("tensor decode rest error {}", e)))?
     {
-        let text: String = sentence.clone().into_iter().collect();
-        let text = format!("{text}{rest}");
-        last_content = Some(text);
-    } else if !sentence.is_empty() {
-        let result: String = sentence.clone().into_iter().collect();
-        last_content = Some(result);
-    }
-    if let Some(text) = last_content
-        && let Some(text) = filter(&text)
-    {
-        let message = RawStreamingChoice::Message(text.clone());
-        if let Err(e) = tx.send(Ok(message)).await {
-            tracing::error!("chat send text error = {}", e);
-        } else {
-            tracing::info!("llm send text success, text = {}", text);
+        let messages = token_converter.accept_final_text(&rest);
+        for message in messages.iter() {
+            if let Err(e) = tx.send(Ok(message.clone())).await {
+                error!("send text error = {}", e);
+            }
         }
     }
-    text_result.clear();
 
     let dt = start_post_prompt.elapsed();
-    tracing::info!(
+    info!(
         "\n\n{:4} prompt tokens processed: {:.2} token/s",
         tokens.len(),
         tokens.len() as f64 / prompt_dt.as_secs_f64(),
     );
-    tracing::info!(
+    info!(
         "{sampled:4} tokens generated: {:.2} token/s",
         sampled as f64 / dt.as_secs_f64(),
     );
+    let message = RawStreamingChoice::FinalResponse(
+        rig::providers::openai::streaming::StreamingCompletionResponse {
+            usage: Usage {
+                prompt_tokens: tokens.len(),
+                total_tokens: sampled,
+            },
+        },
+    );
+    if let Err(e) = tx.send(Ok(message)).await {
+        error!("send text error = {}", e);
+    }
     drop(tx);
     Ok(())
 }
@@ -327,9 +298,10 @@ impl Model for LlmQwen {
         >(10);
         thread::spawn(move || {
             block_on(async move {
+                // TODO:
                 if let Err(e) = handle(&request, tokenizer, model, device, tx.clone()).await {
                     if let Err(e) = tx.send(Err(e)).await {
-                        tracing::error!("chat llmError send error = {}", e);
+                        error!("chat llmError send error = {}", e);
                     };
                 };
                 drop(tx);
