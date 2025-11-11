@@ -4,7 +4,7 @@ mod tests {
     use rig::{
         OneOrMany,
         completion::CompletionRequest,
-        message::{Message, Text, UserContent},
+        message::{AssistantContent, Message, Text, UserContent},
     };
     use tokio_stream::StreamExt;
     use tracing::{error, info};
@@ -86,5 +86,57 @@ mod tests {
         let result: String = result.into_iter().collect();
         info!("{}", result);
         assert_ne!(0, result.len());
+    }
+
+    #[tokio::test]
+    #[traced_test]
+    #[ignore]
+    /// cargo test --test llm_test --features cuda -- tests::test_llm_chat_history --ignored --show-output
+    async fn test_llm_chat_history() {
+        LlmFactory::init().await;
+        let llm = LlmFactory::global().get_client();
+        let system_prompt = "你是一个助手，协助用户进行记录，查询和提供建议，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等并且数字使用中文字代替。".to_string();
+        let mut chat_history = OneOrMany::<Message>::one(Message::User {
+            content: OneOrMany::<UserContent>::one(UserContent::Text(Text {
+                text: r#"记录一下，小小的电话号码为12349876"#.to_string(),
+            })),
+        });
+        chat_history.push(Message::Assistant {
+            id: None,
+            content: OneOrMany::<AssistantContent>::one(AssistantContent::Text(Text {
+                text: r#"小小电话号码为12349876"#.to_string(),
+            })),
+        });
+        chat_history.push(Message::User {
+            content: OneOrMany::<UserContent>::one(UserContent::Text(Text {
+                text: r#"告诉我小小的电话号码"#.to_string(),
+            })),
+        });
+        let request = CompletionRequest {
+            preamble: Some(system_prompt),
+            chat_history,
+            documents: vec![],
+            tools: vec![],
+            temperature: Some(0.8),
+            max_tokens: Some(999),
+            tool_choice: None,
+            additional_params: None,
+        };
+        let mut output = llm.chat(request);
+        let mut result = Vec::new();
+        while let Some(text) = output.next().await {
+            match text {
+                Ok(text) => {
+                    result.push(text);
+                }
+                Err(e) => {
+                    error!("{}", e.to_string());
+                }
+            }
+        }
+        let result: String = result.into_iter().collect();
+        assert_ne!(0, result.len());
+        assert_eq!("小小的电话号码为12349876", result);
+        info!("{}", result);
     }
 }

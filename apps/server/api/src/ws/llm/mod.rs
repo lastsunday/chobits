@@ -75,6 +75,7 @@ impl LlmFactory {
         INSTANCE.get_or_init(|| -> Self { Self::new(Arc::new(client)) })
     }
 
+    // TODO: modify to create client?
     pub fn get_client(&self) -> Arc<client::Client> {
         self.default_client.clone()
     }

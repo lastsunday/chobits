@@ -19,6 +19,7 @@ use tracing::error;
 #[derive(Clone)]
 pub struct Client {
     model: Arc<Box<dyn Model>>,
+    // TODO: mcp call logic?
 }
 
 impl Client {
@@ -29,7 +30,8 @@ impl Client {
     pub fn chat(
         &self,
         request: CompletionRequest,
-    ) -> impl Stream<Item = core::result::Result<String, ModelError>> + Unpin + Send + 'static {
+    ) -> impl Stream<Item = core::result::Result<String, ModelError>> + Unpin + Send + 'static // TODO:return text or mcp result?
+    {
         let (tx, rx) = channel::<core::result::Result<String, ModelError>>(10);
         let model = self.model.clone();
         thread::spawn(move || {

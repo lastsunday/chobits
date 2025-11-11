@@ -85,7 +85,8 @@ fn convert_request_to_prompt(request: &CompletionRequest) -> String {
                 for item in items {
                     match item {
                         UserContent::Text(text) => {
-                            prompt.push_str(&format!("|im_start|>user\n{}<|im_end|>\n", text.text));
+                            prompt
+                                .push_str(&format!("<|im_start|>user\n{}<|im_end|>\n", text.text));
                         }
                         _ => {
                             // TODO: fix other
@@ -99,7 +100,7 @@ fn convert_request_to_prompt(request: &CompletionRequest) -> String {
                     match item {
                         AssistantContent::Text(text) => {
                             prompt.push_str(&format!(
-                                "|im_start|>assistant\n{}<|im_end|>\n",
+                                "<|im_start|>assistant\n{}<|im_end|>\n",
                                 text.text
                             ));
                         }
@@ -111,7 +112,7 @@ fn convert_request_to_prompt(request: &CompletionRequest) -> String {
             }
         }
     }
-    prompt.push_str(r#"|im_start|>assistant\n"#);
+    prompt.push_str(r#"<|im_start|>assistant\n"#);
     prompt
 }
 
