@@ -70,13 +70,48 @@ impl LlmQwen {
 }
 
 fn convert_request_to_prompt(request: &CompletionRequest) -> String {
+    //control tokens see https://qwen.readthedocs.io/en/latest/getting_started/concepts.html
     let mut prompt = String::new();
+    prompt.push_str("<|im_start|>system\n");
     if let Some(text) = &request.preamble {
-        prompt.push_str(&format!(
-            "<|im_start|>system\n{} /no_think<|im_end|>\n",
-            text
-        ));
+        prompt.push_str(text);
     }
+    prompt.push_str(" /no_think\n");
+    //<|im_start|>system\n{} /no_think
+    // tools handle
+    if !request.tools.is_empty() {
+        // llm tool call agent example see: https://github.com/QwenLM/Qwen-Agent/blob/main/docs/llm.md
+        // llm tool call template see:
+        // 1. https://qwen.readthedocs.io/en/latest/getting_started/concepts.html#tool-calling
+        // 2. https://qwen.readthedocs.io/en/latest/run_locally/ollama.html
+        // 3. https://github.com/NousResearch/Hermes-Function-Calling#prompt-format-for-function-calling
+        // reqeust object see: https://github.com/0xPlaygrounds/rig/blob/main/rig-core/src/completion/request.rs
+        let mut tools_str = String::new();
+        let tools = &request.tools;
+        for tool in tools.iter() {
+            let tool = rig::providers::openai::ToolDefinition::from(tool.clone());
+            let tool_json_str = serde_json::to_string(&tool).unwrap();
+            tools_str.push_str(&format!("{}\n", tool_json_str));
+        }
+        let mut tools_prompt = String::new();
+        tools_prompt.push_str(&format!(
+            "# Tools\n
+            You may call one or more functions to assist with the user query.\n
+            You are provided with function signatures within <tools></tools> XML tags:\n
+            <tools>\n
+            {}
+            </tools>\n
+            For each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:\n
+            <tool_call>\n
+            {{\"name\": <function-name>, \"arguments\": <args-json-object>}}\n
+            </tool_call>\n
+            ",
+        tools_str
+        ));
+        prompt.push_str(&tools_prompt);
+    }
+    prompt.push_str("<|im_end|>\n");
+
     let chat_history = &request.chat_history;
     for message in chat_history.iter() {
         match message {
@@ -112,7 +147,7 @@ fn convert_request_to_prompt(request: &CompletionRequest) -> String {
             }
         }
     }
-    prompt.push_str(r#"<|im_start|>assistant\n"#);
+    prompt.push_str("<|im_start|>assistant\n");
     prompt
 }
 
@@ -309,5 +344,109 @@ impl Model for LlmQwen {
             })
         });
         Ok(StreamingCompletionResponse::stream(Box::pin(rx)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rig::{
+        OneOrMany,
+        agent::Text,
+        completion::{CompletionRequest, ToolDefinition},
+        message::{AssistantContent, Message, UserContent},
+    };
+    use tracing::info;
+    use tracing_test::traced_test;
+
+    use crate::ws::llm::models::qwen3::convert_request_to_prompt;
+
+    #[tokio::test]
+    #[traced_test]
+    /// cargo test --package api --lib -- ws::llm::models::qwen3::tests::test_convert_request_to_prompt_chat_history --show-output
+    async fn test_convert_request_to_prompt_chat_history() {
+        let system_prompt = "你是一个助手，协助用户进行记录，查询和提供建议，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等并且数字使用中文字代替。".to_string();
+        let mut chat_history = OneOrMany::<Message>::one(Message::User {
+            content: OneOrMany::<UserContent>::one(UserContent::Text(Text {
+                text: r#"记录一下，小小的电话号码为12349876"#.to_string(),
+            })),
+        });
+        chat_history.push(Message::Assistant {
+            id: None,
+            content: OneOrMany::<AssistantContent>::one(AssistantContent::Text(Text {
+                text: r#"小小电话号码为12349876"#.to_string(),
+            })),
+        });
+        chat_history.push(Message::User {
+            content: OneOrMany::<UserContent>::one(UserContent::Text(Text {
+                text: r#"告诉我小小的电话号码"#.to_string(),
+            })),
+        });
+        let request = CompletionRequest {
+            preamble: Some(system_prompt),
+            chat_history,
+            documents: vec![],
+            tools: vec![],
+            temperature: Some(0.8),
+            max_tokens: Some(999),
+            tool_choice: None,
+            additional_params: None,
+        };
+        let result = convert_request_to_prompt(&request);
+        let expect = format!(
+            "<|im_start|>system\n{} /no_think<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n{}<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
+            "你是一个助手，协助用户进行记录，查询和提供建议，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等并且数字使用中文字代替。",
+            "记录一下，小小的电话号码为12349876",
+            "小小电话号码为12349876",
+            "告诉我小小的电话号码"
+        );
+        assert_eq!(expect, result);
+    }
+
+    #[tokio::test]
+    #[traced_test]
+    /// cargo test --package api --lib -- ws::llm::models::qwen3::tests::test_convert_request_to_prompt_mcp --show-output
+    async fn test_convert_request_to_prompt_mcp() {
+        // https://github.com/QwenLM/Qwen-Agent/blob/main/docs/llm.md#11-direct-external-call
+        let system_prompt = "".to_string();
+        let tools: Vec<ToolDefinition> = vec![ToolDefinition {
+            name: "get_current_weather".to_string(),
+            description: "Get the current weather in a given location".to_string(),
+            parameters: serde_json::from_str(
+                r#"
+                {
+                    "type": "object",
+                    "properties": {
+                        "location": {
+                            "type": "string",
+                            "description":"The city and state, e.g. San Francisco, CA"
+                        },
+                        "unit": {
+                            "type": "string",
+                            "enum": ["celsius", "fahrenheit"]
+                        }
+                    },
+                    "required": ["location"]
+                }
+                "#,
+            )
+            .unwrap(),
+        }];
+        let chat_history = OneOrMany::<Message>::one(Message::User {
+            content: OneOrMany::<UserContent>::one(UserContent::Text(Text {
+                text: r#"What's the weather like in San Francisco?"#.to_string(),
+            })),
+        });
+        let request = CompletionRequest {
+            preamble: Some(system_prompt),
+            chat_history,
+            documents: vec![],
+            tools,
+            temperature: Some(0.8),
+            max_tokens: Some(999),
+            tool_choice: None,
+            additional_params: None,
+        };
+        let result = convert_request_to_prompt(&request);
+        info!("{}", result);
     }
 }

@@ -62,15 +62,9 @@ impl LlmFactory {
     }
 
     pub async fn init() -> &'static Self {
-        let app_config = config::get();
-        let llm_config = app_config.llm();
-        let llm = models::qwen3::LlmQwen::new(
-            llm_config.model().to_string(),
-            llm_config.tokens().to_string(),
-        )
-        .unwrap();
+        let llm = LlmFactory::create_model();
         let client = client::ClientBuilder::new()
-            .with_client(Arc::new(Box::new(llm)))
+            .with_client(Arc::new(llm))
             .build();
         INSTANCE.get_or_init(|| -> Self { Self::new(Arc::new(client)) })
     }
@@ -78,6 +72,17 @@ impl LlmFactory {
     // TODO: modify to create client?
     pub fn get_client(&self) -> Arc<client::Client> {
         self.default_client.clone()
+    }
+
+    pub fn create_model() -> Box<dyn Model> {
+        let app_config = config::get();
+        let llm_config = app_config.llm();
+        let llm = models::qwen3::LlmQwen::new(
+            llm_config.model().to_string(),
+            llm_config.tokens().to_string(),
+        )
+        .unwrap();
+        Box::new(llm)
     }
 
     pub fn global() -> &'static LlmFactory {
