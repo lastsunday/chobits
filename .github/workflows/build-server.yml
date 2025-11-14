@@ -73,10 +73,10 @@ jobs:
           pnpm exec nx run @chobits/server-ui-e2e:e2e
 
   server-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
-      # - name: Install Protoc
-      #   uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b
+      - name: Install Protoc
+        uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b
 
       - name: Set Version Env
         if: startsWith(github.ref, 'refs/tags/')
