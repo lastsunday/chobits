@@ -122,7 +122,7 @@ jobs:
       - name: Install rust toolchain
         uses: dtolnay/rust-toolchain@0f44b27771c32bda9f458f75a1e241b09791b331
         with:
-          toolchain: stable 18 months ago
+          toolchain: stable minus 2 releases
 
       - name: Show disk usage
         run: |
