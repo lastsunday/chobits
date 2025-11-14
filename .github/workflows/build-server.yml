@@ -88,11 +88,19 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Show disk usage
+        run: |
+          df -h
+
       - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda
         name: Install pnpm
         with:
           version: 10.5.0
           run_install: false
+
+      - name: Show disk usage
+        run: |
+          df -h
 
       - name: Install Node.js
         uses: actions/setup-node@3235b876344d2a9aa001b8d1453c930bba69e610
@@ -100,8 +108,16 @@ jobs:
           node-version: 22
           cache: "pnpm"
 
+      - name: Show disk usage
+        run: |
+          df -h
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Show disk usage
+        run: |
+          df -h
 
       - name: Build ui
         run: |
