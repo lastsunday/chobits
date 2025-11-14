@@ -78,6 +78,7 @@ jobs:
 
   server-test:
     runs-on: ubuntu-slim
+    timeout-minutes: 45
     steps:
       - name: Show disk usage
         run: |
@@ -128,7 +129,6 @@ jobs:
           pnpm exec nx run @chobits/server-ui:build
 
       - name: Run tests
-        timeout-minutes: 45
         run: |
           pnpm exec nx run chobits-server:test --workspace --all-targets --verbose
 
