@@ -107,6 +107,10 @@ jobs:
         run: |
           pnpm exec nx run @chobits/server-ui:build
 
+      - name: Show disk usage
+        run: |
+          df -h
+
       - name: Run tests
         run: |
           pnpm exec nx run chobits-server:test --workspace --all-targets --verbose
