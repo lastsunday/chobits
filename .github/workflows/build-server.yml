@@ -83,6 +83,10 @@ jobs:
         run: |
           echo "VERSION=$(echo '${{  github.ref_name }}' | sed -e 's/chobits-server\@//g')" >> $GITHUB_ENV
 
+      - name: Show disk usage
+        run: |
+          df -h
+
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
