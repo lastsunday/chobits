@@ -1,6 +1,8 @@
 use rig::streaming::RawStreamingChoice;
 use serde::{Deserialize, Serialize};
 
+use crate::ws::common::ModelError;
+
 const THINK_TAG_NAME: &str = r#"think"#;
 const TOOL_CALL_TAG_NAME: &str = r#"tool_call"#;
 const MAX_TAG_NAME_LEN: usize = 9;
@@ -25,27 +27,42 @@ impl TokenConverter {
         }
     }
 
-    fn skip_start_tag<'a>(text: &'a str, tag_name: &'a str) -> &'a str {
-        let regex = regex::Regex::new(&format!("<{}>([\\s\\S]*)", tag_name)).unwrap();
-        // TODO: need handle unwrap
-        let (_full, [other]) = regex.captures(text).map(|caps| caps.extract()).unwrap();
-        other
+    fn skip_start_tag<'a>(
+        text: &'a str,
+        tag_name: &'a str,
+    ) -> core::result::Result<&'a str, ModelError> {
+        let regex = regex::Regex::new(&format!("<{}>([\\s\\S]*)", tag_name))?;
+        let (_full, [other]) = regex.captures(text).map(|caps| caps.extract()).ok_or(
+            ModelError::TokenConvertFailure(format!(
+                "start tag not exists,tag name = {}, text = {}",
+                tag_name, text
+            )),
+        )?;
+        Ok(other)
     }
 
-    fn skip_end_tag_and_get_content<'a>(text: &'a str, tag_name: &'a str) -> (&'a str, &'a str) {
+    fn skip_end_tag_and_get_content<'a>(
+        text: &'a str,
+        tag_name: &'a str,
+    ) -> core::result::Result<(&'a str, &'a str), ModelError> {
         // https://github.com/javascript-tutorial/en.javascript.info/blob/master/9-regular-expressions/10-regexp-greedy-and-lazy/article.md
-        let regex =
-            regex::Regex::new(&format!("([\\s\\S]*?)</{}>+([\\s]*[\\s\\S]*)", tag_name)).unwrap();
-        // TODO: need handle unwrap
-        let (_full, [tag_content, other_content]) =
-            regex.captures(text).map(|caps| caps.extract()).unwrap();
-        (tag_content, other_content)
+        let regex = regex::Regex::new(&format!("([\\s\\S]*?)</{}>+([\\s]*[\\s\\S]*)", tag_name))?;
+        let (_full, [tag_content, other_content]) = regex
+            .captures(text)
+            .map(|caps| caps.extract())
+            .ok_or(ModelError::TokenConvertFailure(format!(
+                "start tag not exists,tag name = {}, text = {}",
+                tag_name, text
+            )))?;
+        Ok((tag_content, other_content))
     }
 
     fn analyse_text(
         &mut self,
-    ) -> Vec<RawStreamingChoice<rig::providers::openai::streaming::StreamingCompletionResponse>>
-    {
+    ) -> core::result::Result<
+        Vec<RawStreamingChoice<rig::providers::openai::streaming::StreamingCompletionResponse>>,
+        ModelError,
+    > {
         let mut result: Vec<
             RawStreamingChoice<rig::providers::openai::streaming::StreamingCompletionResponse>,
         > = Vec::new();
@@ -56,7 +73,7 @@ impl TokenConverter {
                     .text_collector
                     .contains(&format!("<{}>", THINK_TAG_NAME))
                 {
-                    let other = TokenConverter::skip_start_tag(&text, THINK_TAG_NAME);
+                    let other = TokenConverter::skip_start_tag(&text, THINK_TAG_NAME)?;
                     self.text_collector.clear();
                     self.text_collector.push_str(other);
                     self.phase = Phase::Thinking;
@@ -64,7 +81,7 @@ impl TokenConverter {
                     .text_collector
                     .contains(&format!("<{}>", TOOL_CALL_TAG_NAME))
                 {
-                    let other = TokenConverter::skip_start_tag(&text, TOOL_CALL_TAG_NAME);
+                    let other = TokenConverter::skip_start_tag(&text, TOOL_CALL_TAG_NAME)?;
                     self.text_collector.clear();
                     self.text_collector.push_str(other);
                     self.phase = Phase::ToolCall;
@@ -78,7 +95,7 @@ impl TokenConverter {
                     .contains(&format!("</{}>", THINK_TAG_NAME))
                 {
                     let (tag_content, other_content) =
-                        TokenConverter::skip_end_tag_and_get_content(&text, THINK_TAG_NAME);
+                        TokenConverter::skip_end_tag_and_get_content(&text, THINK_TAG_NAME)?;
                     result.push(RawStreamingChoice::Reasoning {
                         id: None,
                         reasoning: tag_content.to_string(),
@@ -100,8 +117,7 @@ impl TokenConverter {
                     .contains(&format!("</{}>", TOOL_CALL_TAG_NAME))
                 {
                     let (tag_content, other_content) =
-                        TokenConverter::skip_end_tag_and_get_content(&text, TOOL_CALL_TAG_NAME);
-                    // TODO: need handle unwrap
+                        TokenConverter::skip_end_tag_and_get_content(&text, TOOL_CALL_TAG_NAME)?;
                     let tool_call: ToolCall = serde_json::from_str(tag_content).unwrap();
                     result.push(RawStreamingChoice::ToolCall {
                         id: "".to_string(),
@@ -127,29 +143,33 @@ impl TokenConverter {
             || text.contains(&format!("<{}>", TOOL_CALL_TAG_NAME))
             || text.contains(&format!("</{}>", TOOL_CALL_TAG_NAME))
         {
-            result.append(&mut self.analyse_text());
+            result.append(&mut self.analyse_text()?);
         }
-        result
+        Ok(result)
     }
 
     pub fn accept_text(
         &mut self,
         text: &str,
-    ) -> Vec<RawStreamingChoice<rig::providers::openai::streaming::StreamingCompletionResponse>>
-    {
+    ) -> core::result::Result<
+        Vec<RawStreamingChoice<rig::providers::openai::streaming::StreamingCompletionResponse>>,
+        ModelError,
+    > {
         self.text_collector.push_str(text);
         if self.text_collector.len() >= MAX_TAG_NAME_LEN + 2 {
             self.analyse_text()
         } else {
-            vec![]
+            Ok(vec![])
         }
     }
 
     pub fn accept_final_text(
         &mut self,
         text: &str,
-    ) -> Vec<RawStreamingChoice<rig::providers::openai::streaming::StreamingCompletionResponse>>
-    {
+    ) -> core::result::Result<
+        Vec<RawStreamingChoice<rig::providers::openai::streaming::StreamingCompletionResponse>>,
+        ModelError,
+    > {
         self.text_collector.push_str(text);
         self.analyse_text()
     }
@@ -175,22 +195,24 @@ mod tests {
     /// cargo test --package api --lib -- ws::llm::models::token_converter::tests::test_token_convert_think_in_one --show-output
     async fn test_token_convert_think_in_one() {
         let mut token_converter = TokenConverter::new();
-        let messages = token_converter.accept_text(
-            r#"<think>
+        let messages = token_converter
+            .accept_text(
+                r#"<think>
 
             </think>
 
             1
             "#,
-        );
+            )
+            .unwrap();
         // out -> <think></think>
         // 1
         assert_eq!(1, messages.len());
         // 1+1
-        let messages = token_converter.accept_text(r#"+1"#);
+        let messages = token_converter.accept_text(r#"+1"#).unwrap();
         assert_eq!(0, messages.len());
         // out -> 1+1=2
-        let messages = token_converter.accept_final_text(r#"=2"#);
+        let messages = token_converter.accept_final_text(r#"=2"#).unwrap();
         assert_eq!(1, messages.len());
         for message in messages.iter() {
             match message {
@@ -209,27 +231,31 @@ mod tests {
     /// cargo test --package api --lib -- ws::llm::models::token_converter::tests::test_token_convert_think_start --show-output
     async fn test_token_convert_think_start() {
         let mut token_converter = TokenConverter::new();
-        let messages = token_converter.accept_text(
-            r#"<think>
+        let messages = token_converter
+            .accept_text(
+                r#"<think>
 
             "#,
-        );
+            )
+            .unwrap();
         assert_eq!(0, messages.len());
-        let messages = token_converter.accept_text(
-            r#"
+        let messages = token_converter
+            .accept_text(
+                r#"
             </think>
 
                 1
             "#,
-        );
+            )
+            .unwrap();
         // out -> <think></think>
         // 1
         assert_eq!(1, messages.len());
         // 1+1
-        let messages = token_converter.accept_text(r#"+1"#);
+        let messages = token_converter.accept_text(r#"+1"#).unwrap();
         assert_eq!(0, messages.len());
         // out -> 1+1=2
-        let messages = token_converter.accept_final_text(r#"=2"#);
+        let messages = token_converter.accept_final_text(r#"=2"#).unwrap();
         assert_eq!(1, messages.len());
         for message in messages.iter() {
             match message {
@@ -253,7 +279,7 @@ mod tests {
             <tool_call>{"name": "get_current_temperature", "arguments": "{\"location\": \"San Francisco, California, United States\", \"unit\": \"celsius\"}"}</tool_call>\n
             <tool_call>{"name": "get_temperature_date", "arguments": "{\"location\": \"San Francisco, California, United States\", \"date\": \"2024-10-01\", \"unit\": \"celsius\"}"}</tool_call>\n
             "#,
-        );
+        ).unwrap();
         let message = messages.remove(0);
         if let rig::streaming::RawStreamingChoice::Reasoning { id: _id, reasoning } = message {
             assert_eq!(
@@ -306,7 +332,7 @@ mod tests {
             r#"<tool_call>{"name": "get_current_temperature", "arguments": "{\"location\": \"San Francisco, California, United States\", \"unit\": \"celsius\"}"}</tool_call>\n
             <tool_call>{"name": "get_temperature_date", "arguments": "{\"location\": \"San Francisco, California, United States\", \"date\": \"2024-10-01\", \"unit\": \"celsius\"}"}</tool_call>\n
             "#,
-        );
+        ).unwrap();
         let message = messages.remove(0);
         if let rig::streaming::RawStreamingChoice::ToolCall {
             id: _id,
@@ -349,7 +375,7 @@ mod tests {
         let text = "<tool_call>{\"name\": \"getweather\", \"arguments\": {\"location\": \"San Francisco\"}}</tool_call>";
         let mut msg_count = 0;
         for c in text.chars() {
-            let mut messages = token_converter.accept_text(&c.to_string());
+            let mut messages = token_converter.accept_text(&c.to_string()).unwrap();
             if !messages.is_empty() {
                 msg_count += 1;
                 let message = messages.remove(0);
@@ -380,9 +406,9 @@ mod tests {
         let mut token_converter = TokenConverter::new();
         let text = "<tool_call>{\"name\": \"getweather\", \"arguments\": {\"location\": \"San Francisco\"}}</tool_call";
         for c in text.chars() {
-            token_converter.accept_text(&c.to_string());
+            token_converter.accept_text(&c.to_string()).unwrap();
         }
-        let messages = token_converter.accept_final_text(">");
+        let messages = token_converter.accept_final_text(">").unwrap();
         assert_eq!(1, messages.len());
         for message in messages.iter() {
             match message {

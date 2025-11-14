@@ -50,6 +50,8 @@ pub enum ModelError {
     ModelInitFailure(String),
     #[error("token init failure path = {0}")]
     TokenInitFailure(String),
+    #[error("token convert failure = {0}")]
+    TokenConvertFailure(String),
     #[error("model completion failure = {0}")]
     ModelCompletionError(String),
     #[error("chat failure msg = {0}")]
@@ -71,6 +73,12 @@ impl From<Error> for ModelError {
 impl From<CompletionError> for ModelError {
     fn from(value: CompletionError) -> Self {
         ModelError::ModelCompletionError(value.to_string())
+    }
+}
+
+impl From<regex::Error> for ModelError {
+    fn from(value: regex::Error) -> Self {
+        ModelError::TokenConvertFailure(value.to_string())
     }
 }
 

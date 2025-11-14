@@ -208,7 +208,7 @@ async fn handle(
         .next_token(next_token)
         .map_err(|e| ModelError::Chat(format!("tensor encoding error {}", e)))?
     {
-        let messages = token_converter.accept_text(&t);
+        let messages = token_converter.accept_text(&t)?;
         for message in messages.iter() {
             if let Err(e) = tx.send(Ok(message.clone())).await {
                 error!("send text error = {}", e);
@@ -255,7 +255,7 @@ async fn handle(
             .next_token(next_token)
             .map_err(|e| ModelError::Chat(format!("tensor encoding error {}", e)))?
         {
-            let messages = token_converter.accept_text(&t);
+            let messages = token_converter.accept_text(&t)?;
             for message in messages.iter() {
                 if let Err(e) = tx.send(Ok(message.clone())).await {
                     error!("send text error = {}", e);
@@ -273,7 +273,7 @@ async fn handle(
         .decode_rest()
         .map_err(|e| ModelError::Chat(format!("tensor decode rest error {}", e)))?
     {
-        let messages = token_converter.accept_final_text(&rest);
+        let messages = token_converter.accept_final_text(&rest)?;
         for message in messages.iter() {
             if let Err(e) = tx.send(Ok(message.clone())).await {
                 error!("send text error = {}", e);
