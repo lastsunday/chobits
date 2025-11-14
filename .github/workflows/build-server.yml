@@ -118,8 +118,8 @@ jobs:
 
       - name: Install openssl
         run: |
-          apt update
-          apt install openssl
+          sudo apt update
+          sudo apt install openssl
           openssl version
 
       - name: Build ui
