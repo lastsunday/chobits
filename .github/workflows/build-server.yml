@@ -116,6 +116,12 @@ jobs:
         with:
           toolchain: stable minus 2 releases
 
+      - name: Install openssl
+        run: |
+          apt update
+          apt install openssl
+          openssl version
+
       - name: Build ui
         run: |
           pnpm exec nx run @chobits/server-ui:build
