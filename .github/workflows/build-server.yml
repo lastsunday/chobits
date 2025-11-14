@@ -33,8 +33,12 @@ env:
 
 jobs:
   ui-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
+      - name: Show disk usage
+        run: |
+          df -h
+
       - name: Set Version Env
         if: startsWith(github.ref, 'refs/tags/')
         run: |
@@ -75,6 +79,10 @@ jobs:
   server-test:
     runs-on: ubuntu-slim
     steps:
+      - name: Show disk usage
+        run: |
+          df -h
+
       - name: Install Protoc
         uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b
 
@@ -83,18 +91,10 @@ jobs:
         run: |
           echo "VERSION=$(echo '${{  github.ref_name }}' | sed -e 's/chobits-server\@//g')" >> $GITHUB_ENV
 
-      - name: Show disk usage
-        run: |
-          df -h
-
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 0
-
-      - name: Show disk usage
-        run: |
-          df -h
 
       - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda
         name: Install pnpm
@@ -102,19 +102,11 @@ jobs:
           version: 10.5.0
           run_install: false
 
-      - name: Show disk usage
-        run: |
-          df -h
-
       - name: Install Node.js
         uses: actions/setup-node@3235b876344d2a9aa001b8d1453c930bba69e610
         with:
           node-version: 22
           cache: "pnpm"
-
-      - name: Show disk usage
-        run: |
-          df -h
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -124,17 +116,9 @@ jobs:
         with:
           toolchain: stable minus 2 releases
 
-      - name: Show disk usage
-        run: |
-          df -h
-
       - name: Build ui
         run: |
           pnpm exec nx run @chobits/server-ui:build
-
-      - name: Show disk usage
-        run: |
-          df -h
 
       - name: Run tests
         run: |
