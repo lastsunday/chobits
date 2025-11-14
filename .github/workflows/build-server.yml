@@ -75,15 +75,13 @@ jobs:
   server-test:
     runs-on: ubuntu-latest
     steps:
+      # https://carlosbecker.com/posts/github-actions-disk-space/
       - name: Maximize build space
-        uses: easimon/maximize-build-space@fc881a613ad2a34aca9c9624518214ebc21dfc0c
-        with:
-          root-reserve-mb: 512
-          swap-size-mb: 1024
-          remove-dotnet: "true"
-
-      - name: Show disk usage
         run: |
+          df -h
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force
+          sudo docker builder prune -a
           df -h
 
       - name: Install Protoc
