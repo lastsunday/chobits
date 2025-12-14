@@ -35,7 +35,9 @@ pub struct LlmQwen {
 }
 
 impl LlmQwen {
-    pub fn new(model_path: String, token_path: String) -> core::result::Result<Self, ModelError> {
+    pub fn new(path: &str) -> core::result::Result<Self, ModelError> {
+        let model_path = format!("{}model.gguf", path);
+        let token_path = format!("{}tokenizer.json", path);
         let mut file = std::fs::File::open(model_path.clone())
             .map_err(|_e| ModelError::ModelFileNotFound(model_path.clone()))?;
         let start = std::time::Instant::now();

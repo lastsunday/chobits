@@ -2,7 +2,13 @@ pub mod chat;
 pub mod client;
 pub mod models;
 
-use crate::config;
+use crate::{
+    config,
+    ws::llm::models::{
+        minicpm4::Minicpm4,
+        qwen3::{self, LlmQwen},
+    },
+};
 use async_trait::async_trait;
 use rig::{
     completion::{CompletionError, CompletionRequest, CompletionResponse},
@@ -77,12 +83,10 @@ impl LlmFactory {
     pub fn create_model() -> Box<dyn Model> {
         let app_config = config::get();
         let llm_config = app_config.llm();
-        let llm = models::qwen3::LlmQwen::new(
-            llm_config.model().to_string(),
-            llm_config.tokens().to_string(),
-        )
-        .unwrap();
-        Box::new(llm)
+        match llm_config.model() {
+            config::llm::Model::Qwen3 => Box::new(LlmQwen::new(llm_config.path()).unwrap()),
+            config::llm::Model::MiniCPM4 => Box::new(Minicpm4::new(llm_config.path()).unwrap()),
+        }
     }
 
     pub fn global() -> &'static LlmFactory {

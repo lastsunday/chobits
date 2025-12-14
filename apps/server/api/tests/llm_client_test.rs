@@ -13,8 +13,8 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     #[ignore]
-    /// cargo test --test llm_client_test --features cuda -- tests::test_chat --ignored --show-output
-    async fn test_chat() {
+    /// cargo test --test llm_client_test --features cuda -- tests::test_chat_simple --ignored --show-output
+    async fn test_chat_simple() {
         LlmFactory::init().await;
         let llm = LlmFactory::global().get_client();
         let system_prompt = "你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等并且数字使用中文字代替。".to_string();

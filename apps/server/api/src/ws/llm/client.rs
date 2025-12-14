@@ -67,6 +67,9 @@ impl Client {
                                 })) => {
                                     // TODO:
                                 }
+                                Ok(StreamedAssistantContent::ToolCallDelta { id: _, delta: _ }) => {
+                                    // TODO:
+                                }
                                 Err(e) => {
                                     let e = tx.send(Err(e.into())).await;
                                     if let Err(e) = e {

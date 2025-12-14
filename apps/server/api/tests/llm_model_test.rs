@@ -81,6 +81,12 @@ mod tests {
                                 serde_json::to_string(&function).unwrap()
                             );
                         }
+                        Ok(StreamedAssistantContent::ToolCallDelta {
+                            id: _id,
+                            delta: _delta,
+                        }) => {
+                            // TODO:
+                        }
                         Ok(StreamedAssistantContent::Reasoning(Reasoning {
                             id: _id,
                             reasoning,
@@ -88,8 +94,8 @@ mod tests {
                         })) => {
                             info!("{:?}", reasoning);
                         }
-                        Err(_e) => {
-                            panic!("has completion error");
+                        Err(e) => {
+                            panic!("has completion error: {:?}", e);
                         }
                     }
                 }

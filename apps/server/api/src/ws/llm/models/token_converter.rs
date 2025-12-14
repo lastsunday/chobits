@@ -99,6 +99,7 @@ impl TokenConverter {
                     result.push(RawStreamingChoice::Reasoning {
                         id: None,
                         reasoning: tag_content.to_string(),
+                        signature: None,
                     });
                     self.text_collector.clear();
                     self.text_collector.push_str(other_content);
@@ -107,6 +108,7 @@ impl TokenConverter {
                     result.push(RawStreamingChoice::Reasoning {
                         id: None,
                         reasoning: text,
+                        signature: None,
                     });
                     self.text_collector.clear();
                 }
@@ -118,13 +120,24 @@ impl TokenConverter {
                 {
                     let (tag_content, other_content) =
                         TokenConverter::skip_end_tag_and_get_content(&text, TOOL_CALL_TAG_NAME)?;
-                    let tool_call: ToolCall = serde_json::from_str(tag_content).unwrap();
-                    result.push(RawStreamingChoice::ToolCall {
-                        id: "".to_string(),
-                        call_id: None,
-                        name: tool_call.name,
-                        arguments: tool_call.arguments,
-                    });
+                    let tool_call: serde_json::error::Result<ToolCall> =
+                        serde_json::from_str(tag_content);
+                    match tool_call {
+                        Ok(tool_call) => {
+                            result.push(RawStreamingChoice::ToolCall {
+                                id: "".to_string(),
+                                call_id: None,
+                                name: tool_call.name,
+                                arguments: tool_call.arguments,
+                            });
+                        }
+                        Err(e) => {
+                            return Err(ModelError::TokenConvertFailure(format!(
+                                "{:?} : {}",
+                                e, tag_content
+                            )));
+                        }
+                    }
                     self.text_collector.clear();
                     self.text_collector.push_str(other_content);
                     self.phase = Phase::Idle;
@@ -281,7 +294,12 @@ mod tests {
             "#,
         ).unwrap();
         let message = messages.remove(0);
-        if let rig::streaming::RawStreamingChoice::Reasoning { id: _id, reasoning } = message {
+        if let rig::streaming::RawStreamingChoice::Reasoning {
+            id: _id,
+            reasoning,
+            signature: _signature,
+        } = message
+        {
             assert_eq!(
                 r#"Okay, the user is asking for the current temperature in San Francisco and the temperature for tomorrow. Let me check the available tools.\n\nFirst, there's the get_current_temperature function. It requires the location and optionally the unit. Since the user didn't specify the unit, I'll default to celsius. The location should be \"San Francisco, State, Country\". Wait, the example format is \"City, State, Country\", but San Francisco is a city in California, USA. So the location parameter would be \"San Francisco, California, United States\".\n\nThen, for tomorrow's temperature, the user mentioned the current date is 2024-09-30, so tomorrow would be 2024-10-01. The get_temperature_date function requires location, date, and unit. Again, using the same location and default unit. I need to format the date as \"Year-Month-Day\", which is 2024-10-01.\n\nWait, the current date given is 2024-09-30. If today is September 30, then tomorrow is October 1st. So the date parameter for the second function call should be \"2024-10-01\".\n\nI should make two separate function calls: one for the current temperature and another for tomorrow's date. Let me structure the JSON for both tool calls accordingly."#,
                 reasoning

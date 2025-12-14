@@ -795,6 +795,7 @@ mod tests {
                 ListToolsResult {
                     next_cursor: None,
                     tools: serde_json::from_str(device_mcp_tools_list_response).unwrap(),
+                    meta: None,
                 },
             ))))
             .await;
