@@ -44,8 +44,8 @@ mod tests {
     #[ignore]
     /// hello paramter input and output the hello result
     /// cargo test --test session_test -- tests::test_chat_flow_hello --ignored --show-output
-    async fn test_chat_flow_hello() {
-        let mut session = create_session().await;
+    async fn test_chat_flow_hello() -> anyhow::Result<()> {
+        let mut session = create_session().await?;
         session.start().await;
         let mut output = session.output_frame().await;
         session
@@ -58,6 +58,7 @@ mod tests {
             FrameResult::HelloResult(..)
         ));
         session.stop().await;
+        Ok(())
     }
 
     #[tokio::test]
@@ -65,7 +66,7 @@ mod tests {
     #[ignore]
     /// listen voice by manual mode and output the asr text result
     /// cargo test --features cuda --test session_test -- tests::test_chat_flow_listen_manual --ignored --show-output
-    async fn test_chat_flow_listen_manual() {
+    async fn test_chat_flow_listen_manual() -> anyhow::Result<()> {
         use std::path::PathBuf;
 
         let wav_file: PathBuf = [
@@ -119,7 +120,7 @@ mod tests {
             audio.push(packet);
         }
 
-        let mut session = create_session().await;
+        let mut session = create_session().await?;
         let session_id = session.id.clone();
         session.start().await;
         let mut output = session.output_frame().await;
@@ -177,6 +178,7 @@ mod tests {
             .await;
         join_handle.await.unwrap();
         session.stop().await;
+        Ok(())
     }
 
     #[tokio::test]
@@ -184,7 +186,7 @@ mod tests {
     #[ignore]
     /// listen voice by auto mode and output the asr text result
     /// cargo test --features cuda --test session_test -- tests::test_chat_flow_listen_auto --ignored --show-output
-    async fn test_chat_flow_listen_auto() {
+    async fn test_chat_flow_listen_auto() -> anyhow::Result<()> {
         use std::path::PathBuf;
 
         let wav_file: PathBuf = [
@@ -238,7 +240,7 @@ mod tests {
             audio.push(packet);
         }
 
-        let mut session = create_session().await;
+        let mut session = create_session().await?;
         let session_id = session.id.clone();
         session.start().await;
         let mut output = session.output_frame().await;
@@ -322,6 +324,7 @@ mod tests {
         }
         join_handle.await.unwrap();
         session.stop().await;
+        Ok(())
     }
 
     #[tokio::test]
@@ -329,7 +332,7 @@ mod tests {
     #[ignore]
     /// listen voice by realtime mode and output the asr text result
     /// cargo test --features cuda --test session_test -- tests::test_chat_flow_listen_realtime --ignored --show-output
-    async fn test_chat_flow_listen_realtime() {
+    async fn test_chat_flow_listen_realtime() -> anyhow::Result<()> {
         use std::path::PathBuf;
 
         let wav_file: PathBuf = [
@@ -383,7 +386,7 @@ mod tests {
             audio.push(packet);
         }
 
-        let mut session = create_session().await;
+        let mut session = create_session().await?;
         let session_id = session.id.clone();
         session.start().await;
         let mut output = session.output_frame().await;
@@ -457,6 +460,7 @@ mod tests {
         }
         join_handle.await.unwrap();
         session.stop().await;
+        Ok(())
     }
 
     #[tokio::test]
@@ -464,8 +468,8 @@ mod tests {
     #[ignore]
     /// get text message and output the asr text result
     /// cargo test --features cuda --test session_test -- tests::test_chat_flow_handle_text_message --ignored --show-output
-    async fn test_chat_flow_handle_text_message() {
-        let mut session = create_session().await;
+    async fn test_chat_flow_handle_text_message() -> anyhow::Result<()> {
+        let mut session = create_session().await?;
         let session_id = session.id.clone();
         session.start().await;
         let mut output = session.output_frame().await;
@@ -513,6 +517,7 @@ mod tests {
             .await;
         join_handle.await.unwrap();
         session.stop().await;
+        Ok(())
     }
 
     #[tokio::test]
@@ -520,8 +525,8 @@ mod tests {
     #[ignore]
     /// when a round running and has a break event,the output stream will stop the original output
     /// cargo test --features cuda --test session_test -- tests::test_chat_flow_break --ignored --show-output
-    async fn test_chat_flow_break() {
-        let mut session = create_session().await;
+    async fn test_chat_flow_break() -> anyhow::Result<()> {
+        let mut session = create_session().await?;
         let session_id = session.id.clone();
         session.start().await;
         let mut output = session.output_frame().await;
@@ -582,6 +587,7 @@ mod tests {
             .await;
         join_handle.await.unwrap();
         session.stop().await;
+        Ok(())
     }
 
     #[tokio::test]
@@ -616,7 +622,7 @@ mod tests {
     /// 5.1.0.6. [Server] llm
     /// 5.1.1. [Server -> Device] llm text response
     /// 5.1.2. [Server -> Device] tts response
-    async fn test_mcp_flow_listen_realtime() {
+    async fn test_mcp_flow_listen_realtime() -> anyhow::Result<()> {
         let device_mcp_tools_list_response: &'static str = r#"
 [
   {
@@ -740,7 +746,7 @@ mod tests {
         }
 
         let request_id = AtomicI64::new(0);
-        let mut session = create_session().await;
+        let mut session = create_session().await?;
         session.start().await;
         // let session_id = session.id.clone();
         let mut output = session.output_frame().await;
@@ -829,10 +835,11 @@ mod tests {
         // }
         // join_handle.await.unwrap();
         session.stop().await;
-        todo!()
+        todo!();
+        Ok(())
     }
 
-    async fn create_session() -> Session<impl Listener> {
+    async fn create_session() -> Result<Session<impl Listener>, anyhow::Error> {
         info!("init vad cahce");
         VadCache::init().await;
         info!("init vad cahce successfully");
@@ -843,17 +850,17 @@ mod tests {
         LlmFactory::init().await;
         tracing::info!("init llm factory successfully");
         tracing::info!("init tts cahce");
-        TtsFactory::init().await;
+        TtsFactory::init().await?;
         tracing::info!("init tts cahce successfully");
         let vad = VadCache::create_vad();
         let vad = Arc::new(Mutex::new(vad));
         let asr = AsrCache::global().instance.clone();
         let asr = Arc::new(Mutex::new(asr));
         let close_connection_no_voice_time = config::get().logic().close_connection_no_voice_time();
-        Session::new(
+        Ok(Session::new(
             Box::new(DefaultListener::new(vad, asr.clone())),
             Some(close_connection_no_voice_time),
-        )
+        ))
     }
 
     fn to_json_rpc_response<T>(id: i64, result: T) -> JsonRpcMessage

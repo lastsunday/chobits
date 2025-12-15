@@ -66,7 +66,7 @@ async fn start() -> anyhow::Result<()> {
     // database schema init or upgrade
     migration::Migrator::up(&conn, None).await?;
     tracing::info!("init tts cahce");
-    TtsFactory::init().await;
+    TtsFactory::init().await?;
     tracing::info!("init tts cahce successfully");
     tracing::info!("init vad cahce");
     VadCache::init().await;

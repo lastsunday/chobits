@@ -18,7 +18,7 @@ impl AudioConfig {
             input_sample_rate: Some(16000),
             input_channel: Some(1),
             input_frame_duration: Some(60_u64),
-            output_sample_rate: Some(24000),
+            output_sample_rate: Some(16000),
             output_channel: Some(1),
             output_frame_duration: Some(60_u64),
         }
