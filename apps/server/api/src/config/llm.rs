@@ -10,9 +10,9 @@ impl LlmConfig {
     pub fn new() -> Self {
         Self {
             model: Some(Model::Qwen3),
-            path: Some(String::from("data/llm/unsloth/Qwen3-1.7B-GGUF/")),
+            path: Some(String::from("data/llm/model/unsloth/Qwen3-1.7B-GGUF/")),
             // model: Some(Model::MiniCPM4),
-            // path: Some(String::from("data/llm/openbmb/MiniCPM4-0.5B/")),
+            // path: Some(String::from("data/llm/model/openbmb/MiniCPM4-0.5B/")),
         }
     }
 

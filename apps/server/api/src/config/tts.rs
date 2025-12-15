@@ -14,9 +14,9 @@ impl TtsConfig {
     pub fn new() -> Self {
         Self {
             // model: Some(Model::Kokoro),
-            // path: Some(String::from("data/tts/mzdk100/kokoro/")),
+            // path: Some(String::from("data/tts/model/mzdk100/kokoro/")),
             model: Some(Model::Voxcpm),
-            path: Some(String::from("data/tts/openbmb/VoxCPM-0.5B/")),
+            path: Some(String::from("data/tts/model/openbmb/VoxCPM-0.5B/")),
             reference_prompt_text: Some(String::from(
                 "一定被灰太狼给吃了，我已经为他准备好了花圈了",
             )),
