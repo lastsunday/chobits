@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use futures::{SinkExt, StreamExt, executor::block_on};
 use futures_channel::mpsc::unbounded;
 use rig::{
-    completion::{CompletionError, CompletionRequest, CompletionResponse},
+    completion::{CompletionError, CompletionRequest},
     message::{Message, UserContent},
     streaming::{RawStreamingChoice, StreamingCompletionResponse},
 };
@@ -36,14 +36,6 @@ impl<'a> Minicpm4<'a> {
 
 #[async_trait]
 impl<'a> Model for Minicpm4<'a> {
-    async fn completion(
-        &self,
-        _request: CompletionRequest,
-    ) -> Result<CompletionResponse<rig::providers::openai::CompletionResponse>, CompletionError>
-    {
-        todo!()
-    }
-
     async fn stream(
         &self,
         request: CompletionRequest,

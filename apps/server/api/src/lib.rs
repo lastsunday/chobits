@@ -42,7 +42,7 @@ use framework::auth::Jwt;
 
 use crate::ws::asr::asr_cache::AsrCache;
 use crate::ws::llm::LlmFactory;
-use crate::ws::tts::tts_cache::TtsCache;
+use crate::ws::tts::TtsFactory;
 use crate::ws::vad::vad_cache::VadCache;
 
 #[macro_use]
@@ -66,7 +66,7 @@ async fn start() -> anyhow::Result<()> {
     // database schema init or upgrade
     migration::Migrator::up(&conn, None).await?;
     tracing::info!("init tts cahce");
-    TtsCache::init().await;
+    TtsFactory::init().await;
     tracing::info!("init tts cahce successfully");
     tracing::info!("init vad cahce");
     VadCache::init().await;

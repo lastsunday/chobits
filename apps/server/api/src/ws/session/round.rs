@@ -3,7 +3,7 @@ use crate::ws::frame::{FrameError, FrameResult};
 use crate::ws::llm::client::Client;
 use crate::ws::mcp::McpHost;
 use crate::ws::session::History;
-use crate::ws::tts::{Tts, TtsKokoro};
+use crate::ws::tts::Tts;
 use crate::ws::util::llm::{EMOJI_MAP, analyze_emotion};
 use anyhow::Context;
 use core::result::Result;
@@ -30,7 +30,7 @@ pub struct Round {
     tx: Sender<Result<FrameResult, FrameError>>,
     stop: Arc<AtomicBool>,
     llm: Arc<Client>,
-    tts: Arc<Mutex<Box<TtsKokoro>>>,
+    tts: Arc<Box<dyn Tts>>,
     pub tts_state: Arc<Mutex<Option<TtsState>>>,
     pub speaking: Arc<AtomicBool>,
     pub end: Arc<AtomicBool>,
@@ -50,7 +50,7 @@ impl Round {
         parent_id: String,
         tx: Sender<Result<FrameResult, FrameError>>,
         llm: Arc<Client>,
-        tts: Arc<Mutex<Box<TtsKokoro>>>,
+        tts: Arc<Box<dyn Tts>>,
         mcp_host: Arc<Mutex<Option<McpHost>>>,
         history: Arc<Mutex<History>>,
     ) -> Self {
@@ -125,7 +125,6 @@ impl Round {
             {
                 info!("send stt result failure");
             }
-            let tts = tts.lock().await;
             let mut history = history.lock().await;
             history.chat_history.push(Message::User {
                 content: OneOrMany::one(UserContent::Text(Text { text })),
@@ -151,7 +150,7 @@ impl Round {
             };
             drop(history);
             let llm_output = llm.chat(request);
-            let mut tts_output = tts.output_stream(llm_output);
+            let mut tts_output = tts.stream(Box::pin(llm_output)).await;
             let audio_config = config::get().audio();
             let delay = audio_config.output_frame_duration();
             let mut latest_time = Instant::now() + Duration::from_millis(delay);

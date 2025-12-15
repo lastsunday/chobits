@@ -1,24 +1,22 @@
-pub mod tts_cache;
+pub mod model;
 
 use crate::config;
 use crate::ws::common::ModelError;
+use async_trait::async_trait;
 use futures::Stream;
-use futures::executor::block_on;
-use kokoro_tts::KokoroTts;
-use std::thread;
-use std::{cmp, sync::Arc};
-use tokio::sync::{Mutex, mpsc::channel};
-use tokio_stream::StreamExt;
-use tokio_stream::wrappers::ReceiverStream;
+use model::kokoro::TtsKokoro;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::sync::OnceLock;
 
-pub trait Tts {
-    fn output_stream(
+#[async_trait]
+pub trait Tts: Send + Sync {
+    async fn stream(
         &self,
-        text_stream: impl Stream<Item = core::result::Result<String, ModelError>>
-        + Unpin
-        + Send
-        + 'static,
-    ) -> impl Stream<Item = core::result::Result<TtsData, TtsError>> + Unpin + Send + 'static;
+        text_stream: Pin<
+            Box<dyn Stream<Item = core::result::Result<String, ModelError>> + Send + Sync>,
+        >,
+    ) -> Pin<Box<dyn Stream<Item = core::result::Result<TtsData, TtsError>> + Send + Sync>>;
 }
 
 pub struct TtsData {
@@ -36,104 +34,33 @@ pub enum TtsError {
     Text,
 }
 
-#[derive(Clone)]
-pub struct TtsKokoro {
-    instance: Arc<Mutex<KokoroTts>>,
-    encoder: Arc<Mutex<opus::Encoder>>,
+static INSTANCE: OnceLock<TtsFactory> = OnceLock::new();
+
+pub struct TtsFactory {
+    pub default_tts: Arc<Box<dyn Tts>>,
 }
 
-impl TtsKokoro {
-    pub fn new(instance: Arc<Mutex<KokoroTts>>) -> Self {
-        let audio_config = config::get().audio();
-        let sample_rate = audio_config.output_sample_rate();
-        let encoder = opus::Encoder::new(
-            sample_rate,
-            opus::Channels::Mono,
-            opus::Application::LowDelay,
-        )
-        .unwrap();
-        Self {
-            instance,
-            encoder: Arc::new(Mutex::new(encoder)),
+impl TtsFactory {
+    pub fn new(default_tts: Arc<Box<dyn Tts>>) -> Self {
+        Self { default_tts }
+    }
+
+    pub async fn init() -> &'static Self {
+        let tts = Self::create_model().await;
+        INSTANCE.get_or_init(|| -> Self { Self::new(Arc::new(tts)) })
+    }
+
+    pub async fn create_model() -> Box<dyn Tts> {
+        let app_config = config::get();
+        let tts_config = app_config.tts();
+
+        match tts_config.model() {
+            config::tts::Model::Kokoro => Box::new(TtsKokoro::new(tts_config.path()).await),
+            config::tts::Model::Voxcpm => todo!(),
         }
     }
-}
-impl Tts for TtsKokoro {
-    fn output_stream(
-        &self,
-        mut text_stream: impl Stream<Item = core::result::Result<String, ModelError>>
-        + Unpin
-        + Send
-        + 'static,
-    ) -> impl Stream<Item = core::result::Result<TtsData, TtsError>> + Unpin + Send + 'static {
-        let (tx, rx) = channel(10);
-        let instance = self.instance.clone();
-        let encoder = self.encoder.clone();
-        thread::spawn(move || {
-            block_on(async move {
-                while let Some(text) = text_stream.next().await {
-                    let instance = instance.clone();
-                    let tx = tx.clone();
-                    match text {
-                        Ok(text) => {
-                            tracing::info!("[TTS] receive, text = {}", text);
-                            let instance = instance.lock().await;
-                            match instance
-                                .synth(text.clone(), kokoro_tts::Voice::Zf059(1))
-                                .await
-                            {
-                                Ok((sample, _took)) => {
-                                    let audio_config = config::get().audio();
-                                    let sample_rate = audio_config.output_sample_rate();
-                                    let channel = audio_config.output_channel();
-                                    let frame_duration = audio_config.output_frame_duration();
-                                    let len = sample.len();
-                                    let size = calcalute_tts_packet_size(
-                                        sample_rate,
-                                        channel,
-                                        frame_duration,
-                                    );
-                                    let count = len / size;
-                                    let mut audio: Vec<Vec<u8>> = Vec::new();
-                                    for n in 1..count {
-                                        let start = (n - 1) * size;
-                                        let end = cmp::min(n * size, len);
-                                        let mut encoder = encoder.lock().await;
-                                        let packet = encoder
-                                            .encode_vec_float(&sample[start..end], size)
-                                            .unwrap();
-                                        audio.push(packet);
-                                    }
-                                    let data = TtsData {
-                                        audio,
-                                        text: text.to_string(),
-                                    };
-                                    if let Err(e) = tx.send(Ok(data)).await {
-                                        tracing::error!("output packet error = {}", e);
-                                        break;
-                                    } else {
-                                        tracing::info!("[TTS] encode and send audio success");
-                                    }
-                                }
-                                Err(e) => {
-                                    tracing::error!("tts synth error = {}", e.to_string())
-                                }
-                            }
-                        }
-                        Err(_e) => {
-                            if let Err(e) = tx.send(Err(TtsError::Text)).await {
-                                tracing::error!("send error failure = {}", e);
-                            }
-                        }
-                    }
-                }
-                drop(tx);
-            })
-        });
-        ReceiverStream::new(rx)
-    }
-}
 
-pub fn calcalute_tts_packet_size(sample_rate: u32, channel: u32, delay_millis: u64) -> usize {
-    sample_rate as usize * channel as usize * delay_millis as usize / 1000
+    pub fn global() -> &'static TtsFactory {
+        INSTANCE.get().unwrap()
+    }
 }

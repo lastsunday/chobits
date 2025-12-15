@@ -4,25 +4,17 @@ pub mod models;
 
 use crate::{
     config,
-    ws::llm::models::{
-        minicpm4::Minicpm4,
-        qwen3::{self, LlmQwen},
-    },
+    ws::llm::models::{minicpm4::Minicpm4, qwen3::LlmQwen},
 };
 use async_trait::async_trait;
 use rig::{
-    completion::{CompletionError, CompletionRequest, CompletionResponse},
+    completion::{CompletionError, CompletionRequest},
     streaming::StreamingCompletionResponse,
 };
 use std::sync::{Arc, OnceLock};
 
 #[async_trait]
 pub trait Model: Send + Sync {
-    async fn completion(
-        &self,
-        request: CompletionRequest,
-    ) -> Result<CompletionResponse<rig::providers::openai::CompletionResponse>, CompletionError>;
-
     async fn stream(
         &self,
         request: CompletionRequest,
@@ -37,14 +29,6 @@ pub struct DummyModel {}
 
 #[async_trait]
 impl Model for DummyModel {
-    async fn completion(
-        &self,
-        _request: CompletionRequest,
-    ) -> Result<CompletionResponse<rig::providers::openai::CompletionResponse>, CompletionError>
-    {
-        todo!()
-    }
-
     async fn stream(
         &self,
         _request: CompletionRequest,

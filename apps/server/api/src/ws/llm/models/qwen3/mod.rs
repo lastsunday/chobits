@@ -18,7 +18,7 @@ use futures::{SinkExt, executor::block_on};
 use futures_channel::mpsc::{Sender, channel};
 use quantized::ModelWeights as Qwen3;
 use rig::{
-    completion::{CompletionError, CompletionRequest, CompletionResponse},
+    completion::{CompletionError, CompletionRequest},
     message::{AssistantContent, Message, UserContent},
     providers::openai::Usage,
     streaming::{RawStreamingChoice, StreamingCompletionResponse},
@@ -310,14 +310,6 @@ async fn handle(
 
 #[async_trait]
 impl Model for LlmQwen {
-    async fn completion(
-        &self,
-        _request: CompletionRequest,
-    ) -> Result<CompletionResponse<rig::providers::openai::CompletionResponse>, CompletionError>
-    {
-        todo!()
-    }
-
     async fn stream(
         &self,
         request: CompletionRequest,

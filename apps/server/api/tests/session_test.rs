@@ -11,7 +11,7 @@ mod tests {
 
     use api::{
         config,
-        ws::{llm::LlmFactory, util::audio::pcm_decode},
+        ws::{llm::LlmFactory, tts::TtsFactory, util::audio::pcm_decode},
     };
 
     use api::ws::{
@@ -21,7 +21,6 @@ mod tests {
             Session,
             listener::{DefaultListener, Listener},
         },
-        tts::tts_cache::TtsCache,
         vad::vad_cache::VadCache,
     };
     use rmcp::model::{
@@ -844,7 +843,7 @@ mod tests {
         LlmFactory::init().await;
         tracing::info!("init llm factory successfully");
         tracing::info!("init tts cahce");
-        TtsCache::init().await;
+        TtsFactory::init().await;
         tracing::info!("init tts cahce successfully");
         let vad = VadCache::create_vad();
         let vad = Arc::new(Mutex::new(vad));

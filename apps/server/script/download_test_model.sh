@@ -10,6 +10,7 @@ wget https://huggingface.co/openai/whisper-tiny/resolve/169d4a4341b33bc18d8881c4
 cd ..
 mkdir -p tts
 cd tts || exit
+mkdir -p tts/mzdk100/kokoro
 wget https://github.com/mzdk100/kokoro/releases/download/V1.1/kokoro-v1.1-zh.onnx -O model.onnx
 wget https://github.com/mzdk100/kokoro/releases/download/V1.1/voices-v1.1-zh.bin -O voice.bin
 cd ..

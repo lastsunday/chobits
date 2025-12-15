@@ -4,7 +4,7 @@ use crate::ws::llm::LlmFactory;
 use crate::ws::mcp::{McpHost, device::DeviceMcpPhase};
 use crate::ws::session::listener::Listener;
 use crate::ws::session::round::{Command, Round};
-use crate::ws::tts::tts_cache::TtsCache;
+use crate::ws::tts::TtsFactory;
 use chrono::Local;
 use core::result::Result;
 use framework::id::gen_id;
@@ -103,12 +103,12 @@ where
             .clone()
             .expect("tx not create,maybe new round method before output frame method");
         let llm = LlmFactory::global().get_client();
-        let tts = TtsCache::global().instance.clone();
+        let tts = TtsFactory::global().default_tts.clone();
         self.current_round = Some(Box::new(Round::new(
             self.id.clone(),
             tx,
             llm,
-            Arc::new(Mutex::new(tts)),
+            tts,
             self.mcp_host.clone(),
             self.history.clone(),
         )));
