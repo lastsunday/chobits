@@ -109,7 +109,7 @@ jobs:
       - name: Install ffmpeg
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg libavutil-dev pkg-config
+          sudo apt install libavformat-dev libavcodec-dev libavutil-dev libavfilter-dev libavdevice-dev ffmpeg pkg-config clang
 
       - name: Set Version Env
         if: startsWith(github.ref, 'refs/tags/')
@@ -215,7 +215,7 @@ jobs:
       - name: Install ffmpeg
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg libavutil-dev pkg-config
+          sudo apt install libavformat-dev libavcodec-dev libavutil-dev libavfilter-dev libavdevice-dev ffmpeg pkg-config clang
 
       - name: Setup Perl
         uses: shogo82148/actions-setup-perl@22423f01bde48fb88785c007e3166fbbbd8e892a
