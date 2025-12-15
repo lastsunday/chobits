@@ -107,7 +107,9 @@ jobs:
         uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b
 
       - name: Install ffmpeg
-        uses: FedericoCarboni/setup-ffmpeg@37062fbf7149fc5578d6c57e08aed62458b375d6
+        run: |
+          apt-get update
+          apt-get install -y ffmpeg libavutil-dev pkg-config
 
       - name: Set Version Env
         if: startsWith(github.ref, 'refs/tags/')
@@ -211,7 +213,9 @@ jobs:
         uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b
 
       - name: Install ffmpeg
-        uses: FedericoCarboni/setup-ffmpeg@37062fbf7149fc5578d6c57e08aed62458b375d6
+        run: |
+          apt-get update
+          apt-get install -y ffmpeg libavutil-dev pkg-config
 
       - name: Setup Perl
         uses: shogo82148/actions-setup-perl@22423f01bde48fb88785c007e3166fbbbd8e892a
