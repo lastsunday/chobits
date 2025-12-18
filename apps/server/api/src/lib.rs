@@ -3,6 +3,7 @@ pub mod auth_error;
 pub mod config;
 pub mod i18n;
 pub mod index;
+pub mod mcp;
 pub mod ota;
 pub mod ota_data;
 pub mod ota_error;
@@ -24,6 +25,7 @@ use tokio::net::TcpListener;
 use framework::error::*;
 use framework::trace::*;
 use framework::*;
+use tokio_util::sync::CancellationToken;
 use tower_http::compression::CompressionLayer;
 use tower_http::cors;
 use tower_http::cors::CorsLayer;
@@ -77,10 +79,11 @@ async fn start() -> anyhow::Result<()> {
     tracing::info!("init llm factory");
     LlmFactory::init().await;
     tracing::info!("init llm factory successfully");
+    let ct = tokio_util::sync::CancellationToken::new();
     // state
     let state = AppState { conn };
     // router
-    let app = create_router(state);
+    let (app, ct) = create_router(state, ct);
     // app start
     let listener = TcpListener::bind(format!("0.0.0.0:{port}")).await?;
     tracing::info!("listening on http://0.0.0.0:{port}");
@@ -89,6 +92,10 @@ async fn start() -> anyhow::Result<()> {
         listener,
         ServiceExt::<Request>::into_make_service_with_connect_info::<SocketAddr>(app),
     )
+    .with_graceful_shutdown(async move {
+        tokio::signal::ctrl_c().await.unwrap();
+        ct.cancel();
+    })
     .await?;
     Ok(())
 }
@@ -97,7 +104,10 @@ async fn start() -> anyhow::Result<()> {
 #[openapi()]
 struct ApiDoc;
 
-pub fn create_router(state: AppState) -> Router {
+pub fn create_router(
+    state: AppState,
+    cancellation_token: CancellationToken,
+) -> (Router, CancellationToken) {
     let mut api = ApiDoc::openapi();
     api.components.as_mut().unwrap().add_security_scheme(
         "AccessToken",
@@ -108,12 +118,13 @@ pub fn create_router(state: AppState) -> Router {
     api_router = setup_auth(api_router, state.clone());
     api_router = setup_ota(api_router, state.clone());
     api_router = setup_ws(api_router, state.clone());
+    api_router = setup_mcp(api_router, state.clone(), cancellation_token.child_token());
     let (mut app, api) = api_router.split_for_parts();
     app = setup_web(app);
     app = setup_api_fallback(app);
     app = setup_default(app);
     app = app.merge(Scalar::with_url("/docs", api));
-    app
+    (app, cancellation_token)
 }
 
 pub fn setup_default(router: Router) -> Router {
@@ -153,6 +164,14 @@ pub fn setup_index(router: OpenApiRouter) -> OpenApiRouter {
 
 pub fn setup_ws(router: OpenApiRouter, state: AppState) -> OpenApiRouter {
     router.merge(ws::create_routes(state))
+}
+
+pub fn setup_mcp(
+    router: OpenApiRouter,
+    state: AppState,
+    cancellation_token: CancellationToken,
+) -> OpenApiRouter {
+    router.merge(mcp::create_routes(state, cancellation_token))
 }
 
 pub fn setup_auth(router: OpenApiRouter, state: AppState) -> OpenApiRouter {

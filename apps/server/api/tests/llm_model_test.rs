@@ -20,23 +20,25 @@ mod tests {
         let model = LlmFactory::create_model();
         let system_prompt = "".to_string();
         let tools: Vec<ToolDefinition> = vec![ToolDefinition {
-            name: "get_current_weather".to_string(),
-            description: "Get the current weather in a given location".to_string(),
+            name: "add".to_string(),
+            description: "Add two numbers together".to_string(),
             parameters: serde_json::from_str(
                 r#"
                 {
                     "type": "object",
                     "properties": {
-                        "location": {
-                            "type": "string",
-                            "description":"The city and state, e.g. San Francisco, CA"
+                        "a": {
+                            "type": "number"
                         },
-                        "unit": {
-                            "type": "string",
-                            "enum": ["celsius", "fahrenheit"]
+                        "b": {
+                            "type": "number"
                         }
                     },
-                    "required": ["location"]
+                    "required": [
+                        "a",
+                        "b"
+                    ],
+                    "additionalProperties": false
                 }
                 "#,
             )
@@ -44,7 +46,8 @@ mod tests {
         }];
         let chat_history = OneOrMany::<Message>::one(Message::User {
             content: OneOrMany::<UserContent>::one(UserContent::Text(Text {
-                text: r#"What's the weather like in San Francisco?"#.to_string(),
+                text: r#"Calculate the sum of 24.5 and 17.3 using the calculator service"#
+                    .to_string(),
             })),
         });
         let request = CompletionRequest {
@@ -77,7 +80,7 @@ mod tests {
                             function,
                         })) => {
                             assert_eq!(
-                                r#"{"name":"get_current_weather","arguments":{"location":"San Francisco"}}"#,
+                                r#"{"name":"add","arguments":{"a":24.5,"b":17.3}}"#,
                                 serde_json::to_string(&function).unwrap()
                             );
                         }

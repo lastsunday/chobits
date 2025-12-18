@@ -45,6 +45,20 @@
         "target-dir": "dist/target/chobits-server"
       }
     },
+    "dev": {
+      "executor": "@monodon/rust:run",
+      "outputs": [
+        "{options.target-dir}"
+      ],
+      "options": {
+        "target-dir": "dist/target/chobits-server"
+      },
+      "configurations": {
+        "production": {
+          "release": false
+        }
+      }
+    },
     "run": {
       "executor": "@monodon/rust:run",
       "outputs": [

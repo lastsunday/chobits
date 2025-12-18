@@ -38,7 +38,6 @@ bytesize = { version = "2.1.0" }
 validator = { version = "0.20.0", features = ["derive"] }
 axum-valid = { version = "0.24.0", features = ["full_validator"] }
 regex = { version = "1.12.2" }
-idgenerator = { version = "2.0.0" }
 bcrypt = { version = "0.17.1" }
 jsonwebtoken = { version = "10.0.0", features = ["rust_crypto"] }
 utoipa = { version = "5.4.0", features = ["axum_extras", "debug", "chrono"] }
@@ -63,13 +62,13 @@ futures-channel = { version = "0.3.31" }
 jiff = { version = "0.2.15" }
 opus = { version = "0.3.0" }
 tokio-stream = { version = "0.1.17" }
+tokio-util = { version = "0.7.17" }
 futures = { version = "0.3.31" }
 openssl = { version = "0.10.74", features = ["vendored"] }
 async-trait = { version = "0.1.89" }
 # audio start
 symphonia = { version = "0.5.5" }
 wavers = { version = "1.5.1" }
-ogg = { version = "0.9.2" }
 # audio end
 # llm start
 candle-core = { version = "0.9.1" }
@@ -78,7 +77,7 @@ tokenizers = { version = "0.22.1", default-features = false, features = [
 ] }
 candle-transformers = { version = "0.9.1" }
 candle-nn = { version = "0.9.1" }
-fancy-regex = { version = "0.16.2" }
+fancy-regex = { version = "0.17.0" }
 intel-mkl-src = { version = "0.8.1", features = [
   "mkl-static-lp64-iomp",
 ], optional = true }
@@ -97,7 +96,14 @@ rand_distr = { version = "0.5.1" }
 kokoro-tts = { version = "0.3.0" }
 # tts end
 # mcp start
-rmcp = { version = "0.11.0" }
+rmcp = { version = "0.11.0", features = [
+  "transport-streamable-http-server",
+  "client",
+  "transport-streamable-http-client",
+  "reqwest",
+  "transport-streamable-http-client-reqwest",
+] }
+sse-stream = { version = "0.2.1" }
 # mcp end
 
 tracing-test = { version = "0.2.5" }
@@ -109,7 +115,7 @@ web = { path = "../web" }
 
 [dev-dependencies]
 tower = { version = "0.5.2", features = ["util"] }
-cucumber = { version = "0.21.1", features = ["tracing", "output-json"] }
+cucumber = { version = "0.22.0", features = ["tracing", "output-json"] }
 futures = "0.3.31"
 
 [build-dependencies]

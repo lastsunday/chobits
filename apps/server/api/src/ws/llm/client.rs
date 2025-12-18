@@ -58,7 +58,11 @@ impl Client {
                                 )) => {
                                     // TODO:
                                 }
-                                Ok(StreamedAssistantContent::ToolCall(ToolCall { .. })) => {
+                                Ok(StreamedAssistantContent::ToolCall(ToolCall {
+                                    id,
+                                    call_id,
+                                    function,
+                                })) => {
                                     // TODO:
                                 }
                                 Ok(StreamedAssistantContent::Reasoning(Reasoning {

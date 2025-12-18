@@ -2,7 +2,6 @@ pub mod asr;
 pub mod common;
 pub mod frame;
 pub mod llm;
-pub mod mcp;
 pub mod message_converter;
 pub mod session;
 pub mod tts;

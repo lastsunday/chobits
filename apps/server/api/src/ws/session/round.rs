@@ -1,7 +1,7 @@
 use crate::config;
+use crate::mcp::mcp_host::McpHost;
 use crate::ws::frame::{FrameError, FrameResult};
 use crate::ws::llm::client::Client;
-use crate::ws::mcp::McpHost;
 use crate::ws::session::History;
 use crate::ws::tts::Tts;
 use crate::ws::util::llm::{EMOJI_MAP, analyze_emotion};

@@ -1,8 +1,7 @@
-pub mod device;
-
-use device::{DeviceMcpClient, DeviceMcpPhase};
 use rmcp::model::{JsonRpcMessage, Tool};
 use service::chobits::message::mcp::McpRequest;
+
+use crate::mcp::device::{DeviceMcpClient, DeviceMcpPhase};
 
 pub struct McpHost {
     pub session_id: Option<String>,
