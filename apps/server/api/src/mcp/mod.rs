@@ -6,7 +6,7 @@ use utoipa_axum::router::OpenApiRouter;
 
 use crate::{AppState, mcp::tool::calculator::Calculator};
 
-pub mod device;
+pub mod client;
 pub mod mcp_host;
 pub mod tool;
 

@@ -125,6 +125,28 @@ fn convert_request_to_prompt(request: &CompletionRequest) -> String {
                             prompt
                                 .push_str(&format!("<|im_start|>user\n{}<|im_end|>\n", text.text));
                         }
+
+                        UserContent::ToolResult(tool_result) => {
+                            let content = tool_result.content.iter();
+                            for item in content {
+                                match item {
+                                    rig::message::ToolResultContent::Text(text) => {
+                                        let mut tool_result_text = String::from("");
+                                        tool_result_text.push_str(&format!(
+                                            "<tool_response>{}</tool_response>",
+                                            text
+                                        ));
+                                        prompt.push_str(&format!(
+                                            "<|im_start|>user\n{}<|im_end|>\n",
+                                            tool_result_text
+                                        ));
+                                    }
+                                    rig::message::ToolResultContent::Image(image) => {
+                                        // TODO:
+                                    }
+                                }
+                            }
+                        }
                         _ => {
                             // TODO: fix other
                         }
@@ -139,6 +161,17 @@ fn convert_request_to_prompt(request: &CompletionRequest) -> String {
                             prompt.push_str(&format!(
                                 "<|im_start|>assistant\n{}<|im_end|>\n",
                                 text.text
+                            ));
+                        }
+                        AssistantContent::ToolCall(tool_call) => {
+                            let mut tool_call_text = String::from("");
+                            tool_call_text.push_str(&format!(
+                                "<tool_call>{}</tool_call>",
+                                &serde_json::to_string(&tool_call.function).unwrap()
+                            ));
+                            prompt.push_str(&format!(
+                                "<|im_start|>assistant\n{}<|im_end|>\n",
+                                tool_call_text
                             ));
                         }
                         _ => {

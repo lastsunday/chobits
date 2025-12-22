@@ -13,7 +13,8 @@ where
                 }
                 if has_mcp {
                     // TODO: init MCP host
-                    self.mcp_host = Arc::new(Mutex::new(Some(McpHost::new(Some(self.id.clone())))));
+                    self.mcp_host =
+                        Arc::new(Mutex::new(Some(UnionMcpHost::new(Some(self.id.clone())))));
                     // TODO: init Server MCP client
                     // TODO: init Remote Server MCP client
                 }

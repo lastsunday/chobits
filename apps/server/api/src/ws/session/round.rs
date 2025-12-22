@@ -1,7 +1,7 @@
 use crate::config;
-use crate::mcp::mcp_host::McpHost;
+use crate::mcp::mcp_host::UnionMcpHost;
 use crate::ws::frame::{FrameError, FrameResult};
-use crate::ws::llm::client::Client;
+use crate::ws::llm::client::{ChatRequest, Client};
 use crate::ws::session::History;
 use crate::ws::tts::Tts;
 use crate::ws::util::llm::{EMOJI_MAP, analyze_emotion};
@@ -29,12 +29,12 @@ pub struct Round {
     pub id: String,
     tx: Sender<Result<FrameResult, FrameError>>,
     stop: Arc<AtomicBool>,
-    llm: Arc<Client>,
+    client: Arc<Client>,
     tts: Arc<Box<dyn Tts>>,
     pub tts_state: Arc<Mutex<Option<TtsState>>>,
     pub speaking: Arc<AtomicBool>,
     pub end: Arc<AtomicBool>,
-    mcp_host: Arc<Mutex<Option<McpHost>>>,
+    mcp_host: Arc<Mutex<Option<UnionMcpHost>>>,
     history: Arc<Mutex<History>>,
 }
 
@@ -49,9 +49,9 @@ impl Round {
     pub fn new(
         parent_id: String,
         tx: Sender<Result<FrameResult, FrameError>>,
-        llm: Arc<Client>,
+        client: Arc<Client>,
         tts: Arc<Box<dyn Tts>>,
-        mcp_host: Arc<Mutex<Option<McpHost>>>,
+        mcp_host: Arc<Mutex<Option<UnionMcpHost>>>,
         history: Arc<Mutex<History>>,
     ) -> Self {
         Self {
@@ -59,7 +59,7 @@ impl Round {
             id: gen_id(),
             tx,
             stop: Arc::new(AtomicBool::new(false)),
-            llm,
+            client,
             tts,
             tts_state: Arc::new(Mutex::new(None)),
             speaking: Arc::new(AtomicBool::new(false)),
@@ -107,12 +107,12 @@ impl Round {
         let tx = self.tx.clone();
         let stop_me = self.stop.clone();
         let session_id = self.parent_id.clone();
-        let llm = self.llm.clone();
+        let client = self.client.clone();
         let tts = self.tts.clone();
         let tts_state_clone = self.tts_state.clone();
         let speaking = self.speaking.clone();
         let end = self.end.clone();
-        let history = self.history.clone();
+        // let history = self.history.clone();
         let text = String::from(text);
         tokio::spawn(async move {
             if tx
@@ -125,31 +125,26 @@ impl Round {
             {
                 info!("send stt result failure");
             }
-            let mut history = history.lock().await;
-            history.chat_history.push(Message::User {
-                content: OneOrMany::one(UserContent::Text(Text { text })),
-            });
-            let chat_history = {
-                if history.chat_history.len() > 1 {
-                    OneOrMany::<Message>::many(history.chat_history.clone()).unwrap()
-                } else if !history.chat_history.is_empty() {
-                    OneOrMany::<Message>::one(history.chat_history.first().unwrap().clone())
-                } else {
-                    panic!("chat history len is empty")
-                }
+            // let mut history = history.lock().await;
+            // history.chat_history.push(Message::User {
+            //     content: OneOrMany::one(UserContent::Text(Text { text })),
+            // });
+            // let chat_history = {
+            //     if history.chat_history.len() > 1 {
+            //         OneOrMany::<Message>::many(history.chat_history.clone()).unwrap()
+            //     } else if !history.chat_history.is_empty() {
+            //         OneOrMany::<Message>::one(history.chat_history.first().unwrap().clone())
+            //     } else {
+            //         panic!("chat history len is empty")
+            //     }
+            // };
+            let request = ChatRequest {
+                message: Message::User {
+                    content: OneOrMany::one(UserContent::Text(Text { text: text.clone() })),
+                },
             };
-            let request = CompletionRequest {
-                preamble: history.preamble.clone(),
-                chat_history,
-                documents: vec![],
-                tools: vec![],
-                temperature: Some(0.8),
-                max_tokens: Some(999),
-                tool_choice: None,
-                additional_params: None,
-            };
-            drop(history);
-            let llm_output = llm.chat(request);
+            // drop(history);
+            let llm_output = client.chat(request);
             let mut tts_output = tts.stream(Box::pin(llm_output)).await;
             let audio_config = config::get().audio();
             let delay = audio_config.output_frame_duration();

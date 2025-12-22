@@ -1,7 +1,8 @@
 use crate::config;
-use crate::mcp::mcp_host::McpHost;
+use crate::mcp::mcp_host::UnionMcpHost;
 use crate::ws::frame::{Frame, FrameError, FrameResult};
 use crate::ws::llm::LlmFactory;
+use crate::ws::llm::client::ClientBuilder;
 use crate::ws::session::listener::Listener;
 use crate::ws::session::round::{Command, Round};
 use crate::ws::tts::TtsFactory;
@@ -33,7 +34,7 @@ pub struct Session<L> {
     phase: Phase,
     latest_activity_time: Arc<Mutex<Option<i64>>>,
     close_connection_no_voice_time: Option<i64>,
-    mcp_host: Arc<Mutex<Option<McpHost>>>,
+    mcp_host: Arc<Mutex<Option<UnionMcpHost>>>,
     history: Arc<Mutex<History>>,
 }
 
@@ -102,12 +103,16 @@ where
             .output_tx
             .clone()
             .expect("tx not create,maybe new round method before output frame method");
-        let llm = LlmFactory::global().get_client();
+        // TODO: need consider client chat history
+        let client = ClientBuilder::new()
+            .with_model(LlmFactory::global().default())
+            .build()
+            .with_chat_history(Some(self.history.lock().await.chat_history.clone()));
         let tts = TtsFactory::global().default_tts.clone();
         self.current_round = Some(Box::new(Round::new(
             self.id.clone(),
             tx,
-            llm,
+            Arc::new(client),
             tts,
             self.mcp_host.clone(),
             self.history.clone(),

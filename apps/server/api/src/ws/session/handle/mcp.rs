@@ -1,4 +1,4 @@
-use crate::mcp::device::DeviceMcpPhase;
+use crate::mcp::client::device::DeviceMcpPhase;
 
 impl<L> Session<L>
 where
@@ -31,7 +31,7 @@ where
 
     async fn request_mcp_initialize(
         &mut self,
-        mcp_host: &mut McpHost,
+        mcp_host: &mut UnionMcpHost,
         _hello_message: &HelloMessage,
     ) {
         let tx = self.output_tx.clone().unwrap();
@@ -43,11 +43,15 @@ where
         }
     }
 
-    async fn handle_mcp_initialize_result(&mut self, mcp_host: &mut McpHost, message: &McpMessage) {
+    async fn handle_mcp_initialize_result(
+        &mut self,
+        mcp_host: &mut UnionMcpHost,
+        message: &McpMessage,
+    ) {
         mcp_host.handle_initialize_result(&message.payload).await;
     }
 
-    async fn request_mcp_tools_list(&mut self, mcp_host: &mut McpHost) {
+    async fn request_mcp_tools_list(&mut self, mcp_host: &mut UnionMcpHost) {
         let tx = self.output_tx.clone().unwrap();
         let result = tx
             .send(Ok(FrameResult::McpResult(
@@ -61,7 +65,7 @@ where
 
     async fn handle_mcp_tools_list_result(
         &mut self,
-        mcp_host: &mut McpHost,
+        mcp_host: &mut UnionMcpHost,
         message: &McpMessage,
     ) -> bool {
         return mcp_host.handle_tools_list_result(&message.payload).await;

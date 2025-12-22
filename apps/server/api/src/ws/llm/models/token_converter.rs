@@ -1,3 +1,4 @@
+use framework::id::gen_id;
 use rig::streaming::RawStreamingChoice;
 use serde::{Deserialize, Serialize};
 
@@ -97,7 +98,7 @@ impl TokenConverter {
                     let (tag_content, other_content) =
                         TokenConverter::skip_end_tag_and_get_content(&text, THINK_TAG_NAME)?;
                     result.push(RawStreamingChoice::Reasoning {
-                        id: None,
+                        id: Some(gen_id()),
                         reasoning: tag_content.to_string(),
                         signature: None,
                     });
@@ -106,7 +107,7 @@ impl TokenConverter {
                     self.phase = Phase::Idle;
                 } else {
                     result.push(RawStreamingChoice::Reasoning {
-                        id: None,
+                        id: Some(gen_id()),
                         reasoning: text,
                         signature: None,
                     });
@@ -125,8 +126,8 @@ impl TokenConverter {
                     match tool_call {
                         Ok(tool_call) => {
                             result.push(RawStreamingChoice::ToolCall {
-                                id: "".to_string(),
-                                call_id: None,
+                                id: gen_id(),
+                                call_id: Some(gen_id()),
                                 name: tool_call.name,
                                 arguments: tool_call.arguments,
                             });

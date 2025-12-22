@@ -1,14 +1,21 @@
 use std::sync::atomic::{AtomicI64, Ordering};
 
+use async_trait::async_trait;
+use rig::{
+    completion::ToolDefinition,
+    message::{ToolCall, ToolResult},
+};
 use rmcp::model::{
-    ClientCapabilities, ConstString, Implementation, InitializeRequest, InitializeRequestParam,
-    InitializeResult, JsonObject, JsonRpcMessage, JsonRpcRequest, JsonRpcVersion2_0,
-    ListToolsRequest, ListToolsResult, PaginatedRequestParam, ProtocolVersion, Request, RequestId,
-    Tool, object,
+    CallToolRequestParam, CallToolResult, ClientCapabilities, ConstString, Implementation,
+    InitializeRequest, InitializeRequestParam, InitializeResult, JsonObject, JsonRpcMessage,
+    JsonRpcRequest, JsonRpcVersion2_0, ListToolsRequest, ListToolsResult, PaginatedRequestParam,
+    ProtocolVersion, Request, RequestId, Tool, object,
 };
 use serde::Serialize;
 use service::chobits::message::mcp::McpRequest;
 use tracing::{error, info};
+
+use crate::mcp::client::McpClient;
 
 #[derive(Debug, Clone)]
 pub enum DeviceMcpPhase {
@@ -23,6 +30,18 @@ pub struct DeviceMcpClient {
     next_cursor: Option<String>,
     pub tools: Vec<Tool>,
     pub phase: DeviceMcpPhase,
+}
+
+#[async_trait]
+impl McpClient for DeviceMcpClient {
+    async fn get_tool(&self) -> anyhow::Result<Vec<ToolDefinition>> {
+        todo!()
+    }
+
+    // TODO:
+    async fn call_tool(&self, param: ToolCall) -> anyhow::Result<ToolResult> {
+        todo!()
+    }
 }
 
 impl DeviceMcpClient {

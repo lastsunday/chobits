@@ -43,25 +43,21 @@ impl Model for DummyModel {
 static INSTANCE: OnceLock<LlmFactory> = OnceLock::new();
 
 pub struct LlmFactory {
-    default_client: Arc<client::Client>,
+    default_llm: Arc<Box<dyn Model>>,
 }
 
 impl LlmFactory {
-    pub fn new(default_client: Arc<client::Client>) -> Self {
-        Self { default_client }
+    pub fn new(default_llm: Arc<Box<dyn Model>>) -> Self {
+        Self { default_llm }
     }
 
     pub async fn init() -> &'static Self {
         let llm = LlmFactory::create_model();
-        let client = client::ClientBuilder::new()
-            .with_client(Arc::new(llm))
-            .build();
-        INSTANCE.get_or_init(|| -> Self { Self::new(Arc::new(client)) })
+        INSTANCE.get_or_init(|| -> Self { Self::new(Arc::new(llm)) })
     }
 
-    // TODO: modify to create client?
-    pub fn get_client(&self) -> Arc<client::Client> {
-        self.default_client.clone()
+    pub fn default(&self) -> Arc<Box<dyn Model>> {
+        self.default_llm.clone()
     }
 
     pub fn create_model() -> Box<dyn Model> {

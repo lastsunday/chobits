@@ -8,8 +8,8 @@ use rmcp::{
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 pub struct SumRequest {
     #[schemars(description = "the left hand side number")]
-    pub a: i32,
-    pub b: i32,
+    pub a: f64,
+    pub b: f64,
 }
 
 #[derive(Debug, Clone)]

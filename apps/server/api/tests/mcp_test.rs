@@ -16,7 +16,7 @@ use crate::common::router_client::RouterClient;
 
 #[tokio::test]
 #[traced_test]
-/// cargo test --test mcp_test -- tests::test_mcp --ignored --show-output
+/// cargo test --test mcp_test -- tests::test_mcp --show-output
 async fn test_mcp() -> anyhow::Result<()> {
     let (container, state) = setup_database().await;
     let router = OpenApiRouter::new();
