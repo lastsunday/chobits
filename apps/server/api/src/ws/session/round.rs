@@ -10,7 +10,6 @@ use core::result::Result;
 use framework::id::gen_id;
 use futures::StreamExt;
 use rig::OneOrMany;
-use rig::completion::CompletionRequest;
 use rig::message::{Message, Text, UserContent};
 use service::chobits::message::audio::AudioMessage;
 use service::chobits::message::llm::LlmMessage;

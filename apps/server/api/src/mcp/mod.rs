@@ -4,7 +4,7 @@ use rmcp::transport::streamable_http_server::{
 use tokio_util::sync::CancellationToken;
 use utoipa_axum::router::OpenApiRouter;
 
-use crate::{AppState, mcp::tool::calculator::Calculator};
+use crate::{AppState, mcp::tool::administrator::Administrator};
 
 pub mod client;
 pub mod mcp_host;
@@ -12,7 +12,7 @@ pub mod tool;
 
 pub fn create_routes(state: AppState, cancellation_token: CancellationToken) -> OpenApiRouter {
     let service = StreamableHttpService::new(
-        || Ok(Calculator::new()),
+        || Ok(Administrator::new()),
         LocalSessionManager::default().into(),
         StreamableHttpServerConfig {
             cancellation_token,

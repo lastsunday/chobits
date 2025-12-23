@@ -176,11 +176,19 @@ async fn test_chat_mcp() -> anyhow::Result<()> {
         .with_mcp_host(Arc::new(Box::new(union_mcp_host)))
         .build()
         .with_preamble(Some(system_prompt));
+    // let request = ChatRequest {
+    //     message: Message::User {
+    //         content: OneOrMany::<UserContent>::one(UserContent::Text(Text {
+    //             text: r#"Calculate the sum of 24.5 and 17.3 using the calculator service"#
+    //                 .to_string(),
+    //         })),
+    //     },
+    // };
     let request = ChatRequest {
         message: Message::User {
             content: OneOrMany::<UserContent>::one(UserContent::Text(Text {
-                text: r#"Calculate the sum of 24.5 and 17.3 using the calculator service"#
-                    .to_string(),
+                // text: r#"What time is it now"#.to_string(),
+                text: r#"现在几点"#.to_string(),
             })),
         },
     };

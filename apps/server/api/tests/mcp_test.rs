@@ -16,8 +16,8 @@ use crate::common::router_client::RouterClient;
 
 #[tokio::test]
 #[traced_test]
-/// cargo test --test mcp_test -- tests::test_mcp --show-output
-async fn test_mcp() -> anyhow::Result<()> {
+/// cargo test --test mcp_test -- test_administrator_mcp --show-output
+async fn test_administrator_mcp() -> anyhow::Result<()> {
     let (container, state) = setup_database().await;
     let router = OpenApiRouter::new();
     let ct = tokio_util::sync::CancellationToken::new();
@@ -52,9 +52,10 @@ async fn test_mcp() -> anyhow::Result<()> {
     let tools = client.list_tools(Default::default()).await?;
     tracing::info!("Available tools: {tools:#?}");
 
+    let tool_name = "sum";
     let tool_result = client
         .call_tool(CallToolRequestParam {
-            name: "sum".into(),
+            name: tool_name.into(),
             arguments: serde_json::json!({
                 "a":1,
                 "b":2
@@ -63,7 +64,17 @@ async fn test_mcp() -> anyhow::Result<()> {
             .cloned(),
         })
         .await?;
-    tracing::info!("Tool result: {tool_result:#?}");
+    tracing::info!("Tool({tool_name}) result: {tool_result:#?}");
+
+    let tool_name = "datetime";
+    let tool_result = client
+        .call_tool(CallToolRequestParam {
+            name: tool_name.into(),
+            arguments: None,
+        })
+        .await?;
+    tracing::info!("Tool({tool_name}) result: {tool_result:#?}");
+
     client.cancel().await?;
 
     let _ = &state.conn.close().await.unwrap();
