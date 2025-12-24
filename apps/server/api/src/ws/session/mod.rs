@@ -1,14 +1,13 @@
 use crate::config;
 use crate::mcp::mcp_host::UnionMcpHost;
 use crate::ws::frame::{Frame, FrameError, FrameResult};
-use crate::ws::llm::LlmFactory;
+use crate::ws::llm::Model;
 use crate::ws::llm::client::ClientBuilder;
 use crate::ws::session::listener::Listener;
 use crate::ws::session::round::{Command, Round};
 use crate::ws::tts::TtsFactory;
 use chrono::Local;
 use core::result::Result;
-use framework::id::gen_id;
 use futures::Stream;
 use rig::message::Message;
 use service::chobits::message::hello::{AudioParam, HelloMessage};
@@ -26,16 +25,73 @@ use tracing::{error, info, instrument};
 pub mod listener;
 pub mod round;
 
-pub struct Session<L> {
+#[derive(Default)]
+pub struct SessionBuilder {
+    id: Option<String>,
+    listener: Option<Box<dyn Listener>>,
+    model: Option<Arc<Box<dyn Model>>>,
+    mcp_host: Option<Arc<Mutex<UnionMcpHost>>>,
+    config: Option<SessionConfig>,
+}
+
+impl SessionBuilder {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn with_id(mut self, id: String) -> SessionBuilder {
+        self.id = Some(id);
+        self
+    }
+
+    pub fn with_listener(mut self, listener: Box<dyn Listener>) -> SessionBuilder {
+        self.listener = Some(listener);
+        self
+    }
+
+    pub fn with_model(mut self, model: Arc<Box<dyn Model>>) -> SessionBuilder {
+        self.model = Some(model);
+        self
+    }
+
+    pub fn with_mcp_host(mut self, mcp_host: Arc<Mutex<UnionMcpHost>>) -> SessionBuilder {
+        self.mcp_host = Some(mcp_host);
+        self
+    }
+
+    pub fn with_config(mut self, config: SessionConfig) -> SessionBuilder {
+        self.config = Some(config);
+        self
+    }
+
+    pub fn build(self) -> Session {
+        Session::new(
+            self.id.expect("id is required"),
+            self.listener.expect("listener is required"),
+            self.model.expect("model is required"),
+            self.mcp_host.expect("mcp host is required"),
+            self.config.expect("config is required"),
+        )
+    }
+}
+
+pub struct SessionConfig {
+    pub close_connection_no_voice_time: Option<i64>,
+}
+
+pub struct Session {
     pub id: String,
     pub current_round: Option<Box<Round>>,
     output_tx: Option<Sender<Result<FrameResult, FrameError>>>,
-    listener: Box<L>,
     phase: Phase,
     latest_activity_time: Arc<Mutex<Option<i64>>>,
-    close_connection_no_voice_time: Option<i64>,
-    mcp_host: Arc<Mutex<Option<UnionMcpHost>>>,
     history: Arc<Mutex<History>>,
+
+    config: SessionConfig,
+
+    model: Arc<Box<dyn Model>>,
+    listener: Box<dyn Listener>,
+    mcp_host: Arc<Mutex<UnionMcpHost>>,
 }
 
 #[derive(Debug, Clone)]
@@ -57,31 +113,38 @@ pub struct History {
     pub chat_history: Vec<Message>,
 }
 
-impl<L> Session<L>
-where
-    L: Listener + Send,
-{
-    pub fn new(listener: Box<L>, close_connection_no_voice_time: Option<i64>) -> Self {
+impl Session {
+    pub fn new(
+        id: String,
+        listener: Box<dyn Listener>,
+        model: Arc<Box<dyn Model>>,
+        mcp_host: Arc<Mutex<UnionMcpHost>>,
+        config: SessionConfig,
+    ) -> Self {
         let system_prompt = config::get().logic().system_prompt();
         Self {
-            id: gen_id(),
+            id,
             current_round: None,
             output_tx: None,
-            listener,
             phase: Phase::Hello,
             latest_activity_time: Arc::new(Mutex::new(None)),
-            close_connection_no_voice_time,
             history: Arc::new(Mutex::new(History {
                 preamble: Some(system_prompt.to_string()),
                 chat_history: vec![],
             })),
-            mcp_host: Arc::new(Mutex::new(None)),
+
+            config,
+
+            listener,
+            model,
+            mcp_host,
         }
     }
 
     #[instrument(skip(self), name="Session start",fields(id = %self.id))]
-    pub async fn start(&mut self) {
+    pub async fn start(&mut self) -> anyhow::Result<()> {
         info!("start");
+        Ok(())
     }
 
     #[instrument(skip(self), name="Session stop" fields(id = %self.id))]
@@ -105,7 +168,8 @@ where
             .expect("tx not create,maybe new round method before output frame method");
         // TODO: need consider client chat history
         let client = ClientBuilder::new()
-            .with_model(LlmFactory::global().default())
+            .with_model(self.model.clone())
+            .with_mcp_host(self.mcp_host.clone())
             .build()
             .with_chat_history(Some(self.history.lock().await.chat_history.clone()));
         let tts = TtsFactory::global().default_tts.clone();
@@ -114,8 +178,6 @@ where
             tx,
             Arc::new(client),
             tts,
-            self.mcp_host.clone(),
-            self.history.clone(),
         )));
         if let Some(round) = &mut self.current_round {
             round.start().await;

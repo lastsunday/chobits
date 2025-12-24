@@ -17,6 +17,7 @@ use rmcp::transport::{
     StreamableHttpClientTransport, streamable_http_client::StreamableHttpClientTransportConfig,
 };
 use std::sync::Arc;
+use tokio::sync::Mutex;
 use tokio_stream::StreamExt;
 use tracing::{error, info};
 use tracing_test::traced_test;
@@ -173,7 +174,7 @@ async fn test_chat_mcp() -> anyhow::Result<()> {
     let system_prompt = "".to_string();
     let client = client::ClientBuilder::new()
         .with_model(Arc::new(model))
-        .with_mcp_host(Arc::new(Box::new(union_mcp_host)))
+        .with_mcp_host(Arc::new(Mutex::new(union_mcp_host)))
         .build()
         .with_preamble(Some(system_prompt));
     // let request = ChatRequest {

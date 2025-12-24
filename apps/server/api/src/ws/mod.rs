@@ -10,10 +10,12 @@ pub mod vad;
 
 use crate::{
     AppState, config,
+    mcp::mcp_host::UnionMcpHost,
     ws::{
         asr::asr_cache::AsrCache,
+        llm::LlmFactory,
         message_converter::convert_to_frame,
-        session::{Session, listener::DefaultListener},
+        session::{SessionBuilder, SessionConfig, listener::DefaultListener},
         vad::vad_cache::VadCache,
     },
 };
@@ -24,6 +26,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use axum_extra::{TypedHeader, headers};
+use framework::id::gen_id;
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
 use serde::Serialize;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
@@ -82,13 +85,31 @@ where
     W: Sink<Message> + Unpin + Send + 'static,
     R: Stream<Item = Result<Message, axum::Error>> + Unpin + Send + 'static,
 {
-    let vad = Arc::new(Mutex::new(VadCache::create_vad()));
-    let asr = Arc::new(Mutex::new(AsrCache::global().instance.clone()));
-    let close_connection_no_voice_time = config::get().logic().close_connection_no_voice_time();
-    let mut session = Session::new(
-        Box::new(DefaultListener::new(vad, asr.clone())),
-        Some(close_connection_no_voice_time),
-    );
+    let config = SessionConfig {
+        close_connection_no_voice_time: Some(
+            config::get().logic().close_connection_no_voice_time(),
+        ),
+    };
+    let id = gen_id();
+    let mcp_host = UnionMcpHost::new(Some(id));
+    let mut session = SessionBuilder::new()
+        .with_listener(Box::new(DefaultListener::new(
+            Arc::new(Mutex::new(VadCache::create_vad())),
+            Arc::new(Mutex::new(AsrCache::global().instance.clone())),
+        )))
+        .with_model(LlmFactory::global().default())
+        .with_mcp_host(Arc::new(Mutex::new(mcp_host)))
+        .with_config(config)
+        .build();
+    let session_id = session.id.clone();
+    if let Err(e) = session.start().await {
+        error!("{}", e);
+        let result = write.close().await;
+        if result.is_err() {
+            info!("write close failure");
+        }
+        return;
+    }
     let mut output = session.output_frame().await;
     tokio::spawn(async move {
         while let Some(data) = output.next().await {
@@ -180,25 +201,24 @@ where
                 && let Some(item) = result.continue_value()
             {
                 match item {
-                    Some(frame) => {
-                        match frame {
-                            frame::Frame::Abort(abort_message) => {
-                                info!("abort message = {:?}", abort_message);
-                                session.stop().await;
-                            }
-                            frame::Frame::Ping { data } => {
-                                // TODO: log session id
-                                info!("ping,len = {}", data.len());
-                            }
-                            frame::Frame::Pong { data } => {
-                                // TODO: log session id
-                                info!("pong,len = {}", data.len());
-                            }
-                            _ => {
-                                session.accept_frame(&frame).await;
-                            }
+                    Some(frame) => match frame {
+                        frame::Frame::Abort(abort_message) => {
+                            info!(
+                                "session_id = {},abort message = {:?}",
+                                session_id, abort_message
+                            );
+                            session.stop().await;
                         }
-                    }
+                        frame::Frame::Ping { data } => {
+                            info!("session_id = {},ping,len = {}", session_id, data.len());
+                        }
+                        frame::Frame::Pong { data } => {
+                            info!("session_id = {},pong,len = {}", session_id, data.len());
+                        }
+                        _ => {
+                            session.accept_frame(&frame).await;
+                        }
+                    },
                     None => {
                         info!("unkonw continue message");
                     }

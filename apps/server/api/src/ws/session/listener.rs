@@ -2,22 +2,19 @@ use crate::{
     config,
     ws::{asr::Asr, common::ModelError, vad::Vad},
 };
+use async_trait::async_trait;
 use chrono::Local;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::info;
 
-pub trait Listener {
-    fn listen(&mut self, data: &[u8]) -> impl std::future::Future<Output = ()> + Send;
+#[async_trait]
+pub trait Listener: Send + Sync {
+    async fn listen(&mut self, data: &[u8]);
     fn set_state(&mut self, state: ListenState);
     fn get_state(&self) -> ListenState;
-    fn get_result(
-        &mut self,
-    ) -> impl std::future::Future<Output = core::result::Result<ListenResult, ModelError>> + Send;
-    fn reset(
-        &mut self,
-        silence_voice_timeout: Option<i64>,
-    ) -> impl std::future::Future<Output = ()> + Send;
+    async fn get_result(&mut self) -> core::result::Result<ListenResult, ModelError>;
+    async fn reset(&mut self, silence_voice_timeout: Option<i64>);
 }
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ListenState {
@@ -43,7 +40,7 @@ where
     voice_data: Arc<Mutex<Vec<f32>>>,
     vad: Arc<Mutex<V>>,
     asr: Arc<Mutex<A>>,
-    decoder: opus::Decoder,
+    decoder: Arc<Mutex<opus::Decoder>>,
     pub state: ListenState,
     silence_voice_timeout: Option<i64>,
     latest_speaking_time: Option<i64>,
@@ -57,7 +54,9 @@ where
     pub fn new(vad: Arc<Mutex<V>>, asr: Arc<Mutex<A>>) -> Self {
         let audio_config = config::get().audio();
         let sample_rate: u32 = audio_config.input_sample_rate();
-        let decoder = opus::Decoder::new(sample_rate, opus::Channels::Mono).unwrap();
+        let decoder = Arc::new(Mutex::new(
+            opus::Decoder::new(sample_rate, opus::Channels::Mono).unwrap(),
+        ));
         Self {
             vad,
             asr,
@@ -71,6 +70,7 @@ where
     }
 }
 
+#[async_trait]
 impl<V, A> Listener for DefaultListener<V, A>
 where
     V: Vad + 'static,
@@ -93,10 +93,8 @@ where
             let frame_size =
                 ((sample_rate as u64 * channel as u64 * frame_duration) / 1000) as usize;
             let mut samples = vec![0f32; frame_size];
-            let len = self
-                .decoder
-                .decode_float(&data, &mut samples, false)
-                .unwrap();
+            let mut decoder = self.decoder.lock().await;
+            let len = decoder.decode_float(&data, &mut samples, false).unwrap();
             let mut temp_voice_data = temp_voice_data.lock().await;
             temp_voice_data.append(&mut samples[..len].to_vec());
             let mut vad = vad.lock().await;

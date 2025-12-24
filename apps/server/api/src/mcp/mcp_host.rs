@@ -26,7 +26,7 @@ pub trait McpHost: Send + Sync {
 
 pub struct UnionMcpHost {
     pub session_id: Option<String>,
-    device_mcp_client: DeviceMcpClient,
+    pub device_mcp_client: DeviceMcpClient,
     mcp_client_list: Vec<Arc<dyn McpClient>>,
     // function_name_and_client_map: HashMap<String, Box<dyn McpClient>>,
     // TODO: map for function name and mcp client ref
@@ -41,6 +41,7 @@ impl McpHost for UnionMcpHost {
     async fn get_tool(&self) -> anyhow::Result<Vec<ToolDefinition>> {
         // TODO: refactor to &Vec::<ToolDefinition> ?
         let mut tools = Vec::<ToolDefinition>::new();
+        tools.append(&mut self.device_mcp_client.get_tool().await?);
         for item in &self.mcp_client_list {
             let mut sub_items = item.get_tool().await?;
             tools.append(&mut sub_items);

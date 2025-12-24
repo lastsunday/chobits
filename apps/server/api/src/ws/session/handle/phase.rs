@@ -1,7 +1,4 @@
-impl<L> Session<L>
-where
-    L: Listener + Send,
-{
+impl Session {
     async fn handle_phase_hello<'a>(&mut self, frame: &Frame<'a>) {
         match frame {
             Frame::Hello(hello_message) => {
@@ -11,21 +8,14 @@ where
                 {
                     has_mcp = mcp;
                 }
-                if has_mcp {
-                    // TODO: init MCP host
-                    self.mcp_host =
-                        Arc::new(Mutex::new(Some(UnionMcpHost::new(Some(self.id.clone())))));
-                    // TODO: init Server MCP client
-                    // TODO: init Remote Server MCP client
-                }
                 self.handle_connect(hello_message).await;
                 self.phase = Phase::ListenDetect;
                 if has_mcp {
                     let mcp_host = self.mcp_host.clone();
                     let mut mcp_host = mcp_host.lock().await;
-                    let mcp_host = mcp_host.as_mut().expect("mcp host is none");
                     //init Device MCP client
-                    self.request_mcp_initialize(mcp_host, hello_message).await;
+                    self.request_mcp_initialize(&mut mcp_host.device_mcp_client, hello_message)
+                        .await;
                 }
             }
             _ => {
@@ -228,9 +218,10 @@ where
                     self.update_latest_activity_time().await;
                 } else {
                     let latest_activity_time = self.get_latest_activity_time().await;
-                    if let (Some(latest_activity_time), Some(close_connection_no_voice_time)) =
-                        (latest_activity_time, self.close_connection_no_voice_time)
-                    {
+                    if let (Some(latest_activity_time), Some(close_connection_no_voice_time)) = (
+                        latest_activity_time,
+                        self.config.close_connection_no_voice_time,
+                    ) {
                         let offset_time = Local::now().timestamp_millis() - latest_activity_time;
                         if offset_time >= close_connection_no_voice_time {
                             self.stop().await;
@@ -438,9 +429,10 @@ where
                     self.update_latest_activity_time().await;
                 } else {
                     let latest_activity_time = self.get_latest_activity_time().await;
-                    if let (Some(latest_activity_time), Some(close_connection_no_voice_time)) =
-                        (latest_activity_time, self.close_connection_no_voice_time)
-                    {
+                    if let (Some(latest_activity_time), Some(close_connection_no_voice_time)) = (
+                        latest_activity_time,
+                        self.config.close_connection_no_voice_time,
+                    ) {
                         //connection timeout handle
                         let offset_time = Local::now().timestamp_millis() - latest_activity_time;
                         // info!("offset_time = {}", offset_time);

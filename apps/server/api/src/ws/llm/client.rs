@@ -16,7 +16,10 @@ use rig::{
     message::{AssistantContent, Message, Reasoning, Text, ToolCall, UserContent},
     streaming::{StreamedAssistantContent, StreamingCompletionResponse},
 };
-use tokio::sync::mpsc::{Sender, channel};
+use tokio::sync::{
+    Mutex,
+    mpsc::{Sender, channel},
+};
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::error;
 
@@ -28,7 +31,7 @@ pub struct Client {
     temperature: Option<f64>,
     max_tokens: Option<u64>,
 
-    mcp_host: Option<Arc<Box<dyn McpHost>>>,
+    mcp_host: Option<Arc<Mutex<dyn McpHost>>>,
 }
 
 pub struct ChatRequest {
@@ -89,6 +92,7 @@ impl Client {
             let output = block_on(async move {
                 let tools = {
                     if let Some(mcp_host) = &mcp_host {
+                        let mcp_host = mcp_host.lock().await;
                         mcp_host.get_tool().await?
                     } else {
                         vec![]
@@ -127,6 +131,7 @@ impl Client {
                                                     function,
                                                 }) => {
                                                     if let Some(mcp_host) = mcp_host.clone() {
+                                                        let mcp_host = mcp_host.lock().await;
                                                         let result = mcp_host
                                                             .call_tool(ToolCall {
                                                                 id: id.clone(),
@@ -264,7 +269,7 @@ pub async fn handle_response(
 
 pub struct ClientBuilder {
     model: Arc<Box<dyn Model>>,
-    mcp_host: Option<Arc<Box<dyn McpHost>>>,
+    mcp_host: Option<Arc<Mutex<dyn McpHost>>>,
 }
 
 impl ClientBuilder {
@@ -277,7 +282,7 @@ impl ClientBuilder {
         self
     }
 
-    pub fn with_mcp_host(mut self, mcp_host: Arc<Box<dyn McpHost>>) -> ClientBuilder {
+    pub fn with_mcp_host(mut self, mcp_host: Arc<Mutex<dyn McpHost>>) -> ClientBuilder {
         self.mcp_host = Some(mcp_host);
         self
     }

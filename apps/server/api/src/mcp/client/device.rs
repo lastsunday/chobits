@@ -6,10 +6,10 @@ use rig::{
     message::{ToolCall, ToolResult},
 };
 use rmcp::model::{
-    CallToolRequestParam, CallToolResult, ClientCapabilities, ConstString, Implementation,
-    InitializeRequest, InitializeRequestParam, InitializeResult, JsonObject, JsonRpcMessage,
-    JsonRpcRequest, JsonRpcVersion2_0, ListToolsRequest, ListToolsResult, PaginatedRequestParam,
-    ProtocolVersion, Request, RequestId, Tool, object,
+    ClientCapabilities, ConstString, Implementation, InitializeRequest, InitializeRequestParam,
+    InitializeResult, JsonObject, JsonRpcMessage, JsonRpcRequest, JsonRpcVersion2_0,
+    ListToolsRequest, ListToolsResult, PaginatedRequestParam, ProtocolVersion, Request, RequestId,
+    Tool, object,
 };
 use serde::Serialize;
 use service::chobits::message::mcp::McpRequest;
@@ -35,7 +35,15 @@ pub struct DeviceMcpClient {
 #[async_trait]
 impl McpClient for DeviceMcpClient {
     async fn get_tool(&self) -> anyhow::Result<Vec<ToolDefinition>> {
-        todo!()
+        let mut result = vec![];
+        for tool in &self.tools {
+            result.push(ToolDefinition {
+                name: tool.name.to_string(),
+                description: tool.description.clone().unwrap_or_default().to_string(),
+                parameters: serde_json::to_value(tool.input_schema.clone())?,
+            });
+        }
+        Ok(result)
     }
 
     // TODO:
