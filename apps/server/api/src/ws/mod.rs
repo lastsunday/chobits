@@ -10,7 +10,10 @@ pub mod vad;
 
 use crate::{
     AppState, config,
-    mcp::mcp_host::UnionMcpHost,
+    mcp::{
+        client::server::ServerMcpClient,
+        mcp_host::{McpHost, UnionMcpHost},
+    },
     ws::{
         asr::asr_cache::AsrCache,
         llm::LlmFactory,
@@ -28,6 +31,9 @@ use axum::{
 use axum_extra::{TypedHeader, headers};
 use framework::id::gen_id;
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
+use rmcp::transport::{
+    StreamableHttpClientTransport, streamable_http_client::StreamableHttpClientTransportConfig,
+};
 use serde::Serialize;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
@@ -80,6 +86,14 @@ where
     write.send(Message::Text(result.into())).await.is_err()
 }
 
+async fn create_server_mcp_client(uri: String) -> anyhow::Result<ServerMcpClient> {
+    let config = StreamableHttpClientTransportConfig::with_uri(uri);
+    let transport = StreamableHttpClientTransport::from_config(config);
+    let mut server_mcp_client = ServerMcpClient::new(transport).await?;
+    server_mcp_client.init().await?;
+    Ok(server_mcp_client)
+}
+
 pub async fn handle_socket<W, R>(mut write: W, mut read: R)
 where
     W: Sink<Message> + Unpin + Send + 'static,
@@ -91,8 +105,21 @@ where
         ),
     };
     let id = gen_id();
-    let mcp_host = UnionMcpHost::new(Some(id));
+    let mut mcp_host = UnionMcpHost::new(Some(id.clone()));
+    let uri_list = config::get().mcp().uri_list();
+    for uri in uri_list {
+        let server_mcp_client = create_server_mcp_client(uri).await;
+        match server_mcp_client {
+            Ok(server_mcp_client) => {
+                mcp_host.add_client(Box::new(server_mcp_client)).await;
+            }
+            Err(e) => {
+                error!("{:?}", e);
+            }
+        }
+    }
     let mut session = SessionBuilder::new()
+        .with_id(id.clone())
         .with_listener(Box::new(DefaultListener::new(
             Arc::new(Mutex::new(VadCache::create_vad())),
             Arc::new(Mutex::new(AsrCache::global().instance.clone())),
