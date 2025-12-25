@@ -1,8 +1,8 @@
+use super::super::frame::{FrameError, FrameResult};
 use crate::config;
-use crate::ws::frame::{FrameError, FrameResult};
-use crate::ws::llm::client::{ChatRequest, Client};
-use crate::ws::tts::Tts;
-use crate::ws::util::llm::{EMOJI_MAP, analyze_emotion};
+use crate::llm::client::{ChatRequest, Client};
+use crate::tts::Tts;
+use crate::util::llm::{EMOJI_MAP, analyze_emotion};
 use anyhow::Context;
 use core::result::Result;
 use framework::id::gen_id;

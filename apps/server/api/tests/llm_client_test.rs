@@ -1,13 +1,13 @@
 use api::{
+    llm::{
+        LlmFactory,
+        client::{self, ChatRequest, ClientBuilder},
+    },
     mcp::{
         client::server::ServerMcpClient,
         mcp_host::{McpHost, UnionMcpHost},
     },
     setup_mcp,
-    ws::llm::{
-        LlmFactory,
-        client::{self, ChatRequest, ClientBuilder},
-    },
 };
 use rig::{
     OneOrMany,

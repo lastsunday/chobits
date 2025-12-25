@@ -10,7 +10,7 @@ use candle_core::{DType, Device, Tensor};
 use candle_onnx::onnx::ModelProto;
 use tracing::info;
 
-use crate::ws::common::{ModelError, device};
+use crate::common::{ModelError, device};
 
 pub trait Vad: Send + Sync {
     fn accept_waveform(

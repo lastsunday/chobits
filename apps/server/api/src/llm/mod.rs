@@ -4,7 +4,7 @@ pub mod models;
 
 use crate::{
     config,
-    ws::llm::models::{minicpm4::Minicpm4, qwen3::LlmQwen},
+    llm::models::{minicpm4::Minicpm4, qwen3::LlmQwen},
 };
 use async_trait::async_trait;
 use rig::{

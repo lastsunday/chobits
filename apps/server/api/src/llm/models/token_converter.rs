@@ -2,7 +2,7 @@ use framework::id::gen_id;
 use rig::streaming::RawStreamingChoice;
 use serde::{Deserialize, Serialize};
 
-use crate::ws::common::ModelError;
+use crate::common::ModelError;
 
 const THINK_TAG_NAME: &str = r#"think"#;
 const TOOL_CALL_TAG_NAME: &str = r#"tool_call"#;

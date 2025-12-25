@@ -1,4 +1,4 @@
-use api::ws::{
+use api::{
     common::ModelError,
     llm::{LlmFactory, chat::Chat},
 };

@@ -1,5 +1,5 @@
-use crate::ws::common::ModelError;
-use crate::ws::tts::{Tts, TtsData, TtsError, encode_sample_to_tts_packet};
+use crate::common::ModelError;
+use crate::tts::{Tts, TtsData, TtsError, encode_sample_to_tts_packet};
 use async_trait::async_trait;
 use futures::Stream;
 use futures::executor::block_on;

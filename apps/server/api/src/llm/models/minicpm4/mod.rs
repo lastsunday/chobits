@@ -1,4 +1,4 @@
-use crate::ws::{
+use crate::{
     common::ModelError,
     llm::{Model, models::token_converter::TokenConverter},
 };

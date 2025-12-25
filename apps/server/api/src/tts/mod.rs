@@ -1,8 +1,8 @@
 pub mod model;
 
+use self::model::voxcpm::TtsVoxCPM;
+use crate::common::ModelError;
 use crate::config;
-use crate::ws::common::ModelError;
-use crate::ws::tts::model::voxcpm::TtsVoxCPM;
 use async_trait::async_trait;
 use futures::Stream;
 use model::kokoro::TtsKokoro;

@@ -1,4 +1,4 @@
-use crate::ws::asr::whisper::{Model, Task, token_id};
+use super::{Model, Task, token_id};
 use anyhow::{Error as E, Result};
 use candle_core::{Device, IndexOp, Tensor};
 use candle_nn::ops::softmax;

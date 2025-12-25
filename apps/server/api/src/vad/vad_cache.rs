@@ -1,6 +1,6 @@
 use std::sync::OnceLock;
 
-use crate::{config, ws::vad::VadSilero};
+use crate::{config, vad::VadSilero};
 
 static VAD_INSTANCE: OnceLock<VadCache> = OnceLock::new();
 

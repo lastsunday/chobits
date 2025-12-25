@@ -1,12 +1,18 @@
+pub mod asr;
 pub mod auth;
 pub mod auth_error;
+pub mod common;
 pub mod config;
 pub mod i18n;
 pub mod index;
+pub mod llm;
 pub mod mcp;
 pub mod ota;
 pub mod ota_data;
 pub mod ota_error;
+pub mod tts;
+pub mod util;
+pub mod vad;
 pub mod ws;
 
 use std::net::SocketAddr;
@@ -43,10 +49,10 @@ use utoipa_scalar::{Scalar, Servable as ScalarServable};
 
 use framework::auth::Jwt;
 
-use crate::ws::asr::asr_cache::AsrCache;
-use crate::ws::llm::LlmFactory;
-use crate::ws::tts::TtsFactory;
-use crate::ws::vad::vad_cache::VadCache;
+use crate::asr::asr_cache::AsrCache;
+use crate::llm::LlmFactory;
+use crate::tts::TtsFactory;
+use crate::vad::vad_cache::VadCache;
 
 #[macro_use]
 extern crate rust_i18n;

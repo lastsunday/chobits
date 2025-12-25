@@ -1,15 +1,12 @@
 pub mod asr_cache;
 pub mod whisper;
 
+use crate::common::{ModelError, device};
 use candle_core::{Device, Tensor};
 use candle_nn::VarBuilder;
 use candle_transformers::models::whisper::{self as m, Config, audio};
 use tokenizers::Tokenizer;
-
-use crate::ws::{
-    asr::whisper::{Model, Task, decoder::Decoder, multilingual::detect_language},
-    common::{ModelError, device},
-};
+use whisper::{Model, Task, decoder::Decoder, multilingual::detect_language};
 
 pub trait Asr: Send + Sync {
     fn transcribe(

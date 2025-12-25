@@ -1,4 +1,4 @@
-use crate::ws::asr::whisper::token_id;
+use super::token_id;
 use candle_core::{D, IndexOp, Tensor};
 use candle_transformers::models::whisper::{self as m};
 use tokenizers::Tokenizer;

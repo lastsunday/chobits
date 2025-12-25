@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use api::ws::llm::chat::Chat;
+    use api::llm::chat::Chat;
     use tracing::info;
     use tracing_test::traced_test;
 

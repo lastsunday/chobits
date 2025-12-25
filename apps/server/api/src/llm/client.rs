@@ -1,11 +1,9 @@
 use std::{sync::Arc, thread};
 
 use crate::{
+    common::ModelError,
+    llm::{DummyModel, Model, chat::Chat},
     mcp::mcp_host::McpHost,
-    ws::{
-        common::ModelError,
-        llm::{DummyModel, Model, chat::Chat},
-    },
 };
 use framework::id::gen_id;
 use futures::StreamExt;

@@ -1,4 +1,4 @@
-use crate::{config, ws::asr::AsrWhisper};
+use crate::{asr::AsrWhisper, config};
 use std::sync::OnceLock;
 
 static INSTANCE: OnceLock<AsrCache> = OnceLock::new();
