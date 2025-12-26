@@ -38,17 +38,21 @@ pub enum TtsError {
 static INSTANCE: OnceLock<TtsFactory> = OnceLock::new();
 
 pub struct TtsFactory {
-    pub default_tts: Arc<Box<dyn Tts>>,
+    default_instance: Arc<Box<dyn Tts>>,
 }
 
 impl TtsFactory {
-    pub fn new(default_tts: Arc<Box<dyn Tts>>) -> Self {
-        Self { default_tts }
+    pub fn new(default_instance: Arc<Box<dyn Tts>>) -> Self {
+        Self { default_instance }
     }
 
     pub async fn init() -> Result<&'static Self, anyhow::Error> {
         let tts = Self::create_model().await?;
         Ok(INSTANCE.get_or_init(|| -> Self { Self::new(Arc::new(tts)) }))
+    }
+
+    pub fn default(&self) -> Arc<Box<dyn Tts>> {
+        self.default_instance.clone()
     }
 
     pub async fn create_model() -> Result<Box<dyn Tts>, anyhow::Error> {

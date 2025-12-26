@@ -172,7 +172,7 @@ impl Session {
             .with_mcp_host(self.mcp_host.clone())
             .build()
             .with_chat_history(Some(self.history.lock().await.chat_history.clone()));
-        let tts = TtsFactory::global().default_tts.clone();
+        let tts = TtsFactory::global().default().clone();
         self.current_round = Some(Box::new(Round::new(
             self.id.clone(),
             tx,
