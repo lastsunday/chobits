@@ -8,7 +8,9 @@ use std::{
 };
 
 use api::{
-    AppState, config,
+    AppState,
+    asr::AsrFactory,
+    config,
     llm::LlmFactory,
     mcp::{
         client::server::ServerMcpClient,
@@ -21,7 +23,6 @@ use api::{
 };
 
 use api::{
-    asr::asr_cache::AsrCache,
     vad::vad_cache::VadCache,
     ws::frame::{Frame, FrameResult},
     ws::session::{Session, listener::DefaultListener},
@@ -894,7 +895,7 @@ async fn create_session()
     VadCache::init().await;
     info!("init vad cahce successfully");
     info!("init asr cahce");
-    AsrCache::init().await;
+    AsrFactory::init().await;
     info!("init asr cahce successfully");
     tracing::info!("init llm factory");
     LlmFactory::init().await;
@@ -932,7 +933,7 @@ async fn create_session()
     let session = SessionBuilder::new()
         .with_listener(Box::new(DefaultListener::new(
             Arc::new(Mutex::new(VadCache::create_vad())),
-            Arc::new(Mutex::new(AsrCache::global().instance.clone())),
+            AsrFactory::global().default(),
         )))
         .with_id(id.clone())
         .with_model(LlmFactory::global().default())

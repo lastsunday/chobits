@@ -4,7 +4,7 @@ pub mod session;
 
 use crate::{
     AppState,
-    asr::asr_cache::AsrCache,
+    asr::AsrFactory,
     config,
     llm::LlmFactory,
     mcp::{
@@ -116,7 +116,7 @@ where
         .with_id(id.clone())
         .with_listener(Box::new(DefaultListener::new(
             Arc::new(Mutex::new(VadCache::create_vad())),
-            Arc::new(Mutex::new(AsrCache::global().instance.clone())),
+            AsrFactory::global().default().clone(),
         )))
         .with_model(LlmFactory::global().default())
         .with_mcp_host(Arc::new(Mutex::new(mcp_host)))

@@ -49,7 +49,7 @@ use utoipa_scalar::{Scalar, Servable as ScalarServable};
 
 use framework::auth::Jwt;
 
-use crate::asr::asr_cache::AsrCache;
+use crate::asr::AsrFactory;
 use crate::llm::LlmFactory;
 use crate::tts::TtsFactory;
 use crate::vad::vad_cache::VadCache;
@@ -81,7 +81,7 @@ async fn start() -> anyhow::Result<()> {
     VadCache::init().await;
     tracing::info!("init vad cahce successfully");
     tracing::info!("init asr cahce");
-    AsrCache::init().await;
+    AsrFactory::init().await;
     tracing::info!("init asr cahce successfully");
     tracing::info!("init llm factory");
     LlmFactory::init().await;
