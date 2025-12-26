@@ -9,7 +9,7 @@ use tokenizers::Tokenizer;
 
 use self::decoder::Decoder;
 use crate::{
-    asr::{Asr, RecognizerResult, whisper::multilingual::detect_language},
+    asr::{Asr, RecognizerResult, model::whisper::multilingual::detect_language},
     common::{ModelError, device},
 };
 
@@ -78,13 +78,12 @@ pub struct AsrWhisper {
 }
 
 impl AsrWhisper {
-    pub fn new(
-        model_path: String,
-        config_path: String,
-        tokenizer_path: String,
-    ) -> Result<Self, ModelError> {
+    pub fn new(path: String) -> Result<Self, ModelError> {
         let start = std::time::Instant::now();
         let device = device(false)?;
+        let model_path = format!("{}model.safetensors", path);
+        let config_path = format!("{}config.json", path);
+        let tokenizer_path = format!("{}tokenizer.json", path);
         let config: Config =
             serde_json::from_str(&std::fs::read_to_string(config_path.clone()).map_err(|_e| {
                 ModelError::ModelFileNotFound(format!(
@@ -95,7 +94,7 @@ impl AsrWhisper {
             .map_err(|_e| {
                 ModelError::ModelInitFailure(format!(
                     "file convert json failure path = {}",
-                    config_path
+                    config_path.clone()
                 ))
             })?;
         let tokenizer = Tokenizer::from_file(tokenizer_path.clone()).map_err(|_e| {
@@ -130,7 +129,7 @@ impl Asr for AsrWhisper {
         &mut self,
         _sample_rate: u32,
         samples: &[f32],
-    ) -> Result<super::RecognizerResult, ModelError> {
+    ) -> Result<RecognizerResult, ModelError> {
         let device = &self.device;
         let mel_filters = &self.mel_filters;
         let config = &self.config;

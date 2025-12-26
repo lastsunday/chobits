@@ -1,11 +1,11 @@
-pub mod whisper;
+pub mod model;
 
 use crate::common::ModelError;
 use crate::config;
 use async_trait::async_trait;
+use model::whisper::AsrWhisper;
 use std::sync::{Arc, OnceLock};
 use tokio::sync::Mutex;
-use whisper::AsrWhisper;
 
 #[async_trait]
 pub trait Asr: Send + Sync {
@@ -49,13 +49,6 @@ impl AsrFactory {
     pub fn create_model() -> Box<dyn Asr> {
         let app_config = config::get();
         let config = app_config.asr();
-        Box::new(
-            AsrWhisper::new(
-                config.model().to_string(),
-                config.config().to_string(),
-                config.tokens().to_string(),
-            )
-            .unwrap(),
-        )
+        Box::new(AsrWhisper::new(config.path().to_string()).unwrap())
     }
 }
