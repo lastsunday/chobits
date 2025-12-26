@@ -60,7 +60,7 @@ use common::{router_client::RouterClient, setup_database, tear_down};
 #[traced_test]
 #[ignore]
 /// hello paramter input and output the hello result
-/// cargo test --test session_test -- test_chat_flow_hello --ignored --show-output
+/// cargo test --test session_test -- test_chat_flow_hello --ignored --nocapture
 async fn test_chat_flow_hello() -> anyhow::Result<()> {
     let (mut session, container, state) = create_session().await?;
     session.start().await?;
@@ -84,7 +84,7 @@ async fn test_chat_flow_hello() -> anyhow::Result<()> {
 #[traced_test]
 #[ignore]
 /// listen voice by manual mode and output the asr text result
-/// cargo test --test session_test -- test_chat_flow_listen_manual --ignored --show-output
+/// cargo test --test session_test -- test_chat_flow_listen_manual --ignored --nocapture
 async fn test_chat_flow_listen_manual() -> anyhow::Result<()> {
     use std::path::PathBuf;
 
@@ -206,7 +206,7 @@ async fn test_chat_flow_listen_manual() -> anyhow::Result<()> {
 #[traced_test]
 #[ignore]
 /// listen voice by auto mode and output the asr text result
-/// cargo test --test session_test -- test_chat_flow_listen_auto --ignored --show-output
+/// cargo test --test session_test -- test_chat_flow_listen_auto --ignored --nocapture
 async fn test_chat_flow_listen_auto() -> anyhow::Result<()> {
     use std::path::PathBuf;
 
@@ -354,7 +354,7 @@ async fn test_chat_flow_listen_auto() -> anyhow::Result<()> {
 #[traced_test]
 #[ignore]
 /// listen voice by realtime mode and output the asr text result
-/// cargo test --test session_test -- test_chat_flow_listen_realtime --ignored --show-output
+/// cargo test --test session_test -- test_chat_flow_listen_realtime --ignored --nocapture
 async fn test_chat_flow_listen_realtime() -> anyhow::Result<()> {
     use std::path::PathBuf;
 
@@ -492,7 +492,7 @@ async fn test_chat_flow_listen_realtime() -> anyhow::Result<()> {
 #[traced_test]
 #[ignore]
 /// get text message and output the asr text result
-/// cargo test --test session_test -- test_chat_flow_handle_text_message --ignored --show-output
+/// cargo test --test session_test -- test_chat_flow_handle_text_message --ignored --nocapture
 async fn test_chat_flow_handle_text_message() -> anyhow::Result<()> {
     let (mut session, container, state) = create_session().await?;
     let session_id = session.id.clone();
@@ -551,7 +551,7 @@ async fn test_chat_flow_handle_text_message() -> anyhow::Result<()> {
 #[traced_test]
 #[ignore]
 /// when a round running and has a break event,the output stream will stop the original output
-/// cargo test --test session_test -- test_chat_flow_break --ignored --show-output
+/// cargo test --test session_test -- test_chat_flow_break --ignored --nocapture
 async fn test_chat_flow_break() -> anyhow::Result<()> {
     let (mut session, container, state) = create_session().await?;
     let session_id = session.id.clone();
@@ -624,7 +624,7 @@ async fn test_chat_flow_break() -> anyhow::Result<()> {
 #[ignore]
 /// Shell command:
 /// ``` shell
-/// cargo test --test session_test -- test_mcp_flow_server_client --ignored --show-output
+/// cargo test --test session_test -- test_mcp_flow_server_client --ignored --nocapture
 /// ```
 /// 1. [Device -> Server] hello request
 /// 2. [Server -> Device] hello response
@@ -658,7 +658,7 @@ async fn test_mcp_flow_server_client() -> anyhow::Result<()> {
 #[ignore]
 /// Shell command:
 /// ``` shell
-/// cargo test --test session_test -- test_mcp_flow_device_client --ignored --show-output
+/// cargo test --test session_test -- test_mcp_flow_device_client --ignored --nocapture
 /// ```
 async fn test_mcp_flow_device_client() -> anyhow::Result<()> {
     test_mcp_flow(String::from("get device status")).await

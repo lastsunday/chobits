@@ -6,7 +6,7 @@ mod tests {
 
     #[tokio::test]
     #[traced_test]
-    /// cargo test --test chat_test -- tests::test_chat_sentence --show-output
+    /// cargo test --test chat_test -- tests::test_chat_sentence --nocapture
     async fn test_chat_sentence() {
         let mut chat = Chat::new();
         let sentences = chat.accept_text(r#"Hello,World!My name is"#);
@@ -19,7 +19,7 @@ mod tests {
 
     #[tokio::test]
     #[traced_test]
-    /// cargo test --test chat_test -- tests::test_chat_sentence_new_line --show-output
+    /// cargo test --test chat_test -- tests::test_chat_sentence_new_line --nocapture
     async fn test_chat_sentence_new_line() {
         let mut chat = Chat::new();
         let sentences = chat.accept_text(
