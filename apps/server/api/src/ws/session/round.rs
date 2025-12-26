@@ -104,6 +104,7 @@ impl Round {
                 .is_err()
             {
                 info!("send stt result failure");
+                return;
             }
             // let mut history = history.lock().await;
             // history.chat_history.push(Message::User {

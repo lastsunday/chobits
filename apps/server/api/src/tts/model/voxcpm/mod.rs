@@ -113,6 +113,7 @@ impl Tts for TtsVoxCPM {
                                             if let Err(e) = tx.send(Err(TtsError::Encode)).await {
                                                 tracing::error!("send error failure = {}", e);
                                             }
+                                            break;
                                         }
                                     }
                                 }
@@ -121,6 +122,7 @@ impl Tts for TtsVoxCPM {
                                     if let Err(e) = tx.send(Err(TtsError::Encode)).await {
                                         tracing::error!("send error failure = {}", e);
                                     }
+                                    break;
                                 }
                             }
                         }
@@ -129,6 +131,7 @@ impl Tts for TtsVoxCPM {
                             if let Err(e) = tx.send(Err(TtsError::Text)).await {
                                 tracing::error!("send error failure = {}", e);
                             }
+                            break;
                         }
                     }
                 }

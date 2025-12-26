@@ -75,7 +75,7 @@ async fn test_chat_flow_hello() -> anyhow::Result<()> {
         FrameResult::HelloResult(..)
     ));
     session.stop().await;
-    let _ = &state.conn.close().await.unwrap();
+    let _ = &state.conn.close().await?;
     tear_down(&container).await;
     Ok(())
 }
@@ -164,8 +164,8 @@ async fn test_chat_flow_listen_manual() -> anyhow::Result<()> {
                         panic!("unexpected frame result");
                     }
                 },
-                Err(_) => {
-                    break;
+                Err(e) => {
+                    panic!("{:?}", e);
                 }
             }
         }
@@ -195,9 +195,9 @@ async fn test_chat_flow_listen_manual() -> anyhow::Result<()> {
             ..Default::default()
         }))
         .await;
-    join_handle.await.unwrap();
+    join_handle.await?;
     session.stop().await;
-    let _ = &state.conn.close().await.unwrap();
+    let _ = &state.conn.close().await?;
     tear_down(&container).await;
     Ok(())
 }
@@ -343,9 +343,9 @@ async fn test_chat_flow_listen_auto() -> anyhow::Result<()> {
             })
             .await;
     }
-    join_handle.await.unwrap();
+    join_handle.await?;
     session.stop().await;
-    let _ = &state.conn.close().await.unwrap();
+    let _ = &state.conn.close().await?;
     tear_down(&container).await;
     Ok(())
 }
@@ -481,9 +481,9 @@ async fn test_chat_flow_listen_realtime() -> anyhow::Result<()> {
             })
             .await;
     }
-    join_handle.await.unwrap();
+    join_handle.await?;
     session.stop().await;
-    let _ = &state.conn.close().await.unwrap();
+    let _ = &state.conn.close().await?;
     tear_down(&container).await;
     Ok(())
 }
@@ -540,9 +540,9 @@ async fn test_chat_flow_handle_text_message() -> anyhow::Result<()> {
             ..Default::default()
         }))
         .await;
-    join_handle.await.unwrap();
+    join_handle.await?;
     session.stop().await;
-    let _ = &state.conn.close().await.unwrap();
+    let _ = &state.conn.close().await?;
     tear_down(&container).await;
     Ok(())
 }
@@ -612,9 +612,9 @@ async fn test_chat_flow_break() -> anyhow::Result<()> {
             ..Default::default()
         }))
         .await;
-    join_handle.await.unwrap();
+    join_handle.await?;
     session.stop().await;
-    let _ = &state.conn.close().await.unwrap();
+    let _ = &state.conn.close().await?;
     tear_down(&container).await;
     Ok(())
 }
@@ -884,7 +884,7 @@ async fn test_mcp_flow(text: String) -> anyhow::Result<()> {
     }
     // join_handle.await.unwrap();
     session.stop().await;
-    let _ = &state.conn.close().await.unwrap();
+    let _ = &state.conn.close().await?;
     tear_down(&container).await;
     Ok(())
 }
