@@ -4,7 +4,7 @@ use api::{common::ModelError, tts::TtsFactory};
 use futures::{Stream, executor::block_on};
 use tokio::sync::mpsc::channel;
 use tokio_stream::{StreamExt, wrappers::ReceiverStream};
-use tracing::{error, info};
+use tracing::info;
 use tracing_test::traced_test;
 use wavers::write;
 
@@ -30,7 +30,7 @@ async fn test_tts_default() -> anyhow::Result<()> {
                 audio.append(&mut data.audio.clone());
             }
             Err(e) => {
-                error!("{:?}", e);
+                panic!("{:?}", e);
             }
         }
     }

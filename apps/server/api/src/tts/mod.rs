@@ -29,8 +29,8 @@ pub struct TtsData {
 pub enum TtsError {
     #[error("init error")]
     Init,
-    #[error("encode error")]
-    Encode,
+    #[error("encode error {0}")]
+    Encode(String),
     #[error("text error")]
     Text,
 }

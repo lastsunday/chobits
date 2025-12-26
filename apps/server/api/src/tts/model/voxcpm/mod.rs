@@ -110,7 +110,9 @@ impl Tts for TtsVoxCPM {
                                                 "tts tensor to sample error = {}",
                                                 e.to_string()
                                             );
-                                            if let Err(e) = tx.send(Err(TtsError::Encode)).await {
+                                            if let Err(e) =
+                                                tx.send(Err(TtsError::Encode(e.to_string()))).await
+                                            {
                                                 tracing::error!("send error failure = {}", e);
                                             }
                                             break;
@@ -119,7 +121,9 @@ impl Tts for TtsVoxCPM {
                                 }
                                 Err(e) => {
                                     tracing::error!("tts synth error = {}", e.to_string());
-                                    if let Err(e) = tx.send(Err(TtsError::Encode)).await {
+                                    if let Err(e) =
+                                        tx.send(Err(TtsError::Encode(e.to_string()))).await
+                                    {
                                         tracing::error!("send error failure = {}", e);
                                     }
                                     break;
