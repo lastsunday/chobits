@@ -52,7 +52,7 @@ use framework::auth::Jwt;
 use crate::asr::AsrFactory;
 use crate::llm::LlmFactory;
 use crate::tts::TtsFactory;
-use crate::vad::vad_cache::VadCache;
+use crate::vad::VadFactory;
 
 #[macro_use]
 extern crate rust_i18n;
@@ -74,15 +74,15 @@ async fn start() -> anyhow::Result<()> {
     tracing::info!("Database connected successfully");
     // database schema init or upgrade
     migration::Migrator::up(&conn, None).await?;
-    tracing::info!("init tts cahce");
+    tracing::info!("init tts factory");
     TtsFactory::init().await?;
-    tracing::info!("init tts cahce successfully");
-    tracing::info!("init vad cahce");
-    VadCache::init().await;
-    tracing::info!("init vad cahce successfully");
-    tracing::info!("init asr cahce");
+    tracing::info!("init tts factory successfully");
+    tracing::info!("init vad factory");
+    VadFactory::init().await;
+    tracing::info!("init vad factory successfully");
+    tracing::info!("init asr factory");
     AsrFactory::init().await;
-    tracing::info!("init asr cahce successfully");
+    tracing::info!("init asr factory successfully");
     tracing::info!("init llm factory");
     LlmFactory::init().await;
     tracing::info!("init llm factory successfully");

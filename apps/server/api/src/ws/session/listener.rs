@@ -27,13 +27,10 @@ pub struct ListenResult {
     pub prob: f32,
 }
 
-pub struct DefaultListener<V>
-where
-    V: Vad + 'static,
-{
+pub struct DefaultListener {
     temp_voice_data: Arc<Mutex<Vec<f32>>>,
     voice_data: Arc<Mutex<Vec<f32>>>,
-    vad: Arc<Mutex<V>>,
+    vad: Arc<Mutex<Box<dyn Vad>>>,
     asr: Arc<Mutex<Box<dyn Asr>>>,
     decoder: Arc<Mutex<opus::Decoder>>,
     pub state: ListenState,
@@ -41,11 +38,8 @@ where
     latest_speaking_time: Option<i64>,
 }
 
-impl<V> DefaultListener<V>
-where
-    V: Vad + 'static,
-{
-    pub fn new(vad: Arc<Mutex<V>>, asr: Arc<Mutex<Box<dyn Asr>>>) -> Self {
+impl DefaultListener {
+    pub fn new(vad: Arc<Mutex<Box<dyn Vad>>>, asr: Arc<Mutex<Box<dyn Asr>>>) -> Self {
         let audio_config = config::get().audio();
         let sample_rate: u32 = audio_config.input_sample_rate();
         let decoder = Arc::new(Mutex::new(
@@ -65,10 +59,7 @@ where
 }
 
 #[async_trait]
-impl<V> Listener for DefaultListener<V>
-where
-    V: Vad + 'static,
-{
+impl Listener for DefaultListener {
     async fn listen(&mut self, data: &[u8]) {
         if self.state == ListenState::Idle {
             self.state = ListenState::Listening(false);

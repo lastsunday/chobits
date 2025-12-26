@@ -4,24 +4,21 @@ extern crate intel_mkl_src;
 #[cfg(feature = "accelerate")]
 extern crate accelerate_src;
 
-pub mod vad_cache;
+pub mod model;
+use crate::common::ModelError;
+use crate::config;
+use async_trait::async_trait;
+use model::silero::VadSilero;
+use std::sync::OnceLock;
 
-use candle_core::{DType, Device, Tensor};
-use candle_onnx::onnx::ModelProto;
-use tracing::info;
-
-use crate::common::{ModelError, device};
-
+#[async_trait]
 pub trait Vad: Send + Sync {
-    fn accept_waveform(
-        &mut self,
-        samples: Vec<f32>,
-    ) -> impl Future<Output = Result<(), ModelError>> + Send;
-    fn front(&mut self) -> impl Future<Output = SpeechSegment> + Send;
-    fn is_empty(&mut self) -> impl Future<Output = bool> + Send;
-    fn is_speech(&mut self) -> impl Future<Output = bool> + Send;
-    fn pop(&mut self) -> impl Future<Output = ()> + Send;
-    fn clear(&mut self) -> impl Future<Output = ()> + Send;
+    async fn accept_waveform(&mut self, samples: Vec<f32>) -> Result<(), ModelError>;
+    async fn front(&mut self) -> SpeechSegment;
+    async fn is_empty(&mut self) -> bool;
+    async fn is_speech(&mut self) -> bool;
+    async fn pop(&mut self);
+    async fn clear(&mut self);
 }
 
 #[derive(Debug)]
@@ -30,161 +27,27 @@ pub struct SpeechSegment {
     pub samples: Vec<f32>,
 }
 
-#[derive(Clone)]
-pub struct VadSilero {
-    model: ModelProto,
-    device: Device,
-    // TODO: need refacotr to Vec<Vec<f32>> to adapter front and pop operation
-    samples: Vec<f32>,
-    is_speech: bool,
-    start: i32,
-    total_accept_waveform_samples_len: i32,
-    /// unit ms
-    min_silence_duration: f32,
-    /// unit ms
-    current_silence_duration: f32,
-    prediction_list: Vec<f32>,
-}
+static VAD_INSTANCE: OnceLock<VadFactory> = OnceLock::new();
 
-impl VadSilero {
-    pub fn new(model_path: String) -> core::result::Result<Self, ModelError> {
-        let start = std::time::Instant::now();
-        let device = device(true)?;
-        let model = candle_onnx::read_file(model_path.clone())?;
-        info!("loaded the model in {:?}", start.elapsed());
-        info!("model built");
-        Ok(Self {
-            model,
-            device: device.clone(),
-            samples: Vec::new(),
-            is_speech: false,
-            start: -1,
-            total_accept_waveform_samples_len: 0,
-            min_silence_duration: 1000.0,
-            current_silence_duration: 0.0,
-            prediction_list: Vec::new(),
-        })
-    }
-}
+#[derive(Default)]
+pub struct VadFactory {}
 
-struct State {
-    frame_size: usize,
-    sample_rate: Tensor,
-    state: Tensor,
-    context: Tensor,
-}
-
-impl Vad for VadSilero {
-    async fn accept_waveform(&mut self, samples: Vec<f32>) -> Result<(), ModelError> {
-        //TODO: setting
-        let sample_rate: i64 = 16000;
-        let frame_size: usize = 512;
-        let context_size: usize = 64;
-        let threshold = 0.5;
-
-        let device = &self.device;
-        let model = &self.model;
-        let mut state = State {
-            frame_size,
-            sample_rate: Tensor::new(sample_rate, device)
-                .map_err(|e| ModelError::Tensor(format!("tensor sample rate {}", e)))?,
-            state: Tensor::zeros((2, 1, 128), DType::F32, device)
-                .map_err(|e| ModelError::Tensor(format!("tensor state {}", e)))?,
-            context: Tensor::zeros((1, context_size), DType::F32, device)
-                .map_err(|e| ModelError::Tensor(format!("context {}", e)))?,
-        };
-        let mut res = vec![];
-        if samples.len() < state.frame_size {
-            return Ok(());
-        }
-        let next_context = Tensor::from_slice(
-            &samples[state.frame_size - context_size..],
-            (1, context_size),
-            device,
-        )?;
-        let chunk = Tensor::from_vec(samples.clone(), (1, state.frame_size), device)
-            .map_err(|e| ModelError::Tensor(format!("from vec error {}", e)))?;
-        let chunk = Tensor::cat(&[&state.context, &chunk], 1)
-            .map_err(|e| ModelError::Tensor(format!("cat error {}", e)))?;
-        let inputs = std::collections::HashMap::from_iter([
-            ("input".to_string(), chunk),
-            ("sr".to_string(), state.sample_rate.clone()),
-            ("state".to_string(), state.state.clone()),
-        ]);
-        let out = candle_onnx::simple_eval(model, inputs)
-            .map_err(|e| ModelError::Tensor(format!("simple eval {}", e)))?;
-        let out_names = &model.graph.as_ref().unwrap().output;
-        let output = out.get(&out_names[0].name).unwrap().clone();
-        state.state = out.get(&out_names[1].name).unwrap().clone();
-        assert_eq!(state.state.dims(), &[2, 1, 128]);
-        state.context = next_context;
-        let output = output.flatten_all()?.to_vec1::<f32>()?;
-        assert_eq!(output.len(), 1);
-        let output = output[0];
-        res.push(output);
-        let res_len = res.len() as f32;
-        let prediction = res.iter().sum::<f32>() / res_len;
-
-        // info!("vad prediction = {}", prediction);
-        if !self.is_speech {
-            if prediction > threshold {
-                self.prediction_list.push(prediction);
-            } else {
-                self.clear().await;
-            }
-
-            if !self.prediction_list.is_empty() {
-                self.samples.append(&mut samples.clone());
-            }
-
-            // avoid some noise trigger speech detect
-            if self.prediction_list.len() >= 5 && !self.is_speech {
-                self.is_speech = true;
-                if self.start < 0 {
-                    self.start = self.total_accept_waveform_samples_len;
-                }
-            }
-        } else if prediction >= threshold {
-            self.samples.append(&mut samples.clone());
-        } else {
-            if self.is_speech && self.current_silence_duration <= self.min_silence_duration {
-                self.samples.append(&mut samples.clone());
-            } else {
-                self.clear().await;
-            }
-            self.current_silence_duration += (samples.len() as f32 / sample_rate as f32) * 1000.0;
-        }
-        // info!("vad len = {}", self.prediction_list.len());
-        self.total_accept_waveform_samples_len += samples.len() as i32;
-        Ok(())
+impl VadFactory {
+    pub fn new() -> Self {
+        Self {}
     }
 
-    async fn front(&mut self) -> SpeechSegment {
-        //TODO: get one samples list
-        let samples = self.samples.to_vec();
-        let start = self.start;
-        SpeechSegment { start, samples }
+    pub async fn init() -> &'static Self {
+        VAD_INSTANCE.get_or_init(|| -> Self { Self::new() })
     }
 
-    async fn is_empty(&mut self) -> bool {
-        self.samples.is_empty()
+    pub fn global() -> &'static VadFactory {
+        VAD_INSTANCE.get().unwrap()
     }
 
-    async fn is_speech(&mut self) -> bool {
-        self.is_speech
-    }
-
-    async fn pop(&mut self) {
-        //TODO: pop one samples
-        self.samples.clear();
-    }
-
-    async fn clear(&mut self) {
-        self.samples.clear();
-        self.start = -1;
-        self.is_speech = false;
-        self.current_silence_duration = 0.0;
-        self.total_accept_waveform_samples_len = 0;
-        self.prediction_list.clear();
+    pub fn create_model() -> Box<dyn Vad> {
+        let app_config = config::get();
+        let config = app_config.vad();
+        Box::new(VadSilero::new(String::from(config.path())).unwrap())
     }
 }

@@ -19,11 +19,11 @@ use api::{
     setup_mcp,
     tts::TtsFactory,
     util::audio::pcm_decode,
+    vad::VadFactory,
     ws::session::{SessionBuilder, SessionConfig},
 };
 
 use api::{
-    vad::vad_cache::VadCache,
     ws::frame::{Frame, FrameResult},
     ws::session::{Session, listener::DefaultListener},
 };
@@ -891,18 +891,18 @@ async fn test_mcp_flow(text: String) -> anyhow::Result<()> {
 
 async fn create_session()
 -> Result<(Session, Option<ContainerAsync<Postgres>>, AppState), anyhow::Error> {
-    info!("init vad cahce");
-    VadCache::init().await;
-    info!("init vad cahce successfully");
-    info!("init asr cahce");
+    info!("init vad factory");
+    VadFactory::init().await;
+    info!("init vad factory successfully");
+    info!("init asr factory");
     AsrFactory::init().await;
-    info!("init asr cahce successfully");
+    info!("init asr factory successfully");
     tracing::info!("init llm factory");
     LlmFactory::init().await;
     tracing::info!("init llm factory successfully");
-    tracing::info!("init tts cahce");
+    tracing::info!("init tts factory");
     TtsFactory::init().await?;
-    tracing::info!("init tts cahce successfully");
+    tracing::info!("init tts factory successfully");
 
     let (container, state) = setup_database().await;
 
@@ -932,7 +932,7 @@ async fn create_session()
     };
     let session = SessionBuilder::new()
         .with_listener(Box::new(DefaultListener::new(
-            Arc::new(Mutex::new(VadCache::create_vad())),
+            Arc::new(Mutex::new(VadFactory::create_model())),
             AsrFactory::global().default(),
         )))
         .with_id(id.clone())

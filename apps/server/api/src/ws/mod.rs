@@ -11,7 +11,7 @@ use crate::{
         client::server::ServerMcpClient,
         mcp_host::{McpHost, UnionMcpHost},
     },
-    vad::vad_cache::VadCache,
+    vad::VadFactory,
 };
 
 use axum::{
@@ -115,7 +115,7 @@ where
     let mut session = SessionBuilder::new()
         .with_id(id.clone())
         .with_listener(Box::new(DefaultListener::new(
-            Arc::new(Mutex::new(VadCache::create_vad())),
+            Arc::new(Mutex::new(VadFactory::create_model())),
             AsrFactory::global().default().clone(),
         )))
         .with_model(LlmFactory::global().default())
