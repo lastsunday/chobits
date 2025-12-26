@@ -1,10 +1,10 @@
 pub mod chat;
 pub mod client;
-pub mod models;
+pub mod model;
 
 use crate::{
     config,
-    llm::models::{minicpm4::Minicpm4, qwen3::LlmQwen},
+    llm::model::{minicpm4::Minicpm4, qwen3::LlmQwen},
 };
 use async_trait::async_trait;
 use rig::{

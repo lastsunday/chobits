@@ -1,6 +1,6 @@
 use crate::{
     common::ModelError,
-    llm::{Model, models::token_converter::TokenConverter},
+    llm::{Model, model::token_converter::TokenConverter},
 };
 use aha::models::{GenerateModel, minicpm4::generate::MiniCPMGenerateModel};
 use aha_openai_dive::v1::resources::chat::{

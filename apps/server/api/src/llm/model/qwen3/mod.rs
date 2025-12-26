@@ -9,7 +9,7 @@ pub mod quantized;
 use super::token_output_stream::TokenOutputStream;
 use crate::{
     common::{ModelError, device, format_size},
-    llm::{Model, models::token_converter::TokenConverter},
+    llm::{Model, model::token_converter::TokenConverter},
 };
 use async_trait::async_trait;
 use candle_core::{Device, Tensor, quantized::gguf_file};
@@ -385,7 +385,7 @@ mod tests {
     use tracing::info;
     use tracing_test::traced_test;
 
-    use crate::llm::models::qwen3::convert_request_to_prompt;
+    use crate::llm::model::qwen3::convert_request_to_prompt;
 
     #[tokio::test]
     #[traced_test]
