@@ -35,4 +35,7 @@ pub enum FrameResult {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum FrameError {}
+pub enum FrameError {
+    #[error("tts error {0}")]
+    Tts(String),
+}

@@ -249,6 +249,9 @@ impl Round {
                     }
                     Err(e) => {
                         error!("{:?}", e);
+                        if let Err(e) = tx.send(Err(FrameError::Tts(e.to_string()))).await {
+                            error!("{:?}", e);
+                        }
                         stop_me.store(true, Ordering::Relaxed);
                         break;
                     }
