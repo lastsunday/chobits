@@ -4,16 +4,16 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-axum = { version = "0.8.7", features = ["macros", "ws"] }
-axum-extra = { version = "0.12.2", features = ["typed-header"] }
+axum = { version = "0.8.8", features = ["macros", "ws"] }
+axum-extra = { version = "0.12.3", features = ["typed-header"] }
 tokio = { version = "1.48.0", features = ["full"] }
-tracing = { version = "0.1.41", features = ["async-await"] }
-tracing-subscriber = { version = "0.3.20", features = ["env-filter", "chrono"] }
-config = { version = "0.15.18", features = ["yaml"] }
+tracing = { version = "0.1.44", features = ["async-await"] }
+tracing-subscriber = { version = "0.3.22", features = ["env-filter", "chrono"] }
+config = { version = "0.15.19", features = ["yaml"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_yaml = { version = "0.9.34" }
 anyhow = { version = "1.0.100" }
-sea-orm = { version = "1.1.17", features = [
+sea-orm = { version = "1.1.19", features = [
   "with-chrono",
   "debug-print",
   "sqlx-postgres",
@@ -23,7 +23,7 @@ sea-orm = { version = "1.1.17", features = [
   "macros",
 ] }
 thiserror = { version = "2.0.17" }
-tower-http = { version = "0.6.6", features = [
+tower-http = { version = "0.6.8", features = [
   "trace",
   "timeout",
   "limit",
@@ -34,21 +34,21 @@ tower-http = { version = "0.6.6", features = [
 ] }
 tower-layer = { version = "0.3.3" }
 xid = { version = "1.1.1" }
-bytesize = { version = "2.1.0" }
+bytesize = { version = "2.3.1" }
 validator = { version = "0.20.0", features = ["derive"] }
 axum-valid = { version = "0.24.0", features = ["full_validator"] }
 regex = { version = "1.12.2" }
 bcrypt = { version = "0.17.1" }
-jsonwebtoken = { version = "10.0.0", features = ["rust_crypto"] }
+jsonwebtoken = { version = "10.2.0", features = ["rust_crypto"] }
 utoipa = { version = "5.4.0", features = ["axum_extras", "debug", "chrono"] }
 utoipa-axum = { version = "0.2.0", features = ["debug"] }
 utoipa-scalar = { version = "0.3.0", features = ["axum"] }
-serde_json = "1.0.145"
+serde_json = "1.0.147"
 serde-aux = { version = "4.7.0" }
 http-body-util = "0.1.3"
 mime = "0.3"
 chrono = "0.4.42"
-testcontainers = "0.26.0"
+testcontainers = "0.26.3"
 testcontainers-modules = { version = "0.14.0", features = [
   "postgres",
   "gitea",
@@ -59,12 +59,12 @@ futures-util = { version = "0.3.31", default-features = false, features = [
   "std",
 ] }
 futures-channel = { version = "0.3.31" }
-jiff = { version = "0.2.15" }
+jiff = { version = "0.2.17" }
 opus = { version = "0.3.0" }
 tokio-stream = { version = "0.1.17" }
 tokio-util = { version = "0.7.17" }
 futures = { version = "0.3.31" }
-openssl = { version = "0.10.74", features = ["vendored"] }
+openssl = { version = "0.10.75", features = ["vendored"] }
 async-trait = { version = "0.1.89" }
 # audio start
 symphonia = { version = "0.5.5" }
@@ -72,7 +72,7 @@ wavers = { version = "1.5.1" }
 # audio end
 # llm start
 candle-core = { version = "0.9.1" }
-tokenizers = { version = "0.22.1", default-features = false, features = [
+tokenizers = { version = "0.22.2", default-features = false, features = [
   "fancy-regex",
 ] }
 candle-transformers = { version = "0.9.1" }
@@ -84,8 +84,8 @@ intel-mkl-src = { version = "0.8.1", features = [
 accelerate-src = { version = "0.3.2", optional = true }
 candle-onnx = { version = "0.9.1" }
 rig-core = { version = "0.26.0" }
-aha = { version = "0.1.4" }
-aha_openai_dive = { version = "1.3.2", features = ["stream"] }
+aha = { version = "0.1.6" }
+aha_openai_dive = { version = "1.4.0", features = ["stream"] }
 # llm end
 # asr start
 byteorder = { version = "1.5.0" }
@@ -93,7 +93,7 @@ rand = { version = "0.9.2" }
 rand_distr = { version = "0.5.1" }
 # asr end
 # tts start
-kokoro-tts = { version = "0.3.0" }
+kokoro-tts = { version = "0.3.1" }
 # tts end
 # mcp start
 rmcp = { version = "0.11.0", features = [
@@ -115,7 +115,7 @@ web = { path = "../web" }
 
 [dev-dependencies]
 tower = { version = "0.5.2", features = ["util"] }
-cucumber = { version = "0.22.0", features = ["tracing", "output-json"] }
+cucumber = { version = "0.22.1", features = ["tracing", "output-json"] }
 futures = "0.3.31"
 
 [build-dependencies]

@@ -8,7 +8,7 @@ publish = false
 api = { path = "api" }
 # llm start
 candle-core = { version = "0.9.1" }
-tokenizers = { version = "0.22.1", default-features = false, features = [
+tokenizers = { version = "0.22.2", default-features = false, features = [
   "fancy-regex",
 ] }
 candle-transformers = { version = "0.9.1" }
