@@ -6,7 +6,7 @@ use crate::util::llm::{EMOJI_MAP, analyze_emotion};
 use anyhow::Context;
 use core::result::Result;
 use framework::id::gen_id;
-use futures::StreamExt;
+use futures::{SinkExt, StreamExt};
 use rig::OneOrMany;
 use rig::message::{Message, Text, UserContent};
 use service::chobits::message::audio::AudioMessage;
@@ -18,6 +18,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::error::SendError;
 use tokio::time::{Duration, sleep};
 use tracing::{error, info, instrument};
 
@@ -38,6 +39,39 @@ pub enum Command<'a> {
     Chat { text: &'a str },
     Wake { text: &'a str },
     ListenUnclear { text: &'a str },
+}
+
+async fn change_tts_state(tts_state: Arc<Mutex<Option<TtsState>>>, state: TtsState) {
+    let mut tts_state = tts_state.lock().await;
+    *tts_state = Some(state);
+    // drop(tts_state);
+}
+
+async fn send_tts_frame(
+    tx: Sender<Result<FrameResult, FrameError>>,
+    session_id: String,
+    state: TtsState,
+    text: Option<String>,
+) -> Result<(), SendError<Result<FrameResult, FrameError>>> {
+    tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
+        Some(session_id),
+        Some(state),
+        text,
+    ))))
+    .await?;
+    Ok(())
+}
+
+async fn send_tts_frame_and_change_state(
+    tts_state: Arc<Mutex<Option<TtsState>>>,
+    tx: Sender<Result<FrameResult, FrameError>>,
+    session_id: String,
+    state: TtsState,
+    text: Option<String>,
+) -> Result<(), SendError<Result<FrameResult, FrameError>>> {
+    change_tts_state(tts_state, state.clone()).await;
+    send_tts_frame(tx, session_id, state, text).await?;
+    Ok(())
 }
 
 impl Round {
@@ -162,29 +196,22 @@ impl Round {
                             ))))
                             .await
                             .context("send llm result failure")?;
-                            //tts
-                            tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                                Some(session_id.to_string()),
-                                Some(TtsState::Start),
+                            send_tts_frame_and_change_state(
+                                tts_state_clone.clone(),
+                                tx.clone(),
+                                session_id.clone(),
+                                TtsState::Start,
                                 None,
-                            ))))
-                            .await
-                            .context("send stt result start failure")?;
-                            let tts_state = tts_state_clone.clone();
-                            let mut tts_state = tts_state.lock().await;
-                            *tts_state = Some(TtsState::Start);
-                            drop(tts_state);
-                            tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                                Some(session_id.to_string()),
-                                Some(TtsState::SentenceStart),
+                            )
+                            .await?;
+                            send_tts_frame_and_change_state(
+                                tts_state_clone.clone(),
+                                tx.clone(),
+                                session_id.clone(),
+                                TtsState::SentenceStart,
                                 Some(text.to_string()),
-                            ))))
-                            .await
-                            .context("send stt result sentence start failure")?;
-                            let tts_state = tts_state_clone.clone();
-                            let mut tts_state = tts_state.lock().await;
-                            *tts_state = Some(TtsState::SentenceStart);
-                            drop(tts_state);
+                            )
+                            .await?;
                             //audio
                             //real time send audio
                             let data = audio_data.into_iter();
@@ -216,28 +243,22 @@ impl Round {
                             info!("send audio frame end");
                             speaking.store(false, Ordering::Relaxed);
                             info!("set speaking = false");
-                            tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                                Some(session_id.to_string()),
-                                Some(TtsState::SentenceEnd),
+                            send_tts_frame_and_change_state(
+                                tts_state_clone.clone(),
+                                tx.clone(),
+                                session_id.clone(),
+                                TtsState::SentenceEnd,
                                 None,
-                            ))))
-                            .await
-                            .context("send stt result sentence end failure")?;
-                            let tts_state = tts_state_clone.clone();
-                            let mut tts_state = tts_state.lock().await;
-                            *tts_state = Some(TtsState::SentenceEnd);
-                            drop(tts_state);
-                            tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                                Some(session_id.to_string()),
-                                Some(TtsState::Stop),
+                            )
+                            .await?;
+                            send_tts_frame_and_change_state(
+                                tts_state_clone.clone(),
+                                tx.clone(),
+                                session_id.clone(),
+                                TtsState::Stop,
                                 None,
-                            ))))
-                            .await
-                            .context("send stt result start failure")?;
-                            let tts_state = tts_state_clone.clone();
-                            let mut tts_state = tts_state.lock().await;
-                            *tts_state = Some(TtsState::Stop);
-                            drop(tts_state);
+                            )
+                            .await?;
                             Ok(())
                         }
                         .await;
@@ -263,31 +284,26 @@ impl Round {
                     let result: Result<(), anyhow::Error> = async {
                         info!("{:?}", tts_state);
                         if tts_state > &TtsState::Start {
-                            tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                                Some(session_id.to_string()),
-                                Some(TtsState::SentenceStart),
+                            send_tts_frame(
+                                tx.clone(),
+                                session_id.clone(),
+                                TtsState::SentenceStart,
                                 None,
-                            ))))
-                            .await
-                            .context("send stt result sentence start failure")?;
+                            )
+                            .await?;
                         }
                         if tts_state > &TtsState::SentenceStart {
-                            tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                                Some(session_id.to_string()),
-                                Some(TtsState::SentenceEnd),
+                            send_tts_frame(
+                                tx.clone(),
+                                session_id.clone(),
+                                TtsState::SentenceEnd,
                                 None,
-                            ))))
-                            .await
-                            .context("send stt result sentence end failure")?;
+                            )
+                            .await?;
                         }
                         if tts_state > &TtsState::SentenceEnd {
-                            tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
-                                Some(session_id.to_string()),
-                                Some(TtsState::Stop),
-                                None,
-                            ))))
-                            .await
-                            .context("send stt result stop failure")?;
+                            send_tts_frame(tx.clone(), session_id.clone(), TtsState::Stop, None)
+                                .await?;
                         }
                         Ok(())
                     }
