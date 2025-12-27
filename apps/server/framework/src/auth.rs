@@ -15,7 +15,7 @@ pub struct Principal {
     pub name: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Claims {
     jti: String,
     sub: String,

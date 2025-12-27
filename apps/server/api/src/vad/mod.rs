@@ -1,0 +1,53 @@
+#[cfg(feature = "mkl")]
+extern crate intel_mkl_src;
+
+#[cfg(feature = "accelerate")]
+extern crate accelerate_src;
+
+pub mod model;
+use crate::common::ModelError;
+use crate::config;
+use async_trait::async_trait;
+use model::silero::VadSilero;
+use std::sync::OnceLock;
+
+#[async_trait]
+pub trait Vad: Send + Sync {
+    async fn accept_waveform(&mut self, samples: Vec<f32>) -> Result<(), ModelError>;
+    async fn front(&mut self) -> SpeechSegment;
+    async fn is_empty(&mut self) -> bool;
+    async fn is_speech(&mut self) -> bool;
+    async fn pop(&mut self);
+    async fn clear(&mut self);
+}
+
+#[derive(Debug)]
+pub struct SpeechSegment {
+    pub start: i32,
+    pub samples: Vec<f32>,
+}
+
+static VAD_INSTANCE: OnceLock<VadFactory> = OnceLock::new();
+
+#[derive(Default)]
+pub struct VadFactory {}
+
+impl VadFactory {
+    pub fn new() -> Self {
+        Self {}
+    }
+
+    pub async fn init() -> &'static Self {
+        VAD_INSTANCE.get_or_init(|| -> Self { Self::new() })
+    }
+
+    pub fn global() -> &'static VadFactory {
+        VAD_INSTANCE.get().unwrap()
+    }
+
+    pub fn create_model() -> Box<dyn Vad> {
+        let app_config = config::get();
+        let config = app_config.vad();
+        Box::new(VadSilero::new(String::from(config.path())).unwrap())
+    }
+}

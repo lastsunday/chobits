@@ -1,24 +1,33 @@
 use serde::Deserialize;
 
-#[derive(Debug, Default, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Default, Clone)]
 pub struct LlmConfig {
-    model: Option<String>,
-    tokens: Option<String>,
+    model: Option<Model>,
+    path: Option<String>,
 }
 
 impl LlmConfig {
     pub fn new() -> Self {
         Self {
-            model: Some(String::from("data/llm/model.gguf")),
-            tokens: Some(String::from("data/llm/tokenizer.json")),
+            model: Some(Model::Qwen3),
+            path: Some(String::from("data/llm/model/unsloth/Qwen3-1.7B-GGUF/")),
+            // model: Some(Model::MiniCPM4),
+            // path: Some(String::from("data/llm/model/openbmb/MiniCPM4-0.5B/")),
         }
     }
 
-    pub fn model(&self) -> &str {
-        self.model.as_deref().unwrap_or_default()
+    pub fn path(&self) -> &str {
+        self.path.as_deref().unwrap_or_default()
     }
 
-    pub fn tokens(&self) -> &str {
-        self.tokens.as_deref().unwrap_or_default()
+    pub fn model(&self) -> Model {
+        self.model.clone().unwrap_or_default()
     }
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Default)]
+pub enum Model {
+    #[default]
+    Qwen3,
+    MiniCPM4,
 }

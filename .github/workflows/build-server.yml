@@ -35,6 +35,20 @@ jobs:
   ui-test:
     runs-on: ubuntu-latest
     steps:
+      - name: Free Disk Space
+        uses: endersonmenezes/free-disk-space@6c4664f43348c8c7011b53488d5ca65e9fc5cd1a # Use @main for latest, @v3 for stable
+        with:
+          remove_android: true
+          remove_dotnet: true
+          remove_haskell: true
+          rm_cmd: "rmz" # Use 'rmz' for faster deletion (default: 'rm')
+          rmz_version: "3.1.1" # Required when rm_cmd is 'rmz'
+          testing: false
+
+      - name: Show disk usage
+        run: |
+          df -h
+
       - name: Set Version Env
         if: startsWith(github.ref, 'refs/tags/')
         run: |
@@ -75,8 +89,27 @@ jobs:
   server-test:
     runs-on: ubuntu-latest
     steps:
+      - name: Free Disk Space
+        uses: endersonmenezes/free-disk-space@6c4664f43348c8c7011b53488d5ca65e9fc5cd1a # Use @main for latest, @v3 for stable
+        with:
+          remove_android: true
+          remove_dotnet: true
+          remove_haskell: true
+          rm_cmd: "rmz" # Use 'rmz' for faster deletion (default: 'rm')
+          rmz_version: "3.1.1" # Required when rm_cmd is 'rmz'
+          testing: false
+
+      - name: Show disk usage
+        run: |
+          df -h
+
       - name: Install Protoc
         uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b
+
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt install libavformat-dev libavcodec-dev libavutil-dev libavfilter-dev libavdevice-dev ffmpeg pkg-config clang
 
       - name: Set Version Env
         if: startsWith(github.ref, 'refs/tags/')
@@ -162,8 +195,27 @@ jobs:
           #   targetOSAndARCH: window-amd64
     runs-on: ${{ matrix.os }}
     steps:
+      - name: Free Disk Space
+        uses: endersonmenezes/free-disk-space@6c4664f43348c8c7011b53488d5ca65e9fc5cd1a # Use @main for latest, @v3 for stable
+        with:
+          remove_android: true
+          remove_dotnet: true
+          remove_haskell: true
+          rm_cmd: "rmz" # Use 'rmz' for faster deletion (default: 'rm')
+          rmz_version: "3.1.1" # Required when rm_cmd is 'rmz'
+          testing: false
+
+      - name: Show disk usage
+        run: |
+          df -h
+
       - name: Install Protoc
         uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b
+
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt install libavformat-dev libavcodec-dev libavutil-dev libavfilter-dev libavdevice-dev ffmpeg pkg-config clang
 
       - name: Setup Perl
         uses: shogo82148/actions-setup-perl@22423f01bde48fb88785c007e3166fbbbd8e892a

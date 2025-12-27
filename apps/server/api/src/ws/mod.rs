@@ -1,23 +1,19 @@
-pub mod asr;
-pub mod common;
 pub mod frame;
-pub mod llm;
 pub mod message_converter;
 pub mod session;
-pub mod state;
-pub mod tts;
-pub mod util;
-pub mod vad;
 
 use crate::{
-    AppState, config,
-    ws::{
-        asr::asr_cache::AsrCache,
-        message_converter::convert_to_frame,
-        session::{Session, listener::DefaultListener},
-        vad::vad_cache::VadCache,
+    AppState,
+    asr::AsrFactory,
+    config,
+    llm::LlmFactory,
+    mcp::{
+        client::server::ServerMcpClient,
+        mcp_host::{McpHost, UnionMcpHost},
     },
+    vad::VadFactory,
 };
+
 use axum::{
     RequestPartsExt, debug_handler,
     extract::{ConnectInfo, FromRequestParts, Path, WebSocketUpgrade, ws::Message},
@@ -25,7 +21,14 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use axum_extra::{TypedHeader, headers};
+use framework::id::gen_id;
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
+use message_converter::convert_to_frame;
+use rmcp::transport::{
+    StreamableHttpClientTransport, streamable_http_client::StreamableHttpClientTransportConfig,
+};
+use serde::Serialize;
+use session::{SessionBuilder, SessionConfig, listener::DefaultListener};
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
 use tracing::{error, info};
@@ -68,52 +71,99 @@ async fn ws_handler(
     })
 }
 
+pub async fn send_text<W, T>(write: &mut W, value: &T) -> bool
+where
+    W: Sink<Message> + Unpin + Send + 'static,
+    T: ?Sized + Serialize,
+{
+    let result: String = serde_json::to_string(value).expect("value to json failure");
+    write.send(Message::Text(result.into())).await.is_err()
+}
+
+async fn create_server_mcp_client(uri: String) -> anyhow::Result<ServerMcpClient> {
+    let config = StreamableHttpClientTransportConfig::with_uri(uri);
+    let transport = StreamableHttpClientTransport::from_config(config);
+    let mut server_mcp_client = ServerMcpClient::new(transport).await?;
+    server_mcp_client.init().await?;
+    Ok(server_mcp_client)
+}
+
 pub async fn handle_socket<W, R>(mut write: W, mut read: R)
 where
     W: Sink<Message> + Unpin + Send + 'static,
     R: Stream<Item = Result<Message, axum::Error>> + Unpin + Send + 'static,
 {
-    let vad = Arc::new(Mutex::new(VadCache::create_vad()));
-    let asr = Arc::new(Mutex::new(AsrCache::global().instance.clone()));
-    let close_connection_no_voice_time = config::get().logic().close_connection_no_voice_time();
-    let mut session = Session::new(
-        Box::new(DefaultListener::new(vad, asr.clone())),
-        Some(close_connection_no_voice_time),
-    );
+    let config = SessionConfig {
+        close_connection_no_voice_time: Some(
+            config::get().logic().close_connection_no_voice_time(),
+        ),
+    };
+    let id = gen_id();
+    let mut mcp_host = UnionMcpHost::new(Some(id.clone()));
+    let uri_list = config::get().mcp().uri_list();
+    for uri in uri_list {
+        let server_mcp_client = create_server_mcp_client(uri).await;
+        match server_mcp_client {
+            Ok(server_mcp_client) => {
+                mcp_host.add_client(Box::new(server_mcp_client)).await;
+            }
+            Err(e) => {
+                error!("{:?}", e);
+            }
+        }
+    }
+    let mut session = SessionBuilder::new()
+        .with_id(id.clone())
+        .with_listener(Box::new(DefaultListener::new(
+            Arc::new(Mutex::new(VadFactory::create_model())),
+            AsrFactory::global().default().clone(),
+        )))
+        .with_model(LlmFactory::global().default())
+        .with_mcp_host(Arc::new(Mutex::new(mcp_host)))
+        .with_config(config)
+        .build();
+    let session_id = session.id.clone();
+    if let Err(e) = session.start().await {
+        error!("{}", e);
+        let result = write.close().await;
+        if result.is_err() {
+            info!("write close failure");
+        }
+        return;
+    }
     let mut output = session.output_frame().await;
     tokio::spawn(async move {
         while let Some(data) = output.next().await {
+            info!("{:?}", data);
             match data {
                 Ok(frame_result) => match frame_result {
-                    frame::FrameResult::HelloResult(hello_message) => {
-                        let result: String = serde_json::to_string(&hello_message)
-                            .expect("hello message to json failure");
-                        if write.send(Message::Text(result.into())).await.is_err() {
-                            info!("send hello message failure");
+                    frame::FrameResult::HelloResult(message) => {
+                        if send_text(&mut write, &message).await {
+                            info!("send hello data failure");
                             break;
                         }
                     }
-                    frame::FrameResult::STTResult(stt_message) => {
-                        let result: String = serde_json::to_string(&stt_message)
-                            .expect("stt message to json failure");
-                        if write.send(Message::Text(result.into())).await.is_err() {
-                            info!("send stt message failure");
+                    frame::FrameResult::STTResult(message) => {
+                        if send_text(&mut write, &message).await {
+                            info!("send stt data failure");
                             break;
                         }
                     }
-                    frame::FrameResult::LLMResult(llm_message) => {
-                        let result: String = serde_json::to_string(&llm_message)
-                            .expect("llm message to json failure");
-                        if write.send(Message::Text(result.into())).await.is_err() {
-                            info!("send llm message failure");
+                    frame::FrameResult::LLMResult(message) => {
+                        if send_text(&mut write, &message).await {
+                            info!("send llm data failure");
                             break;
                         }
                     }
-                    frame::FrameResult::TTSResult(tts_message) => {
-                        let result: String = serde_json::to_string(&tts_message)
-                            .expect("tts message to json failure");
-                        if write.send(Message::Text(result.into())).await.is_err() {
-                            info!("send tts message failure");
+                    frame::FrameResult::TTSResult(message) => {
+                        if send_text(&mut write, &message).await {
+                            info!("send tts data failure");
+                            break;
+                        }
+                    }
+                    frame::FrameResult::McpResult(message) => {
+                        if send_text(&mut write, &message).await {
+                            info!("send mcp request data failure");
                             break;
                         }
                     }
@@ -145,7 +195,7 @@ where
     });
     tokio::spawn(async move {
         while let Some(Ok(msg)) = read.next().await {
-            let result = convert_to_frame(msg).await;
+            let result = convert_to_frame(&msg).await;
             if result.is_break() {
                 if let Some(item) = result.break_value() {
                     match item {
@@ -156,7 +206,7 @@ where
                                 return;
                             }
                             _ => {
-                                session.accept_frame(frame).await;
+                                session.accept_frame(&frame).await;
                             }
                         },
                         None => {
@@ -168,31 +218,30 @@ where
                 }
                 return;
             }
-            if result.is_continue() {
-                if let Some(item) = result.continue_value() {
-                    match item {
-                        Some(frame) => {
-                            match frame {
-                                frame::Frame::Abort(abort_message) => {
-                                    info!("abort message = {:?}", abort_message);
-                                    session.stop().await;
-                                }
-                                frame::Frame::Ping(_bytes) => {
-                                    // TODO: log session id
-                                    info!("ping");
-                                }
-                                frame::Frame::Pong(_bytes) => {
-                                    // TODO: log session id
-                                    info!("pong");
-                                }
-                                _ => {
-                                    session.accept_frame(frame).await;
-                                }
-                            }
+            if result.is_continue()
+                && let Some(item) = result.continue_value()
+            {
+                match item {
+                    Some(frame) => match frame {
+                        frame::Frame::Abort(abort_message) => {
+                            info!(
+                                "session_id = {},abort message = {:?}",
+                                session_id, abort_message
+                            );
+                            session.stop().await;
                         }
-                        None => {
-                            info!("unkonw continue message");
+                        frame::Frame::Ping { data } => {
+                            info!("session_id = {},ping,len = {}", session_id, data.len());
                         }
+                        frame::Frame::Pong { data } => {
+                            info!("session_id = {},pong,len = {}", session_id, data.len());
+                        }
+                        _ => {
+                            session.accept_frame(&frame).await;
+                        }
+                    },
+                    None => {
+                        info!("unkonw continue message");
                     }
                 }
             }

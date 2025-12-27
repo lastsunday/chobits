@@ -1,19 +1,26 @@
-use axum::{body::Bytes, extract::ws::Utf8Bytes};
 use service::chobits::message::{
-    abort::AbortMessage, audio::AudioMessage, close::CloseMessage, hello::HelloMessage,
-    listen::ListenMessage, llm::LlmMessage, stt::SttMessage, tts::TtsMessage,
+    abort::AbortMessage,
+    audio::AudioMessage,
+    close::CloseMessage,
+    hello::HelloMessage,
+    listen::ListenMessage,
+    llm::LlmMessage,
+    mcp::{McpMessage, McpRequest},
+    stt::SttMessage,
+    tts::TtsMessage,
 };
 
 #[derive(Debug, Clone)]
-pub enum Frame {
+pub enum Frame<'a> {
     Hello(HelloMessage),
-    Listen(ListenMessage),
-    UnknowText(Utf8Bytes),
-    Voice(Bytes),
-    Abort(AbortMessage),
-    Ping(Bytes),
-    Pong(Bytes),
-    Close(CloseMessage),
+    Listen(ListenMessage<'a>),
+    UnknowText { data: &'a [u8] },
+    Voice { data: &'a [u8] },
+    Abort(AbortMessage<'a>),
+    Ping { data: &'a [u8] },
+    Pong { data: &'a [u8] },
+    Close(CloseMessage<'a>),
+    Mcp(McpMessage),
 }
 
 #[derive(Debug)]
@@ -24,7 +31,11 @@ pub enum FrameResult {
     TTSResult(TtsMessage),
     AudioResult(AudioMessage),
     CloseResult,
+    McpResult(McpRequest),
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum FrameError {}
+pub enum FrameError {
+    #[error("tts error {0}")]
+    Tts(String),
+}

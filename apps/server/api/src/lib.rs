@@ -1,11 +1,18 @@
+pub mod asr;
 pub mod auth;
 pub mod auth_error;
+pub mod common;
 pub mod config;
 pub mod i18n;
 pub mod index;
+pub mod llm;
+pub mod mcp;
 pub mod ota;
 pub mod ota_data;
 pub mod ota_error;
+pub mod tts;
+pub mod util;
+pub mod vad;
 pub mod ws;
 
 use std::net::SocketAddr;
@@ -15,6 +22,7 @@ use axum::Router;
 use axum::ServiceExt;
 use axum::extract::DefaultBodyLimit;
 use axum::extract::Request;
+use axum::http::StatusCode;
 use axum::routing::get;
 use bytesize::ByteSize;
 use migration::MigratorTrait;
@@ -24,6 +32,7 @@ use tokio::net::TcpListener;
 use framework::error::*;
 use framework::trace::*;
 use framework::*;
+use tokio_util::sync::CancellationToken;
 use tower_http::compression::CompressionLayer;
 use tower_http::cors;
 use tower_http::cors::CorsLayer;
@@ -40,10 +49,10 @@ use utoipa_scalar::{Scalar, Servable as ScalarServable};
 
 use framework::auth::Jwt;
 
-use crate::ws::asr::asr_cache::AsrCache;
-use crate::ws::llm::llm_cache::LlmCache;
-use crate::ws::tts::tts_cache::TtsCache;
-use crate::ws::vad::vad_cache::VadCache;
+use crate::asr::AsrFactory;
+use crate::llm::LlmFactory;
+use crate::tts::TtsFactory;
+use crate::vad::VadFactory;
 
 #[macro_use]
 extern crate rust_i18n;
@@ -65,22 +74,23 @@ async fn start() -> anyhow::Result<()> {
     tracing::info!("Database connected successfully");
     // database schema init or upgrade
     migration::Migrator::up(&conn, None).await?;
-    tracing::info!("init tts cahce");
-    TtsCache::init().await;
-    tracing::info!("init tts cahce successfully");
-    tracing::info!("init vad cahce");
-    VadCache::init().await;
-    tracing::info!("init vad cahce successfully");
-    tracing::info!("init asr cahce");
-    AsrCache::init().await;
-    tracing::info!("init asr cahce successfully");
-    tracing::info!("init llm cahce");
-    LlmCache::init().await;
-    tracing::info!("init llm cahce successfully");
+    tracing::info!("init tts factory");
+    TtsFactory::init().await?;
+    tracing::info!("init tts factory successfully");
+    tracing::info!("init vad factory");
+    VadFactory::init().await;
+    tracing::info!("init vad factory successfully");
+    tracing::info!("init asr factory");
+    AsrFactory::init().await;
+    tracing::info!("init asr factory successfully");
+    tracing::info!("init llm factory");
+    LlmFactory::init().await;
+    tracing::info!("init llm factory successfully");
+    let ct = tokio_util::sync::CancellationToken::new();
     // state
     let state = AppState { conn };
     // router
-    let app = create_router(state);
+    let (app, ct) = create_router(state, ct);
     // app start
     let listener = TcpListener::bind(format!("0.0.0.0:{port}")).await?;
     tracing::info!("listening on http://0.0.0.0:{port}");
@@ -89,6 +99,10 @@ async fn start() -> anyhow::Result<()> {
         listener,
         ServiceExt::<Request>::into_make_service_with_connect_info::<SocketAddr>(app),
     )
+    .with_graceful_shutdown(async move {
+        tokio::signal::ctrl_c().await.unwrap();
+        ct.cancel();
+    })
     .await?;
     Ok(())
 }
@@ -97,7 +111,10 @@ async fn start() -> anyhow::Result<()> {
 #[openapi()]
 struct ApiDoc;
 
-pub fn create_router(state: AppState) -> Router {
+pub fn create_router(
+    state: AppState,
+    cancellation_token: CancellationToken,
+) -> (Router, CancellationToken) {
     let mut api = ApiDoc::openapi();
     api.components.as_mut().unwrap().add_security_scheme(
         "AccessToken",
@@ -108,12 +125,13 @@ pub fn create_router(state: AppState) -> Router {
     api_router = setup_auth(api_router, state.clone());
     api_router = setup_ota(api_router, state.clone());
     api_router = setup_ws(api_router, state.clone());
+    api_router = setup_mcp(api_router, state.clone(), cancellation_token.child_token());
     let (mut app, api) = api_router.split_for_parts();
     app = setup_web(app);
     app = setup_api_fallback(app);
     app = setup_default(app);
     app = app.merge(Scalar::with_url("/docs", api));
-    app
+    (app, cancellation_token)
 }
 
 pub fn setup_default(router: Router) -> Router {
@@ -123,7 +141,8 @@ pub fn setup_default(router: Router) -> Router {
             tracing::warn!("Method not allowed");
             Err(ApiError::MethodNotAllowed)
         });
-    let timeout = TimeoutLayer::new(Duration::from_secs(120));
+    let timeout =
+        TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_secs(120));
     let body_limit = DefaultBodyLimit::max(ByteSize::mib(10).as_u64() as usize);
     let cors = CorsLayer::new()
         .allow_origin(cors::Any)
@@ -153,6 +172,14 @@ pub fn setup_index(router: OpenApiRouter) -> OpenApiRouter {
 
 pub fn setup_ws(router: OpenApiRouter, state: AppState) -> OpenApiRouter {
     router.merge(ws::create_routes(state))
+}
+
+pub fn setup_mcp(
+    router: OpenApiRouter,
+    state: AppState,
+    cancellation_token: CancellationToken,
+) -> OpenApiRouter {
+    router.merge(mcp::create_routes(state, cancellation_token))
 }
 
 pub fn setup_auth(router: OpenApiRouter, state: AppState) -> OpenApiRouter {

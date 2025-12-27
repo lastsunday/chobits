@@ -1,4 +1,4 @@
-use api::ws::util::audio::pcm_decode;
+use api::util::audio::pcm_decode;
 use std::cmp;
 use std::path::PathBuf;
 use tracing::info;
@@ -7,7 +7,7 @@ use wavers::write;
 
 #[tokio::test]
 #[traced_test]
-/// cargo test --test audio_test -- test_audio_encode_decode --show-output
+/// cargo test --test audio_test -- test_audio_encode_decode --nocapture
 async fn test_audio_encode_decode() {
     // 1. get wav file
     let wav_file: PathBuf = [
@@ -46,7 +46,7 @@ async fn test_audio_encode_decode() {
     let len = pcm_data.len();
     let mut count = len / size;
     if len % size > 0 {
-        count = count + 1;
+        count += 1;
     }
     info!("count = {}", count);
     let mut audio: Vec<Vec<u8>> = Vec::new();
