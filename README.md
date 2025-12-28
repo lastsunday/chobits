@@ -1,138 +1,107 @@
-<p align="center">
-    <img width="180" src="docs\logo.svg" alt="chobits">
-</p>
-<h1 align="center">Ch❤️‍🩹bits</h1>
+# Chobits
 
-[![build-server](https://github.com/lastsunday/chobits/actions/workflows/build-server.yml/badge.svg)](https://github.com/lastsunday/chobits/actions/workflows/build-server.yml)
+> [!WARNING]
+> This project is being developed,all the things is not stable.
 
-<p align="left">
-  <a href="https://github.com/lastsunday/chobits/releases">
-    <img alt="GitHub Release" src="https://img.shields.io/github/v/release/lastsunday/chobits?logo=docker" />
-  </a>
-  <a href="https://github.com/lastsunday/chobits/graphs/contributors">
-    <img alt="GitHub Contributors" src="https://img.shields.io/github/contributors/lastsunday/chobits?logo=github" />
-  </a>
-  <a href="https://github.com/lastsunday/chobits/issues">
-    <img alt="Issues" src="https://img.shields.io/github/issues/lastsunday/chobits?color=0088ff" />
-  </a>
-  <a href="https://github.com/lastsunday/chobits/pulls">
-    <img alt="GitHub Pull Requests" src="https://img.shields.io/github/issues-pr/lastsunday/chobits?color=0088ff" />
-  </a>
-  <a href="https://github.com/lastsunday/chobits/blob/main/LICENSE">
-    <img alt="GitHub License" src="https://img.shields.io/badge/license-MIT-white?labelColor=black" />
-  </a>
-  <a href="https://github.com/lastsunday/chobits">
-    <img alt="Stars" src="https://img.shields.io/github/stars/lastsunday/chobits?color=ffcb47&labelColor=black" />
-  </a>
-</p>
+[![build-server](https://github.com/lastsunday/chobits/actions/workflows/build-server.yml/badge.svg)](https://github.com/lastsunday/chobits/actions/workflows/build-server.yml)[![docker](https://img.shields.io/github/v/release/lastsunday/chobits?logo=docker)](https://github.com/lastsunday/chobits/releases)
 
-<details open>
-<summary>Technology stack</summary>
+## Purpose
 
-1. Rust
-   1. Axum
-   2. sea-orm
-2. Reactjs
-3. Database
-   1. Postgres
-   2. Sqlite
+To learn the rust programming language,voice interaction and large language model.
+To make an self contained chatbot(self host all component,eg: llm,tts etc..), like [xiaozhi-esp32](https://github.com/78/xiaozhi-esp32) with self host server.
 
-</details>
+## Features
 
-<details>
-<summary>Development</summary>
+1. Connection: websocket
+1. Voice interaction: VAD,ASR,TTS
+1. Chat: LLM
+1. MCP: self host/remote server mcp,device mcp(WIP)
+1. Backend
+   1. home page(WIP)
+   1. admin console(WIP)
+   1. simulation deivce in web(WIP)
+1. Deploy: bin(WIP),docker(WIP)
+1. Compatible devices
+   1. [xiaozhi-esp32](https://github.com/78/xiaozhi-esp32)(WIP)
+   1. chobits(cross platform app,create by flutter)(WIP)
 
-- apps/server-ui
+## Documentation
+
+You can find user guide documentation on [here](./docs/guide/README.md).
+You can find user development documentation on [here](/docs/development/README.md).
+
+## Quick start
+
+### Development
+
+#### apps/server
 
 ```shell
+pnpm i
+pnpm exec nx run @chobits/server-ui:build
+./apps/server/script/download_model.sh
+# using cuda: pnpm nx run chobits-server:run --features cuda
+pnpm nx run chobits-server:run
+```
+
+- Access home page <http://127.0.0.1:3000>
+- Access admin console <http://127.0.0.1:3000/login>
+  - default account: root/Change_Me
+- Access api documentation <http://127.0.0.1:3000/docs>
+- Client setting
+  - ota url
+    <http://127.0.0.1:3000/api/ota/>
+  - ws url
+    <ws://127.0.0.1:3000/chobits/v1/>
+
+#### apps/server-ui
+
+```shell
+pnpm i
 pnpm exec nx run @chobits/server-ui:dev
 ```
 
-- apps/server
+### Building
 
-```shell
-pnpm exec nx run @chobits/server-ui:build
-./apps/server/script/download_model.sh
-pnpm nx run chobits-server:run
-pnpm nx run chobits-server:run --features cuda
-```
+**_TODO_**
 
-</details>
+### Using
+
+**_TODO_**
+
+## Contributing
+
+Expected workflow is: Fork -> Patch -> Push -> Pull Request
+
+> [!NOTE]
+>
+> 1. **YOU MUST READ THE [CONTRIBUTORS GUIDE](CONTRIBUTING.md) BEFORE STARTING TO WORK ON A PULL REQUEST.**
+> 2. If you have found a vulnerability in the project, please write privately to **<lastsunday@yeah.net>**. Thanks!
+
+## FAQ
+
+See the [FAQ](./docs/guide/faq.md) file
+
+## License
+
+This project is licensed under the MIT License.
+See the [LICENSE](./LICENSE) file
+for the full license text.
+
+## Further information
 
 <details>
-<summary>Feature</summary>
+<summary>Looking for an overview of the interface? Check it out!</summary>
 
-### Server
+### Login/Register Page
 
-1. Api
-   1. Auth
-      - [x] HTTP
-        - [x] JWT
-      - [ ] WebSocket
-        - [ ] JWT
-   2. Ota
-      - [x] Ws Url
-2. Audio
-   - [x] TTS(语音合成)
-   - [x] VAD(语音活动检测)
-   - [x] ASR(语音识别)
-   - [x] 多语言识别
-   - [ ] 语音处理
-   - [ ] 声纹
-3. Video
-4. 大模型
-   - [x] 智能对话
-   - [ ] 视觉感知
-   - [ ] 意图识别
-     - [ ] Function Call 函数调用
-   - [ ] 记忆系统
-5. MCP
+**_TODO_**
 
-### Server UI
+### User Dashboard
 
-1. Other
-   - [ ] Home
-   - [x] Login
-   - [x] Reset password
+**_TODO_**
 
-### Other
-
-1. Api
-   - [x] Api docs
-2. Database
-   - [x] Migration
-3. I18n
-   - [x] Server
-   - [x] Server UI
-4. Config
-   - [x] Server
-   - [x] Server UI
-5. Logger
-   - [ ] File log
-6. Cicd
-   - [ ] Github Action
-     - [x] test
-     - [x] build
-     - [x] release
-   - [x] Docker(server + server-ui)
-   - [x] Bin(server + server-ui)
-7. Testing
-   - [ ] Unit Test
-   - [ ] BDD
-   - [ ] E2E
-   </details>
-
-## Support Component
-
-| 模块名称          | 组件                     |
-| ----------------- | ------------------------ |
-| VAD(语音活动检测) | candle(onnx->silero-vad) |
-| ASR(语音识别)     | candle(whisper)          |
-| LLM(大模型)       | candle(Qwen3)            |
-| VLLM(视觉大模型)  |                          |
-| TTS(语音合成)     | kokoro-tts               |
-| Intent(意图识别)  |                          |
-| Memory(记忆功能)  |                          |
+</details>
 
 ## Thanks
 
