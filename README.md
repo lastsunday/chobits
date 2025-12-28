@@ -8,6 +8,7 @@
 ## Purpose
 
 To learn the rust programming language,voice interaction and large language model.
+
 To make an self contained chatbot(self host all component,eg: llm,tts etc..), like [xiaozhi-esp32](https://github.com/78/xiaozhi-esp32) with self host server.
 
 ## Features
