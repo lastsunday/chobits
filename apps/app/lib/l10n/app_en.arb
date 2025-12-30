@@ -1,0 +1,92 @@
+{
+  "memo": "Memo",
+  "updateMemo":"Update Memo",
+  "addMemo":"Add Memo",
+  "word":"Word",
+  "displayMode":"Display Mode",
+  "displayModeAuto":"Auto",
+  "displayModeText":"Text",
+  "displayModeImage":"Image",
+  "displayAll":"All",
+  "imageConvertFailure":"Image Convert Failure",
+  "convertToBase64":"Convert To Base64",
+  "toggleDatetime":"Toggle Datetime",
+  "toggleOnlineMemo":"Toggle Online Memo",
+  "selectFile":"Please select file",
+  "importFile":"Import file",
+  "setting":"Setting",
+  "scan":"Scan",
+  "add":"Add",
+  "confirm":"Confirm",
+  "confirmDelete":"Delete this item?",
+  "cancel":"Cancel",
+  "delete":"Delete",
+  "save":"Save",
+  "about":"About",
+  "version":"Version",
+  "newVersionDownload":"New Version Downloading",
+  "newVersionUpdate":"New Version Update",
+  "versionUpToDate":"Up To Date",
+  "newVersion":"New",
+  "planTime":"Estimated time",
+  "inputContentHint":"Please type something",
+  "qrcodeNotShow":"The qrcode not show",
+  "qrcodeContentToLong":"Text to long({current}/{max} Words)",
+  "@qrcodeContentToLong":{
+    "description": "A message with word count",
+    "placeholders": {
+      "current": {
+        "type": "int",
+        "example": "1"
+      },
+      "max":{
+        "type": "int",
+        "example": "2953"
+      }
+    }
+  },
+  "settingsTextScaling": "Text scaling",
+  "settingsTextScalingSmall": "Small",
+  "settingsTextScalingNormal": "Normal",
+  "settingsTextScalingLarge": "Large",
+  "settingsTextScalingHuge": "Huge",
+  "settingsTheme": "Theme",
+  "settingsDarkTheme": "Dark",
+  "settingsLightTheme": "Light",
+  "settingsSystemDefault": "System",
+  "settingsLocale": "Locale",
+
+  "login":"Login",
+  "pleaseLogin":"Please login",
+  "areYouSureLogout":"Are you sure logout?",
+  "account":"Account",
+  "password":"Password",
+  "loginSuccess":"Login success",
+  "loginFailure":"Login Failure",
+  "loginTimeout":"Login Timeout",
+
+  "loginNotOpen":"Login feature not open",
+
+  "loadMore": "Scroll up to load more...",
+  "loadFail": "Loading failed, please try again",
+  "releaseToLoad": "Release to loading",
+  "hasNoData": "No data",
+  "hasNoDataClickRefresh": "No data,click to refresh",
+  "loading": "Loading ...",
+  "successful": "Load successful",
+  "scrollDownToRefresh": "Scroll down to refresh",
+
+  "serverError":"Service Exception",
+
+  "search":"Search",
+  "inputSearchHint":"Enter your search term",
+
+  "locationServiceDisabled":"Location services are disabled.",
+  "locationPermissionDenied":"Location permissions are denied.",
+  "locationPermissionDeniedForever":"Location permissions are permanently denied, we cannot request permissions.",
+  "runningInBackgroundTip":"App will continue to receive your location even when you aren't using it",
+  "runningInBackground":"Running in Background",
+
+  "deviceId":"Device Id",
+  "copyDeviceId":"Copied device id to Clipboard"
+}
