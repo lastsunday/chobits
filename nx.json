@@ -95,6 +95,38 @@
         "buildDepsTargetName": "build-deps",
         "typecheckTargetName": "typecheck"
       }
+    },
+    {
+      "plugin": "@nxrocks/nx-flutter",
+      "options": {
+        "analyzeTargetName": "analyze",
+        "cleanTargetName": "clean",
+        "formatTargetName": "format",
+        "testTargetName": "test",
+        "assembleTargetName": "assemble",
+        "attachTargetName": "attach",
+        "driveTargetName": "drive",
+        "genL10nTargetName": "gen-l10n",
+        "installTargetName": "install",
+        "runTargetName": "run",
+        "buildAarTargetName": "build-aar",
+        "buildApkTargetName": "build-apk",
+        "buildAppbundleTargetName": "build-appbundle",
+        "buildBundleTargetName": "build-bundle",
+        "buildIosTargetName": "build-ios",
+        "buildIosFrameworkTargetName": "build-ios-framework",
+        "buildIpaTargetName": "build-ipa",
+        "pubGetTargetName": "pub-get",
+        "pubUpgradeTargetName": "pub-upgrade",
+        "pubDowngradeTargetName": "pub-downgrade",
+        "pubOutdatedTargetName": "pub-outdated",
+        "pubAddTargetName": "pub-add",
+        "pubRemoveTargetName": "pub-remove",
+        "pubRunTargetName": "pub-run",
+        "pubPublishTargetName": "pub-publish",
+        "pubDepsTargetName": "pub-deps",
+        "pubVersionTargetName": "pub-version"
+      }
     }
   ],
   "release": {

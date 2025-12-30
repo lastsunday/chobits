@@ -70,7 +70,8 @@
     "unocss": "^66.5.11",
     "vite": "npm:rolldown-vite@^7.3.0",
     "vite-plugin-dts": "^3.9.1",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "@nxrocks/nx-flutter": "^10.0.1"
   },
   "dependencies": {
     "next": "^15.5.9",
