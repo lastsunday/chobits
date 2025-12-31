@@ -1,10 +1,10 @@
 import 'dart:async';
 
+import 'package:app/l10n/app_localizations.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:go_router/go_router.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:app/core/connection_provider/connection_provider.dart';
 import 'package:app/core/net/authorized_denied_exception.dart';
 import 'package:app/env.dart';

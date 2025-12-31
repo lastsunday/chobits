@@ -22,7 +22,6 @@ import 'package:app/modules/app/store/menu.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:app/core/log_helper.dart';
-import 'package:platform_device_id/platform_device_id.dart';
 import 'package:sqflite/sqflite.dart';
 
 import 'db/changelog_v4.dart';
@@ -45,7 +44,6 @@ class AppStore extends ChangeNotifier {
   static EventBus eventBus = EventBus();
   static var timerCount = 0;
   static List<Task> timerRunningTask = [];
-  static String? _deviceId;
 
   late LocationSettings locationSettings;
   bool initLocation = false;
@@ -106,12 +104,12 @@ class AppStore extends ChangeNotifier {
     var dbVersion = await db.getVersion();
     LogHelper.info("[DB] current database version is $dbVersion");
     //获取设备编号
-    try {
-      _deviceId = await PlatformDeviceId.getDeviceId;
-    } on PlatformException {
-      LogHelper.info("[Platform] Cant't found DeviceId");
-    }
-    LogHelper.info("[Platform] DeviceId=$_deviceId");
+    // try {
+    //   _deviceId = await PlatformDeviceId.getDeviceId;
+    // } on PlatformException {
+    //   LogHelper.info("[Platform] Cant't found DeviceId");
+    // }
+    // LogHelper.info("[Platform] DeviceId=$_deviceId");
     //自签证书配置
     // HttpOverrides.global = MyHttpOverrides();
   }
@@ -231,7 +229,7 @@ class AppStore extends ChangeNotifier {
 
   get showOnlineMemo => _showOnlineMemo;
 
-  get deviceId => _deviceId;
+  // get deviceId => _deviceId;
 
   void toggleShowDatetime() {
     _showDatetime = !showDatetime;

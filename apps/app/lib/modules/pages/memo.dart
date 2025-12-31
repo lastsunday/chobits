@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:app/l10n/app_localizations.dart';
 import 'package:easy_refresh/easy_refresh.dart';
 import 'package:flag/flag.dart';
 import 'package:flutter/foundation.dart';
@@ -26,7 +27,6 @@ import 'package:app/modules/pages/widget/memo_item.dart';
 import 'package:app/third_party/flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:badges/badges.dart' as badges;
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:reorderable_grid/reorderable_grid.dart';

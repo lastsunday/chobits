@@ -1,8 +1,8 @@
+import 'package:app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:app/core/log_helper.dart';
 import 'package:app/core/widgets/common_app_bar.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:app/modules/app/common/service_exception.dart';
 import 'package:app/modules/app/ui.dart';
 import 'package:app/modules/auth/login_model.dart';

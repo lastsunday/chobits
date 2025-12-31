@@ -1,5 +1,6 @@
 import 'dart:collection';
 
+import 'package:app/l10n/app_localizations.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localized_locales/flutter_localized_locales.dart';
@@ -7,7 +8,6 @@ import 'package:app/modules/app/app_setting.dart';
 import 'package:app/modules/app/app_store.dart';
 import 'package:app/modules/pages/widget/settings_list_item.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 
 import 'package:app/constants.dart';
 

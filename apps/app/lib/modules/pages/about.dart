@@ -1,8 +1,8 @@
 import 'dart:async';
 
+import 'package:app/l10n/app_localizations.dart';
 import 'package:clipboard/clipboard.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:app/env.dart';
 import 'package:app/modules/app/ui.dart';
@@ -233,29 +233,33 @@ class _AboutPageState extends State<AboutPage> {
               )
             ]).toList(),
           ),
-          GestureDetector(
-            onTap: () {
-              FlutterClipboard.copy(Provider.of<AppStore>(context, listen: false).deviceId).then(( value ) => UI.showInfo(AppLocalizations.of(context)!.copyDeviceId));
-            },
-            child:
-          Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(0, 10, 0, 0),
-                child: Text(AppLocalizations.of(context)!.deviceId,
-                    style: Theme.of(context).textTheme.bodyMedium),
-              ),
-              SizedBox(
-                width: 150,
-                height: 150,
-                child: PrettyQrView.data(
-                  data: Provider.of<AppStore>(context, listen: false).deviceId,
-                ),
-              ),
-              Text(Provider.of<AppStore>(context, listen: false).deviceId,
-                  style: Theme.of(context).textTheme.bodyMedium),
-            ],
-          ))
+          //   GestureDetector(
+          //       onTap: () {
+          //         FlutterClipboard.copy(
+          //                 Provider.of<AppStore>(context, listen: false).deviceId)
+          //             .then((value) => UI
+          //                 .showInfo(AppLocalizations.of(context)!.copyDeviceId));
+          //       },
+          //       child: Column(
+          //         children: [
+          //           Padding(
+          //             padding: const EdgeInsets.fromLTRB(0, 10, 0, 0),
+          //             child: Text(AppLocalizations.of(context)!.deviceId,
+          //                 style: Theme.of(context).textTheme.bodyMedium),
+          //           ),
+          //           SizedBox(
+          //             width: 150,
+          //             height: 150,
+          //             child: PrettyQrView.data(
+          //               data: Provider.of<AppStore>(context, listen: false)
+          //                   .deviceId,
+          //             ),
+          //           ),
+          //           Text(Provider.of<AppStore>(context, listen: false).deviceId,
+          //               style: Theme.of(context).textTheme.bodyMedium),
+          //         ],
+          //       ))
+          //
         ],
       )),
     );
