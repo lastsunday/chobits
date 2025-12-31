@@ -21,6 +21,7 @@ import 'package:provider/provider.dart';
 import 'package:r_upgrade/r_upgrade.dart';
 import 'package:upgrader/upgrader.dart';
 import 'package:app/core/log_helper.dart';
+import 'package:version/version.dart';
 
 import 'memo.dart';
 
@@ -35,7 +36,7 @@ class _HomePageState extends State<HomePage> {
   static const String notificationChannelId = "channelId";
   static const String notificationChannelName = "channelName";
 
-  final appcast = Appcast();
+  final appcast = Appcast(osVersion: Version(0, 0, 0));
 
   int installPackageCurrentLength = 0;
   int installPackageMaxLength = 0;
@@ -51,9 +52,6 @@ class _HomePageState extends State<HomePage> {
   StreamSubscription? notificationSubscription;
   bool desktopShowMenu = true;
 
-  final cfg = AppcastConfiguration(
-      url: Env.config.appcastURL, supportedOS: ['android']);
-
   late MemoStore memoStore = Provider.of<LocalMemoStore>(context, listen: true);
 
   @override
@@ -64,8 +62,9 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _setupSubscription() {
-    menuOpenSubscription =
-        AppStore.eventBus.on<MenuOpenEvent>().listen((event) {
+    menuOpenSubscription = AppStore.eventBus.on<MenuOpenEvent>().listen((
+      event,
+    ) {
       final isDesktop = isDisplayDesktop(context);
       if (isDesktop) {
         desktopShowMenu = !desktopShowMenu;
@@ -74,8 +73,9 @@ class _HomePageState extends State<HomePage> {
       }
       setState(() {});
     });
-    errorToastSubscription =
-        AppStore.eventBus.on<ErrorToastEvent>().listen((event) {
+    errorToastSubscription = AppStore.eventBus.on<ErrorToastEvent>().listen((
+      event,
+    ) {
       if (event.e is AuthorizedDeniedException) {
         UI.showError(AppLocalizations.of(context)!.pleaseLogin);
       } else if (event.e is ServiceException) {
@@ -87,10 +87,12 @@ class _HomePageState extends State<HomePage> {
         UI.showError(event.e.toString());
       }
     });
-    notificationSubscription =
-        AppStore.eventBus.on<NotificationEvent>().listen((event) async {
+    notificationSubscription = AppStore.eventBus.on<NotificationEvent>().listen((
+      event,
+    ) async {
       LogHelper.info(
-          "[IM] on listen NotificationEvent name = ${event.name},text = ${event.text}");
+        "[IM] on listen NotificationEvent name = ${event.name},text = ${event.text}",
+      );
 
       FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
           FlutterLocalNotificationsPlugin();
@@ -103,28 +105,37 @@ class _HomePageState extends State<HomePage> {
           LinuxInitializationSettings(defaultActionName: 'Open notification');
       const InitializationSettings initializationSettings =
           InitializationSettings(
-              android: initializationSettingsAndroid,
-              iOS: initializationSettingsDarwin,
-              macOS: initializationSettingsDarwin,
-              linux: initializationSettingsLinux);
-      await flutterLocalNotificationsPlugin.initialize(initializationSettings,
-          onDidReceiveNotificationResponse: onDidReceiveNotificationResponse);
+            android: initializationSettingsAndroid,
+            iOS: initializationSettingsDarwin,
+            macOS: initializationSettingsDarwin,
+            linux: initializationSettingsLinux,
+          );
+      await flutterLocalNotificationsPlugin.initialize(
+        initializationSettings,
+        onDidReceiveNotificationResponse: onDidReceiveNotificationResponse,
+      );
       const AndroidNotificationDetails androidNotificationDetails =
           AndroidNotificationDetails(
-        notificationChannelId,
-        notificationChannelName,
-        importance: Importance.max,
-        priority: Priority.high,
+            notificationChannelId,
+            notificationChannelName,
+            importance: Importance.max,
+            priority: Priority.high,
+          );
+      const NotificationDetails notificationDetails = NotificationDetails(
+        android: androidNotificationDetails,
       );
-      const NotificationDetails notificationDetails =
-          NotificationDetails(android: androidNotificationDetails);
       flutterLocalNotificationsPlugin.show(
-          0, event.name, event.text, notificationDetails);
+        0,
+        event.name,
+        event.text,
+        notificationDetails,
+      );
     });
   }
 
   void onDidReceiveNotificationResponse(
-      NotificationResponse notificationResponse) async {
+    NotificationResponse notificationResponse,
+  ) async {
     final String? payload = notificationResponse.payload;
     if (notificationResponse.payload != null) {
       LogHelper.info('notification payload: $payload');
@@ -147,8 +158,10 @@ class _HomePageState extends State<HomePage> {
       }
       bool? isSuccess = await RUpgrade.upgradeWithId(id!);
       if (!isSuccess!) {
-        id = await RUpgrade.upgrade(bestItem!.fileURL!,
-            fileName: bestItem.versionString);
+        id = await RUpgrade.upgrade(
+          bestItem!.fileURL!,
+          fileName: bestItem.versionString,
+        );
       }
     } else {
       id = await RUpgrade.upgrade(bestItem!.fileURL!);
@@ -179,7 +192,8 @@ class _HomePageState extends State<HomePage> {
                   }
                 }
                 LogHelper.debug(
-                    "${event.currentLength}/${event.maxLength},${event.status},${event.path},${event.speed},${event.planTime}");
+                  "${event.currentLength}/${event.maxLength},${event.status},${event.path},${event.speed},${event.planTime}",
+                );
               });
               return AlertDialog(
                 title: Text(AppLocalizations.of(context)!.newVersionDownload),
@@ -192,11 +206,12 @@ class _HomePageState extends State<HomePage> {
                         value: installPackageMaxLength == 0
                             ? 0
                             : (installPackageCurrentLength /
-                                installPackageMaxLength),
+                                  installPackageMaxLength),
                       ),
                     ),
                     Text(
-                        "${(installPackageCurrentLength / (1024 * 1024)).toStringAsFixed(2)}MB/${(installPackageMaxLength / (1024 * 1024)).toStringAsFixed(2)}MB(${(installPackageCurrentLength / installPackageMaxLength * 100).toStringAsFixed(2)}%)"),
+                      "${(installPackageCurrentLength / (1024 * 1024)).toStringAsFixed(2)}MB/${(installPackageMaxLength / (1024 * 1024)).toStringAsFixed(2)}MB(${(installPackageCurrentLength / installPackageMaxLength * 100).toStringAsFixed(2)}%)",
+                    ),
                     Text(
                       "${installPackageSpeed.toInt()} kb/s,${AppLocalizations.of(context)!.planTime}:${installPackagePlanTime.toInt()}s",
                     ),
@@ -204,10 +219,11 @@ class _HomePageState extends State<HomePage> {
                 ),
                 actions: [
                   TextButton(
-                      onPressed: () {
-                        context.pop();
-                      },
-                      child: Text(AppLocalizations.of(context)!.cancel))
+                    onPressed: () {
+                      context.pop();
+                    },
+                    child: Text(AppLocalizations.of(context)!.cancel),
+                  ),
                 ],
               );
             },
@@ -250,26 +266,38 @@ class _HomePageState extends State<HomePage> {
 
     void toLogin() async {
       if (Env.config.loginFeatureEnable) {
-        await context
-            .push("/$loginPageRouteName", extra: {'host': Env.config.oauthUrl});
+        await context.push(
+          "/$loginPageRouteName",
+          extra: {'host': Env.config.oauthUrl},
+        );
         if (mounted) {
-          AppStore.eventBus.fire(LoginEvent(
-              loginSuccess:
-                  Provider.of<ConnectionProvider>(context, listen: false)
-                      .authorized));
+          AppStore.eventBus.fire(
+            LoginEvent(
+              loginSuccess: Provider.of<ConnectionProvider>(
+                context,
+                listen: false,
+              ).authorized,
+            ),
+          );
         }
       } else {
         await showDialog(
-            context: context,
-            builder: (context) {
-              return AlertDialog(
-                  content: Text(AppLocalizations.of(context)!.loginNotOpen));
-            });
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              content: Text(AppLocalizations.of(context)!.loginNotOpen),
+            );
+          },
+        );
         if (mounted) {
-          AppStore.eventBus.fire(LoginEvent(
-              loginSuccess:
-                  Provider.of<ConnectionProvider>(context, listen: false)
-                      .authorized));
+          AppStore.eventBus.fire(
+            LoginEvent(
+              loginSuccess: Provider.of<ConnectionProvider>(
+                context,
+                listen: false,
+              ).authorized,
+            ),
+          );
         }
       }
     }
@@ -278,30 +306,36 @@ class _HomePageState extends State<HomePage> {
       return Provider.of<ConnectionProvider>(context).authorized
           ? GestureDetector(
               child: UserAccountsDrawerHeader(
-                accountName: Provider.of<ConnectionProvider>(context)
-                        .tokenInvalid
-                    ? Row(children: [
-                        Text(ConnectionProvider.connection!.userInfo.sub),
-                        Text("(${AppLocalizations.of(context)!.loginTimeout})")
-                      ])
+                accountName:
+                    Provider.of<ConnectionProvider>(context).tokenInvalid
+                    ? Row(
+                        children: [
+                          Text(ConnectionProvider.connection!.userInfo.sub),
+                          Text(
+                            "(${AppLocalizations.of(context)!.loginTimeout})",
+                          ),
+                        ],
+                      )
                     : Text(ConnectionProvider.connection!.userInfo.sub),
                 accountEmail: const Text(""),
                 currentAccountPicture:
                     ConnectionProvider.connection!.userInfo.avatar != null
-                        ? ClipRRect(
-                            borderRadius:
-                                const BorderRadius.all(Radius.circular(42)),
-                            child: Image.network(
-                              ConnectionProvider.connection!.userInfo.avatar!,
-                              width: 42,
-                              height: 42,
-                              errorBuilder: (context, error, stackTrace) {
-                                return const CircleAvatar(
-                                    child: FlutterLogo(size: 42.0));
-                              },
-                            ),
-                          )
-                        : const CircleAvatar(child: FlutterLogo(size: 42.0)),
+                    ? ClipRRect(
+                        borderRadius: const BorderRadius.all(
+                          Radius.circular(42),
+                        ),
+                        child: Image.network(
+                          ConnectionProvider.connection!.userInfo.avatar!,
+                          width: 42,
+                          height: 42,
+                          errorBuilder: (context, error, stackTrace) {
+                            return const CircleAvatar(
+                              child: FlutterLogo(size: 42.0),
+                            );
+                          },
+                        ),
+                      )
+                    : const CircleAvatar(child: FlutterLogo(size: 42.0)),
               ),
               onTap: () {
                 if (ConnectionProvider().tokenInvalid) {
@@ -310,32 +344,35 @@ class _HomePageState extends State<HomePage> {
                   toLogin();
                 } else {
                   showDialog(
-                      context: context,
-                      builder: (context) {
-                        return AlertDialog(
-                          content: Text(
-                              AppLocalizations.of(context)!.areYouSureLogout),
-                          actions: [
-                            TextButton(
-                                onPressed: () => {context.pop()},
-                                child:
-                                    Text(AppLocalizations.of(context)!.cancel)),
-                            TextButton(
-                                onPressed: () {
-                                  var connection =
-                                      ConnectionProvider.connection!;
-                                  ConnectionProvider()
-                                      .loggedOutSelectedConnection(connection);
-                                  setState(() {});
-                                  context.pop();
-                                },
-                                child: Text(
-                                    AppLocalizations.of(context)!.confirm)),
-                          ],
-                        );
-                      });
+                    context: context,
+                    builder: (context) {
+                      return AlertDialog(
+                        content: Text(
+                          AppLocalizations.of(context)!.areYouSureLogout,
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => {context.pop()},
+                            child: Text(AppLocalizations.of(context)!.cancel),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              var connection = ConnectionProvider.connection!;
+                              ConnectionProvider().loggedOutSelectedConnection(
+                                connection,
+                              );
+                              setState(() {});
+                              context.pop();
+                            },
+                            child: Text(AppLocalizations.of(context)!.confirm),
+                          ),
+                        ],
+                      );
+                    },
+                  );
                 }
-              })
+              },
+            )
           : GestureDetector(
               child: UserAccountsDrawerHeader(
                 accountName: Text(AppLocalizations.of(context)!.pleaseLogin),
@@ -346,7 +383,8 @@ class _HomePageState extends State<HomePage> {
               ),
               onTap: () {
                 toLogin();
-              });
+              },
+            );
     }
 
     ListView getMenuItem(BuildContext context) {
@@ -355,7 +393,8 @@ class _HomePageState extends State<HomePage> {
           getMenuHeader(),
           ListTile(
             title: Text(
-                "${AppLocalizations.of(context)!.memo}(${memoStore.memoTotal})"),
+              "${AppLocalizations.of(context)!.memo}(${memoStore.memoTotal})",
+            ),
             leading: const Icon(Icons.comment),
             onTap: () async {
               Provider.of<AppStore>(context, listen: false).setMenu(Menu.memo);
@@ -387,10 +426,7 @@ class _HomePageState extends State<HomePage> {
     Widget getMemoPage() {
       if (Provider.of<AppStore>(context).showOnlineMemo) {
         memoStore = Provider.of<OnlineMemoStore>(context, listen: true);
-        return MemoPage(
-          memoStore,
-          key: const Key("onlineMemo"),
-        );
+        return MemoPage(memoStore, key: const Key("onlineMemo"));
       } else {
         memoStore = Provider.of<LocalMemoStore>(context, listen: true);
         return MemoPage(memoStore, key: const Key("localMemo"));
@@ -403,21 +439,29 @@ class _HomePageState extends State<HomePage> {
 
     Widget getDisplay() {
       final body = SafeArea(
-          child: Stack(children: [
-        getTargetPage(),
-        UpgradeAlert(
-          upgrader: Upgrader(
-            appcast: appcast,
-            appcastConfig: cfg,
-            messages: UpgraderMessages(
-                code: AppLocalizations.of(context)!.localeName),
-            onUpdate: () {
-              _showDownloadDialog();
-              return false;
-            },
-          ),
+        child: Stack(
+          children: [
+            getTargetPage(),
+            UpgradeAlert(
+              upgrader: Upgrader(
+                storeController: UpgraderStoreController(
+                  onAndroid: () => UpgraderAppcastStore(
+                    appcastURL: Env.config.appcastURL,
+                    osVersion: Version(0, 0, 0),
+                  ),
+                ),
+                messages: UpgraderMessages(
+                  code: AppLocalizations.of(context)!.localeName,
+                ),
+              ),
+              onUpdate: () {
+                _showDownloadDialog();
+                return false;
+              },
+            ),
+          ],
         ),
-      ]));
+      );
 
       if (isDesktop) {
         return Row(
@@ -425,11 +469,12 @@ class _HomePageState extends State<HomePage> {
             desktopShowMenu ? getMenu(context) : Container(),
             const VerticalDivider(width: 1),
             Expanded(
-                child: Scaffold(
-              resizeToAvoidBottomInset: false,
-              key: _scaffoldkey,
-              body: body,
-            ))
+              child: Scaffold(
+                resizeToAvoidBottomInset: false,
+                key: _scaffoldkey,
+                body: body,
+              ),
+            ),
           ],
         );
       } else {

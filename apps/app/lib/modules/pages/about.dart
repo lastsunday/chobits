@@ -13,6 +13,7 @@ import 'package:provider/provider.dart';
 import 'package:r_upgrade/r_upgrade.dart';
 import 'package:upgrader/upgrader.dart';
 import 'package:app/core/log_helper.dart';
+import 'package:version/version.dart';
 
 class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
@@ -33,9 +34,9 @@ class _AboutPageState extends State<AboutPage> {
 
   bool _newVersionAvailable = false;
   bool _versionUpToDate = false;
-  String _newVersion = "";
+  String? _newVersion = "";
 
-  final appcast = Appcast();
+  final appcast = Appcast(osVersion: Version(0, 0, 0));
   int installPackageCurrentLength = 0;
   int installPackageMaxLength = 0;
   double installPackageSpeed = 0.0;
@@ -57,16 +58,20 @@ class _AboutPageState extends State<AboutPage> {
   }
 
   Future<void> _checkAppVersion() async {
-    final cfg = AppcastConfiguration(
-        url: Env.config.appcastURL, supportedOS: ['android']);
-
-    Upgrader upgrader = Upgrader(appcastConfig: cfg, appcast: appcast);
+    Upgrader upgrader = Upgrader(
+      storeController: UpgraderStoreController(
+        onAndroid: () => UpgraderAppcastStore(
+          appcastURL: Env.config.appcastURL,
+          osVersion: Version(0, 0, 0),
+        ),
+      ),
+    );
     await upgrader.initialize();
     if (upgrader.isUpdateAvailable()) {
       setState(() {
         _newVersionAvailable = true;
         _versionUpToDate = false;
-        _newVersion = upgrader.currentAppStoreVersion()!;
+        _newVersion = upgrader.currentAppStoreVersion;
       });
     } else {
       setState(() {
@@ -92,8 +97,10 @@ class _AboutPageState extends State<AboutPage> {
       }
       bool? isSuccess = await RUpgrade.upgradeWithId(id!);
       if (!isSuccess!) {
-        id = await RUpgrade.upgrade(bestItem!.fileURL!,
-            fileName: bestItem.versionString);
+        id = await RUpgrade.upgrade(
+          bestItem!.fileURL!,
+          fileName: bestItem.versionString,
+        );
       }
     } else {
       id = await RUpgrade.upgrade(bestItem!.fileURL!);
@@ -124,7 +131,8 @@ class _AboutPageState extends State<AboutPage> {
                   }
                 }
                 LogHelper.debug(
-                    "${event.currentLength}/${event.maxLength},${event.status},${event.path},${event.speed},${event.planTime}");
+                  "${event.currentLength}/${event.maxLength},${event.status},${event.path},${event.speed},${event.planTime}",
+                );
               });
               return AlertDialog(
                 title: Text(AppLocalizations.of(context)!.newVersionDownload),
@@ -137,11 +145,12 @@ class _AboutPageState extends State<AboutPage> {
                         value: installPackageMaxLength == 0
                             ? 0
                             : (installPackageCurrentLength /
-                                installPackageMaxLength),
+                                  installPackageMaxLength),
                       ),
                     ),
                     Text(
-                        "${(installPackageCurrentLength / (1024 * 1024)).toStringAsFixed(2)}MB/${(installPackageMaxLength / (1024 * 1024)).toStringAsFixed(2)}MB(${(installPackageCurrentLength / installPackageMaxLength * 100).toStringAsFixed(2)}%)"),
+                      "${(installPackageCurrentLength / (1024 * 1024)).toStringAsFixed(2)}MB/${(installPackageMaxLength / (1024 * 1024)).toStringAsFixed(2)}MB(${(installPackageCurrentLength / installPackageMaxLength * 100).toStringAsFixed(2)}%)",
+                    ),
                     Text(
                       "${installPackageSpeed.toInt()} kb/s,${AppLocalizations.of(context)!.planTime}:${installPackagePlanTime.toInt()}s",
                     ),
@@ -149,10 +158,11 @@ class _AboutPageState extends State<AboutPage> {
                 ),
                 actions: [
                   TextButton(
-                      onPressed: () {
-                        context.pop();
-                      },
-                      child: Text(AppLocalizations.of(context)!.cancel))
+                    onPressed: () {
+                      context.pop();
+                    },
+                    child: Text(AppLocalizations.of(context)!.cancel),
+                  ),
                 ],
               );
             },
@@ -167,101 +177,109 @@ class _AboutPageState extends State<AboutPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(AppLocalizations.of(context)!.about),
-      ),
+      appBar: AppBar(title: Text(AppLocalizations.of(context)!.about)),
       body: SingleChildScrollView(
-          child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Column(children: [
-            const Padding(
-                padding: EdgeInsets.all(10),
-                child: FlutterLogo(
-                  size: 100,
-                )),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(0, 0, 0, 40),
-              child: Text(
-                  "${AppLocalizations.of(context)!.version}:${_packageInfo.version}",
-                  style: Theme.of(context).textTheme.bodyMedium),
-            )
-          ]),
-          ListView(
-            shrinkWrap: true,
-            children: ListTile.divideTiles(context: context, tiles: [
-              ListTile(
-                title: Text(AppLocalizations.of(context)!.newVersionUpdate),
-                trailing: _newVersionAvailable
-                    ? Wrap(
-                        alignment: WrapAlignment.center,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                            Container(
-                              padding: const EdgeInsets.all(3),
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .primaryContainer,
-                              child: Text(
-                                AppLocalizations.of(context)!.newVersion,
-                                style: TextStyle(
-                                    fontSize: Theme.of(context)
-                                        .textTheme
-                                        .labelSmall!
-                                        .fontSize,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .secondary),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Column(
+              children: [
+                const Padding(
+                  padding: EdgeInsets.all(10),
+                  child: FlutterLogo(size: 100),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(0, 0, 0, 40),
+                  child: Text(
+                    "${AppLocalizations.of(context)!.version}:${_packageInfo.version}",
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+              ],
+            ),
+            ListView(
+              shrinkWrap: true,
+              children: ListTile.divideTiles(
+                context: context,
+                tiles: [
+                  ListTile(
+                    title: Text(AppLocalizations.of(context)!.newVersionUpdate),
+                    trailing: _newVersionAvailable
+                        ? Wrap(
+                            alignment: WrapAlignment.center,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(3),
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.primaryContainer,
+                                child: Text(
+                                  AppLocalizations.of(context)!.newVersion,
+                                  style: TextStyle(
+                                    fontSize: Theme.of(
+                                      context,
+                                    ).textTheme.labelSmall!.fontSize,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.secondary,
+                                  ),
+                                ),
                               ),
-                            ),
-                            Text(_newVersion)
-                          ])
-                    : (_versionUpToDate
-                        ? Text(AppLocalizations.of(context)!.versionUpToDate)
-                        : const CircularProgressIndicator()),
-                onTap: () {
-                  if (_newVersionAvailable) {
-                    _showDownloadDialog();
-                  }
-                },
-              ),
-              ListTile(
-                // tileColor: Colors.white.withOpacity(1),
-                onTap: () => {showLicensePage(context: context)},
-                title:
-                    Text(MaterialLocalizations.of(context).licensesPageTitle),
-              )
-            ]).toList(),
-          ),
-          //   GestureDetector(
-          //       onTap: () {
-          //         FlutterClipboard.copy(
-          //                 Provider.of<AppStore>(context, listen: false).deviceId)
-          //             .then((value) => UI
-          //                 .showInfo(AppLocalizations.of(context)!.copyDeviceId));
-          //       },
-          //       child: Column(
-          //         children: [
-          //           Padding(
-          //             padding: const EdgeInsets.fromLTRB(0, 10, 0, 0),
-          //             child: Text(AppLocalizations.of(context)!.deviceId,
-          //                 style: Theme.of(context).textTheme.bodyMedium),
-          //           ),
-          //           SizedBox(
-          //             width: 150,
-          //             height: 150,
-          //             child: PrettyQrView.data(
-          //               data: Provider.of<AppStore>(context, listen: false)
-          //                   .deviceId,
-          //             ),
-          //           ),
-          //           Text(Provider.of<AppStore>(context, listen: false).deviceId,
-          //               style: Theme.of(context).textTheme.bodyMedium),
-          //         ],
-          //       ))
-          //
-        ],
-      )),
+                              Text(_newVersion ?? ""),
+                            ],
+                          )
+                        : (_versionUpToDate
+                              ? Text(
+                                  AppLocalizations.of(context)!.versionUpToDate,
+                                )
+                              : const CircularProgressIndicator()),
+                    onTap: () {
+                      if (_newVersionAvailable) {
+                        _showDownloadDialog();
+                      }
+                    },
+                  ),
+                  ListTile(
+                    // tileColor: Colors.white.withOpacity(1),
+                    onTap: () => {showLicensePage(context: context)},
+                    title: Text(
+                      MaterialLocalizations.of(context).licensesPageTitle,
+                    ),
+                  ),
+                ],
+              ).toList(),
+            ),
+            //   GestureDetector(
+            //       onTap: () {
+            //         FlutterClipboard.copy(
+            //                 Provider.of<AppStore>(context, listen: false).deviceId)
+            //             .then((value) => UI
+            //                 .showInfo(AppLocalizations.of(context)!.copyDeviceId));
+            //       },
+            //       child: Column(
+            //         children: [
+            //           Padding(
+            //             padding: const EdgeInsets.fromLTRB(0, 10, 0, 0),
+            //             child: Text(AppLocalizations.of(context)!.deviceId,
+            //                 style: Theme.of(context).textTheme.bodyMedium),
+            //           ),
+            //           SizedBox(
+            //             width: 150,
+            //             height: 150,
+            //             child: PrettyQrView.data(
+            //               data: Provider.of<AppStore>(context, listen: false)
+            //                   .deviceId,
+            //             ),
+            //           ),
+            //           Text(Provider.of<AppStore>(context, listen: false).deviceId,
+            //               style: Theme.of(context).textTheme.bodyMedium),
+            //         ],
+            //       ))
+            //
+          ],
+        ),
+      ),
     );
   }
 }
