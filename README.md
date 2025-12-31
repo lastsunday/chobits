@@ -63,6 +63,10 @@ pnpm i
 pnpm exec nx run @chobits/server-ui:dev
 ```
 
+#### apps/app
+
+**_TODO_**
+
 ### Building
 
 **_TODO_**

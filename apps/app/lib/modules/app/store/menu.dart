@@ -1,0 +1,1 @@
+enum Menu { memo, park }
