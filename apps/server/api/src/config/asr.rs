@@ -8,9 +8,7 @@ pub struct AsrConfig {
 impl AsrConfig {
     pub fn new() -> Self {
         Self {
-            path: Some(String::from(
-                "data/asr/model/openai/whisper-large-v3-turbo/",
-            )),
+            path: Some(String::from("data/asr/model/openai/whisper-tiny/")),
         }
     }
 

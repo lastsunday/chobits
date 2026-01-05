@@ -84,7 +84,7 @@ intel-mkl-src = { version = "0.8.1", features = [
 accelerate-src = { version = "0.3.2", optional = true }
 candle-onnx = { version = "0.9.1" }
 rig-core = { version = "0.26.0" }
-aha = { version = "0.1.6" }
+aha = { version = "0.1.6", features = ["cuda"] }
 aha_openai_dive = { version = "1.4.0", features = ["stream"] }
 # llm end
 # asr start

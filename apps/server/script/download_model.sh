@@ -3,10 +3,15 @@ mkdir -p data
 cd data || exit
 
 mkdir -p asr
-mkdir -p asr/model/openai/whisper-large-v3-turbo
-wget https://huggingface.co/openai/whisper-large-v3-turbo/resolve/41f01f3fe87f28c78e2fbf8b568835947dd65ed9/model.safetensors -O asr/model/openai/whisper-large-v3-turbo/model.safetensors
-wget https://huggingface.co/openai/whisper-large-v3-turbo/resolve/41f01f3fe87f28c78e2fbf8b568835947dd65ed9/tokenizer.json -O asr/model/openai/whisper-large-v3-turbo/tokenizer.json
-wget https://huggingface.co/openai/whisper-large-v3-turbo/resolve/41f01f3fe87f28c78e2fbf8b568835947dd65ed9/config.json -O asr/model/openai/whisper-large-v3-turbo/config.json
+# mkdir -p asr/model/openai/whisper-large-v3-turbo
+# wget https://huggingface.co/openai/whisper-large-v3-turbo/resolve/41f01f3fe87f28c78e2fbf8b568835947dd65ed9/model.safetensors -O asr/model/openai/whisper-large-v3-turbo/model.safetensors
+# wget https://huggingface.co/openai/whisper-large-v3-turbo/resolve/41f01f3fe87f28c78e2fbf8b568835947dd65ed9/tokenizer.json -O asr/model/openai/whisper-large-v3-turbo/tokenizer.json
+# wget https://huggingface.co/openai/whisper-large-v3-turbo/resolve/41f01f3fe87f28c78e2fbf8b568835947dd65ed9/config.json -O asr/model/openai/whisper-large-v3-turbo/config.json
+
+mkdir -p asr/model/openai/whisper-tiny
+wget https://huggingface.co/openai/whisper-tiny/resolve/169d4a4341b33bc18d8881c4b69c2e104e1cc0af/model.safetensors -O asr/model/openai/whisper-tiny/model.safetensors
+wget https://huggingface.co/openai/whisper-tiny/resolve/169d4a4341b33bc18d8881c4b69c2e104e1cc0af/tokenizer.json -O asr/model/openai/whisper-tiny/tokenizer.json
+wget https://huggingface.co/openai/whisper-tiny/resolve/169d4a4341b33bc18d8881c4b69c2e104e1cc0af/config.json -O asr/model/openai/whisper-tiny/config.json
 
 mkdir -p tts
 # mkdir -p tts/model/mzdk100/kokoro
