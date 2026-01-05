@@ -57,3 +57,5 @@
 ## [server-ui](./server-ui.md)
 
 ## [app](./app.md)
+
+## [esp32](./esp32.md)
