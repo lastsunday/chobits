@@ -218,6 +218,12 @@ pub fn setup_web(router: Router) -> Router {
                 .route("/{*file}", get(web::device_assets_handler))
                 .route_layer(CompressionLayer::new()),
         )
+        .nest(
+            "/test",
+            Router::new()
+                .route("/{*file}", get(web::test_handler))
+                .route_layer(CompressionLayer::new()),
+        )
 }
 
 pub fn main() {

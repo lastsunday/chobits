@@ -50,6 +50,7 @@ pnpm nx run chobits-server:run
 - Access admin console <http://127.0.0.1:3000/login>
   - default account: root/Change_Me
 - Access api documentation <http://127.0.0.1:3000/docs>
+- Access device test page <http://127.0.0.1:3000/test/device/test_page.html>
 - Client setting
   - ota url
     <http://127.0.0.1:3000/api/ota/>

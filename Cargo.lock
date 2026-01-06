@@ -1400,6 +1400,7 @@ name = "chobits-server"
 version = "0.1.0"
 dependencies = [
  "accelerate-src",
+ "aha",
  "api",
  "bindgen_cuda",
  "candle-core",

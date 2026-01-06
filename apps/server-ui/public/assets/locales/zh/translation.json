@@ -6,6 +6,7 @@
     "home": "主页"
   },
   "admin": {
+    "title": "管理页面",
     "menu": {
       "dashboard": "仪表板"
     },
@@ -32,6 +33,11 @@
       "account_hint": "请输入账号",
       "password": "密码",
       "password_hint": "请输入密码"
+    }
+  },
+  "test": {
+    "device": {
+      "title": "设备测试页面"
     }
   },
   "error": "错误",

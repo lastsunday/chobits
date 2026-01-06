@@ -8,6 +8,15 @@ use rust_embed::Embed;
 #[include = "index.html"]
 struct IndexHtml;
 
+pub async fn index_handler(method: Method) -> impl IntoResponse {
+    if method == Method::GET {
+        let file = IndexHtml::get("index.html").expect("index.html not found");
+        ([(header::CONTENT_TYPE, "text/html")], file.data).into_response()
+    } else {
+        (StatusCode::NOT_FOUND, "Not Found").into_response()
+    }
+}
+
 #[derive(Embed)]
 #[folder = "dist/assets"]
 struct Assets;
@@ -56,11 +65,26 @@ pub async fn device_assets_handler(Path(path): Path<String>) -> impl IntoRespons
     DeviceAssetsFile(path).into_response()
 }
 
-pub async fn index_handler(method: Method) -> impl IntoResponse {
-    if method == Method::GET {
-        let file = IndexHtml::get("index.html").expect("index.html not found");
-        ([(header::CONTENT_TYPE, "text/html")], file.data).into_response()
-    } else {
-        (StatusCode::NOT_FOUND, "Not Found").into_response()
+#[derive(Embed)]
+#[folder = "dist/test"]
+struct Test;
+
+struct TestFile<T>(T);
+
+impl<T: AsRef<str>> IntoResponse for TestFile<T> {
+    fn into_response(self) -> axum::response::Response {
+        let path = self.0.as_ref();
+        match Test::get(path) {
+            Some(file) => {
+                let mime = file.metadata.mimetype();
+                let body = file.data;
+                ([(header::CONTENT_TYPE, mime)], body).into_response()
+            }
+            None => (StatusCode::NOT_FOUND, "Not found").into_response(),
+        }
     }
+}
+
+pub async fn test_handler(Path(path): Path<String>) -> impl IntoResponse {
+    TestFile(path).into_response()
 }
