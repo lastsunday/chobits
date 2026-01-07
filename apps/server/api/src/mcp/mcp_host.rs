@@ -6,17 +6,18 @@ use rig::{
     completion::ToolDefinition,
     message::{ToolCall, ToolResult},
 };
-use rmcp::model::{JsonRpcMessage, Tool};
-use service::chobits::message::mcp::McpRequest;
+use tokio::sync::Mutex;
+use tracing::info;
 
-use crate::mcp::client::{
-    McpClient,
-    device::{DeviceMcpClient, DeviceMcpPhase},
-};
+use crate::mcp::client::{McpClient, device::DeviceMcpClient};
 use std::sync::Arc;
 
 #[async_trait]
 pub trait McpHost: Send + Sync {
+    async fn set_device_client(&mut self, mcp_client: Arc<Mutex<DeviceMcpClient>>);
+
+    async fn get_device_client(&mut self) -> Option<Arc<Mutex<DeviceMcpClient>>>;
+
     async fn add_client(&mut self, mcp_client: Box<dyn McpClient>);
 
     async fn get_tool(&self) -> anyhow::Result<Vec<ToolDefinition>>;
@@ -26,14 +27,22 @@ pub trait McpHost: Send + Sync {
 
 pub struct UnionMcpHost {
     pub session_id: Option<String>,
-    pub device_mcp_client: DeviceMcpClient,
     mcp_client_list: Vec<Arc<dyn McpClient>>,
     // function_name_and_client_map: HashMap<String, Box<dyn McpClient>>,
     // TODO: map for function name and mcp client ref
+    device_mcp_client: Option<Arc<Mutex<DeviceMcpClient>>>,
 }
 
 #[async_trait]
 impl McpHost for UnionMcpHost {
+    async fn set_device_client(&mut self, mcp_client: Arc<Mutex<DeviceMcpClient>>) {
+        self.device_mcp_client = Some(mcp_client);
+    }
+
+    async fn get_device_client(&mut self) -> Option<Arc<Mutex<DeviceMcpClient>>> {
+        self.device_mcp_client.clone()
+    }
+
     async fn add_client(&mut self, mcp_client: Box<dyn McpClient>) {
         self.mcp_client_list.push(mcp_client.into());
     }
@@ -41,7 +50,11 @@ impl McpHost for UnionMcpHost {
     async fn get_tool(&self) -> anyhow::Result<Vec<ToolDefinition>> {
         // TODO: refactor to &Vec::<ToolDefinition> ?
         let mut tools = Vec::<ToolDefinition>::new();
-        tools.append(&mut self.device_mcp_client.get_tool().await?);
+        if let Some(item) = self.device_mcp_client.clone() {
+            let item = item.lock().await;
+            let mut sub_items = item.get_tool().await?;
+            tools.append(&mut sub_items);
+        }
         for item in &self.mcp_client_list {
             let mut sub_items = item.get_tool().await?;
             tools.append(&mut sub_items);
@@ -59,15 +72,42 @@ impl McpHost for UnionMcpHost {
                 function_name_and_client_map.insert(tool.name, mcp_client.clone());
             }
         }
-        let client = function_name_and_client_map
-            .get(&param.function.name)
-            .with_context(|| {
-                anyhow::anyhow!(format!(
+        if function_name_and_client_map.contains_key(&param.function.name) {
+            let client = function_name_and_client_map
+                .get(&param.function.name)
+                .with_context(|| {
+                    anyhow::anyhow!(format!(
+                        "can't find function name = {}",
+                        param.function.name
+                    ))
+                })?;
+            client.call_tool(param).await
+        } else {
+            let mut function_name_and_client_map =
+                HashMap::<String, Arc<Mutex<DeviceMcpClient>>>::new();
+            if let Some(mcp_client) = self.device_mcp_client.clone() {
+                let mcp_client_item = mcp_client.lock().await;
+                let tools = mcp_client_item.get_tool().await?;
+                for tool in tools {
+                    function_name_and_client_map.insert(tool.name, mcp_client.clone());
+                }
+                let client = function_name_and_client_map
+                    .get(&param.function.name)
+                    .with_context(|| {
+                        anyhow::anyhow!(format!(
+                            "can't find function name = {}",
+                            param.function.name
+                        ))
+                    })?;
+                let client = client.lock().await;
+                client.call_tool(param).await
+            } else {
+                Err(anyhow::anyhow!(format!(
                     "can't find function name = {}",
                     param.function.name
-                ))
-            })?;
-        client.call_tool(param).await
+                )))
+            }
+        }
     }
 }
 
@@ -78,39 +118,9 @@ impl UnionMcpHost {
     pub fn new(session_id: Option<String>) -> Self {
         Self {
             session_id: session_id.clone(),
-            device_mcp_client: DeviceMcpClient::new(session_id.clone()),
             mcp_client_list: vec![],
+            device_mcp_client: None,
             // function_name_and_client_map: HashMap::new(),
         }
     }
-
-    pub async fn get_all_tools(&self) -> Vec<Tool> {
-        self.device_mcp_client.tools.clone()
-    }
-
-    // device mcp start
-    pub async fn create_initialize_request(&mut self) -> McpRequest {
-        self.device_mcp_client.create_initialize_request().await
-    }
-
-    pub async fn handle_initialize_result(&mut self, message: &JsonRpcMessage) {
-        self.device_mcp_client
-            .handle_initialize_result(message)
-            .await
-    }
-
-    pub async fn create_tools_list_request(&mut self) -> McpRequest {
-        self.device_mcp_client.create_tools_list_request().await
-    }
-
-    pub async fn handle_tools_list_result(&mut self, message: &JsonRpcMessage) -> bool {
-        self.device_mcp_client
-            .handle_tools_list_result(message)
-            .await
-    }
-
-    pub async fn get_phase(&self) -> &DeviceMcpPhase {
-        &self.device_mcp_client.phase
-    }
-    // device mcp end
 }

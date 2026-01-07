@@ -21,7 +21,8 @@ use api::setup_mcp;
 use rmcp::{
     ServiceExt as _rmcp_ServiceExt,
     model::{
-        CallToolRequestParam, ClientCapabilities, ClientInfo, Implementation, PaginatedRequestParam,
+        CallToolRequestParam, ClientCapabilities, ClientInfo, Implementation,
+        PaginatedRequestParam, Tool,
     },
     transport::{
         StreamableHttpClientTransport, streamable_http_client::StreamableHttpClientTransportConfig,
@@ -37,8 +38,20 @@ use crate::common::router_client::RouterClient;
 #[tokio::test]
 #[traced_test]
 #[ignore]
-/// cargo test --test llm_model_test -- test_chat_mcp --ignored --nocapture
-async fn test_chat_mcp() -> anyhow::Result<()> {
+/// cargo test --test llm_model_test -- test_chat_server_mcp --ignored --nocapture
+async fn test_chat_server_mcp() -> anyhow::Result<()> {
+    test_chat_mcp(r#"Calculate the sum of 24.5 and 17.3 using the calculator service"#).await
+}
+
+#[tokio::test]
+#[traced_test]
+#[ignore]
+/// cargo test --test llm_model_test -- test_chat_device_mcp --ignored --nocapture
+async fn test_chat_device_mcp() -> anyhow::Result<()> {
+    test_chat_mcp(r#"get device status"#).await
+}
+
+async fn test_chat_mcp(text: &str) -> anyhow::Result<()> {
     let (container, state) = setup_database().await;
     let router = OpenApiRouter::new();
     let ct = tokio_util::sync::CancellationToken::new();
@@ -89,6 +102,83 @@ async fn test_chat_mcp() -> anyhow::Result<()> {
             break;
         }
     }
+
+    let device_mcp_tools_list_response: &'static str = r#"
+[
+  {
+    "name": "self.get_device_status",
+    "description": "Provides the real-time information of the device, including the current status of the audio speaker, screen, battery, network, etc.\nUse this tool for: \n1. Answering questions about current condition (e.g. what is the current volume of the audio speaker?)\n2. As the first step to control the device (e.g. turn up / down the volume of the audio speaker, etc.)",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  {
+    "name": "self.audio_speaker.set_volume",
+    "description": "Set the volume of the audio speaker. If the current volume is unknown, you must call `self.get_device_status` tool first and then call this tool.",
+    "inputSchema": {
+      "properties": {
+        "volume": {
+          "maximum": 100,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": ["volume"],
+      "type": "object"
+    }
+  },
+  {
+    "name": "self.screen.set_brightness",
+    "description": "Set the brightness of the screen.",
+    "inputSchema": {
+      "properties": {
+        "brightness": {
+          "maximum": 100,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": ["brightness"],
+      "type": "object"
+    }
+  },
+  {
+    "name": "self.screen.set_theme",
+    "description": "Set the theme of the screen. The theme can be `light` or `dark`.",
+    "inputSchema": {
+      "properties": {
+        "theme": {
+          "type": "string"
+        }
+      },
+      "required": ["theme"],
+      "type": "object"
+    }
+  },
+  {
+    "name": "self.camera.take_photo",
+    "description": "Take a photo and explain it. Use this tool after the user asks you to see something.\nArgs:\n  `question`: The question that you want to ask about the photo.\nReturn:\n  A JSON object that provides the photo information.",
+    "inputSchema": {
+      "properties": {
+        "question": {
+          "type": "string"
+        }
+      },
+      "required": ["question"],
+      "type": "object"
+    }
+  }
+]"#;
+
+    let device_list_tool: Vec<Tool> = serde_json::from_str(device_mcp_tools_list_response).unwrap();
+    for tool in device_list_tool {
+        tools.push(ToolDefinition {
+            name: tool.name.to_string(),
+            description: tool.description.unwrap_or_default().to_string(),
+            parameters: serde_json::to_value(tool.input_schema)?,
+        });
+    }
     tracing::info!("{:?}", tools);
 
     LlmFactory::init().await;
@@ -99,7 +189,7 @@ async fn test_chat_mcp() -> anyhow::Result<()> {
     let system_prompt = "".to_string();
     let mut chat_history = OneOrMany::<Message>::one(Message::User {
         content: OneOrMany::<UserContent>::one(UserContent::Text(Text {
-            text: r#"Calculate the sum of 24.5 and 17.3 using the calculator service"#.to_string(),
+            text: text.to_string(),
         })),
     });
 

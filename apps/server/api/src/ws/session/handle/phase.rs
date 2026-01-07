@@ -11,10 +11,16 @@ impl Session {
                 self.handle_connect(hello_message).await;
                 self.phase = Phase::ListenDetect;
                 if has_mcp {
-                    let mcp_host = self.mcp_host.clone();
-                    let mut mcp_host = mcp_host.lock().await;
                     //init Device MCP client
-                    self.request_mcp_initialize(&mut mcp_host.device_mcp_client, hello_message)
+                    let mut mcp_host = self.mcp_host.lock().await;
+                    let device_mcp_client = mcp_host
+                        .get_device_client()
+                        .await
+                        .clone()
+                        .expect("device mcp not exists");
+                    let mut device_mcp_client = device_mcp_client.lock().await;
+                    device_mcp_client
+                        .request_mcp_initialize(hello_message)
                         .await;
                 }
             }
@@ -453,7 +459,8 @@ impl Session {
     }
 
     async fn handle_connect(&mut self, _hello_message: &HelloMessage) {
-        let tx = self.output_tx.clone().unwrap();
+        let tx = self.output_tx.clone().expect("output tx not exists");
+        let tx = tx.lock().await;
         let audio_config = config::get().audio();
         let data = HelloMessage {
             message: service::chobits::message::Message {

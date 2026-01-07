@@ -1,5 +1,12 @@
-use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::{
+    Arc,
+    atomic::{AtomicI64, Ordering},
+};
 
+use crate::{
+    mcp::client::McpClient,
+    ws::frame::{FrameError, FrameResult},
+};
 use async_trait::async_trait;
 use rig::{
     completion::ToolDefinition,
@@ -12,10 +19,13 @@ use rmcp::model::{
     Tool, object,
 };
 use serde::Serialize;
-use service::chobits::message::mcp::McpRequest;
+use service::chobits::message::{
+    hello::HelloMessage,
+    mcp::{McpMessage, McpRequest},
+};
+use tokio::sync::Mutex;
+use tokio::sync::mpsc::Sender;
 use tracing::{error, info};
-
-use crate::mcp::client::McpClient;
 
 #[derive(Debug, Clone)]
 pub enum DeviceMcpPhase {
@@ -30,6 +40,7 @@ pub struct DeviceMcpClient {
     next_cursor: Option<String>,
     pub tools: Vec<Tool>,
     pub phase: DeviceMcpPhase,
+    output_tx: Arc<Mutex<Sender<Result<FrameResult, FrameError>>>>,
 }
 
 #[async_trait]
@@ -53,7 +64,10 @@ impl McpClient for DeviceMcpClient {
 }
 
 impl DeviceMcpClient {
-    pub fn new(session_id: Option<String>) -> Self {
+    pub fn new(
+        session_id: Option<String>,
+        output_tx: Arc<Mutex<Sender<Result<FrameResult, FrameError>>>>,
+    ) -> Self {
         Self {
             session_id,
             current_request_id: None,
@@ -61,6 +75,7 @@ impl DeviceMcpClient {
             next_cursor: None,
             tools: Vec::new(),
             phase: DeviceMcpPhase::Initialize,
+            output_tx,
         }
     }
 
@@ -169,6 +184,57 @@ impl DeviceMcpClient {
             }
         }
         false
+    }
+
+    pub async fn handle_mcp(&mut self, message: &McpMessage) {
+        match self.phase {
+            DeviceMcpPhase::Initialize => {
+                self.handle_mcp_initialize_result(message).await;
+                self.request_mcp_tools_list().await;
+            }
+            DeviceMcpPhase::GetToolList => {
+                let has_next = self.handle_mcp_tools_list_result(message).await;
+                if has_next {
+                    self.request_mcp_tools_list().await;
+                } else {
+                    // TODO:end of get deivce mcp tools list
+                    // let tools_list = mcp_host.get_all_tools().await;
+                    // info!("{:?}", tools_list);
+                }
+            }
+        }
+    }
+
+    pub async fn request_mcp_initialize(&mut self, _hello_message: &HelloMessage) {
+        let tx = self.output_tx.clone();
+        let tx = tx.lock().await;
+        let request = self.create_initialize_request().await;
+        // mcp request send
+        let result = tx.send(Ok(FrameResult::McpResult(request))).await;
+        if result.is_err() {
+            info!("tx send mcp initialize reqeust failure");
+        }
+    }
+
+    async fn handle_mcp_initialize_result(&mut self, message: &McpMessage) {
+        self.handle_initialize_result(&message.payload).await;
+    }
+
+    async fn request_mcp_tools_list(&mut self) {
+        let tx = self.output_tx.clone();
+        let tx = tx.lock().await;
+        let result = tx
+            .send(Ok(FrameResult::McpResult(
+                self.create_tools_list_request().await,
+            )))
+            .await;
+        if result.is_err() {
+            info!("tx send mcp tools list reqeust failure");
+        }
+    }
+
+    async fn handle_mcp_tools_list_result(&mut self, message: &McpMessage) -> bool {
+        return self.handle_tools_list_result(&message.payload).await;
     }
 }
 

@@ -6,7 +6,7 @@ use crate::util::llm::{EMOJI_MAP, analyze_emotion};
 use anyhow::Context;
 use core::result::Result;
 use framework::id::gen_id;
-use futures::{SinkExt, StreamExt};
+use futures::StreamExt;
 use rig::OneOrMany;
 use rig::message::{Message, Text, UserContent};
 use service::chobits::message::audio::AudioMessage;
@@ -25,7 +25,7 @@ use tracing::{error, info, instrument};
 pub struct Round {
     pub parent_id: String,
     pub id: String,
-    tx: Sender<Result<FrameResult, FrameError>>,
+    tx: Arc<Mutex<Sender<Result<FrameResult, FrameError>>>>,
     stop: Arc<AtomicBool>,
     client: Arc<Client>,
     tts: Arc<Box<dyn Tts>>,
@@ -77,7 +77,7 @@ async fn send_tts_frame_and_change_state(
 impl Round {
     pub fn new(
         parent_id: String,
-        tx: Sender<Result<FrameResult, FrameError>>,
+        tx: Arc<Mutex<Sender<Result<FrameResult, FrameError>>>>,
         client: Arc<Client>,
         tts: Arc<Box<dyn Tts>>,
     ) -> Self {
@@ -129,6 +129,7 @@ impl Round {
         // let history = self.history.clone();
         let text = String::from(text);
         tokio::spawn(async move {
+            let tx = tx.lock().await;
             if tx
                 .send(Ok(FrameResult::STTResult(SttMessage::new(
                     Some(session_id.clone()),

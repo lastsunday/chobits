@@ -11,6 +11,7 @@ impl LlmConfig {
         Self {
             model: Some(Model::Qwen3),
             path: Some(String::from("data/llm/model/unsloth/Qwen3-1.7B-GGUF/")),
+            // path: Some(String::from("data/llm/model/unsloth/Qwen3-4B-GGUF/")),
             // model: Some(Model::MiniCPM4),
             // path: Some(String::from("data/llm/model/openbmb/MiniCPM4-0.5B/")),
         }

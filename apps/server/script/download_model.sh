@@ -43,5 +43,9 @@ mkdir -p llm
 mkdir -p llm/model/unsloth/Qwen3-1.7B-GGUF
 wget https://huggingface.co/Qwen/Qwen3-1.7B/resolve/70d244cc86ccca08cf5af4e1e306ecf908b1ad5e/tokenizer.json -O llm/model/unsloth/Qwen3-1.7B-GGUF/tokenizer.json
 wget https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/d7f544eead698dbd1f15126ef60b45a1e1933222/Qwen3-1.7B-Q4_K_M.gguf -O llm/model/unsloth/Qwen3-1.7B-GGUF/model.gguf
+# 4B
+# mkdir -p llm/model/unsloth/Qwen3-4B-GGUF
+# wget https://huggingface.co/Qwen/Qwen3-4B/resolve/1cfa9a7208912126459214e8b04321603b3df60c/tokenizer.json -O llm/model/unsloth/Qwen3-4B-GGUF/tokenizer.json
+# wget https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/22c9fc8a8c7700b76a1789366280a6a5a1ad1120/Qwen3-4B-Q4_K_M.gguf -O llm/model/unsloth/Qwen3-4B-GGUF/model.gguf
 
 cd ..

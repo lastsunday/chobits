@@ -4,7 +4,8 @@ use super::session::round::{Command, Round};
 use crate::config;
 use crate::llm::Model;
 use crate::llm::client::ClientBuilder;
-use crate::mcp::mcp_host::UnionMcpHost;
+use crate::mcp::client::device::DeviceMcpClient;
+use crate::mcp::mcp_host::{McpHost, UnionMcpHost};
 use crate::tts::TtsFactory;
 use chrono::Local;
 use core::result::Result;
@@ -12,7 +13,6 @@ use futures::Stream;
 use rig::message::Message;
 use service::chobits::message::hello::{AudioParam, HelloMessage};
 use service::chobits::message::listen::ListenState;
-use service::chobits::message::mcp::McpMessage;
 use service::chobits::message::{AudioFormat, Transport};
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -79,10 +79,12 @@ pub struct SessionConfig {
     pub close_connection_no_voice_time: Option<i64>,
 }
 
+type OutputTx = Option<Arc<Mutex<Sender<Result<FrameResult, FrameError>>>>>;
+
 pub struct Session {
     pub id: String,
     pub current_round: Option<Box<Round>>,
-    output_tx: Option<Sender<Result<FrameResult, FrameError>>>,
+    output_tx: OutputTx,
     phase: Phase,
     latest_activity_time: Arc<Mutex<Option<i64>>>,
     history: Arc<Mutex<History>>,
@@ -150,7 +152,8 @@ impl Session {
     #[instrument(skip(self), name="Session stop" fields(id = %self.id))]
     pub async fn stop(&mut self) {
         self.stop_round().await;
-        let tx = self.output_tx.clone().unwrap();
+        let tx = self.output_tx.clone().expect("output tx not exists");
+        let tx = tx.lock().await;
         let result = tx.send(Ok(FrameResult::CloseResult)).await;
         if result.is_err() {
             info!("tx send frame result close result failure");
@@ -175,7 +178,7 @@ impl Session {
         let tts = TtsFactory::global().default().clone();
         self.current_round = Some(Box::new(Round::new(
             self.id.clone(),
-            tx,
+            tx.clone(),
             Arc::new(client),
             tts,
         )));
@@ -200,7 +203,16 @@ impl Session {
         //     frame.clone()
         // );
         if let Frame::Mcp(message) = frame {
-            self.handle_mcp(message).await;
+            let mcp_host = self.mcp_host.clone();
+            let mut mcp_host = mcp_host.lock().await;
+            let device_mcp_client = mcp_host
+                .get_device_client()
+                .await
+                .clone()
+                .expect("device mcp client must init before accept frame");
+            let device_mcp_client = device_mcp_client.clone();
+            let mut device_mcp_client = device_mcp_client.lock().await;
+            device_mcp_client.handle_mcp(message).await;
             return;
         }
         match phase {
@@ -253,7 +265,14 @@ impl Session {
                 }
             }
         });
-        self.output_tx = Some(inner_tx);
+        let output_tx = Arc::new(Mutex::new(inner_tx));
+        let mcp_device_client = DeviceMcpClient::new(Some(self.id.clone()), output_tx.clone());
+        let mcp_host = self.mcp_host.clone();
+        let mut mcp_host = mcp_host.lock().await;
+        mcp_host
+            .set_device_client(Arc::new(Mutex::new(mcp_device_client)))
+            .await;
+        self.output_tx = Some(output_tx);
         ReceiverStream::new(outer_rx)
     }
 
@@ -268,5 +287,4 @@ impl Session {
     }
 }
 
-include!("handle/mcp.rs");
 include!("handle/phase.rs");
