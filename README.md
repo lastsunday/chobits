@@ -13,18 +13,18 @@ To make an self contained chatbot(self host all component,eg: llm,tts etc..), li
 
 ## Features
 
-1. Connection: websocket
-1. Voice interaction: VAD,ASR,TTS
-1. Chat: LLM
-1. MCP: self host/remote server mcp,device mcp(WIP)
-1. Backend
-   1. home page(WIP)
-   1. admin console(WIP)
-   1. simulation deivce in web(WIP)
-1. Deploy: bin(WIP),docker(WIP)
-1. Compatible devices
-   1. [xiaozhi-esp32](https://github.com/78/xiaozhi-esp32)(WIP)
-   1. chobits(cross platform app,create by flutter)(WIP)
+- [x] Connection: websocket
+- [x] Voice interaction: VAD,ASR,TTS
+- [x] Chat: LLM
+- [x] MCP: self host/remote server mcp,device mcp
+- [ ] Backend
+  1. home page(WIP)
+  1. admin console(WIP)
+  1. simulation deivce in web(WIP)
+- [ ] Deploy: bin(WIP),docker(WIP)
+- [ ] Compatible devices
+  1. [xiaozhi-esp32](https://github.com/78/xiaozhi-esp32)(WIP)
+  1. chobits(cross platform app,create by flutter)(WIP)
 
 ## Documentation
 
