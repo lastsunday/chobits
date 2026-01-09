@@ -15,10 +15,10 @@ impl TtsConfig {
         Self {
             // model: Some(Model::Kokoro),
             // path: Some(String::from("data/tts/model/mzdk100/kokoro/")),
-            model: Some(Model::Voxcpm),
-            path: Some(String::from("data/tts/model/openbmb/VoxCPM-0.5B/")),
             // reference_prompt_text: None,
             // reference_prompt_wav_path: None,
+            model: Some(Model::Voxcpm),
+            path: Some(String::from("data/tts/model/openbmb/VoxCPM-0.5B/")),
             reference_prompt_text: Some(String::from(
                 "一定被灰太狼给吃了，我已经为他准备好了花圈了",
             )),
