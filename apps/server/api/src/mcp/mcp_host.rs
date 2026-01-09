@@ -65,16 +65,18 @@ impl McpHost for UnionMcpHost {
     async fn call_tool(&self, param: ToolCall) -> anyhow::Result<ToolResult> {
         // TODO: need route(check map for function name) before tool call
         // TODO: cache by function_name_and_client_map?
+        let function_name = param.function.name.as_str();
         let mut function_name_and_client_map = HashMap::<String, Arc<dyn McpClient>>::new();
         for mcp_client in &self.mcp_client_list {
             let tools = mcp_client.get_tool().await?;
             for tool in tools {
-                function_name_and_client_map.insert(tool.name, mcp_client.clone());
+                function_name_and_client_map.insert(tool.name.clone(), mcp_client.clone());
             }
         }
-        if function_name_and_client_map.contains_key(&param.function.name) {
+        if function_name_and_client_map.contains_key(function_name) {
+            // server tool call
             let client = function_name_and_client_map
-                .get(&param.function.name)
+                .get(function_name)
                 .with_context(|| {
                     anyhow::anyhow!(format!(
                         "can't find function name = {}",
@@ -83,28 +85,26 @@ impl McpHost for UnionMcpHost {
                 })?;
             client.call_tool(param).await
         } else {
-            let mut function_name_and_client_map =
-                HashMap::<String, Arc<Mutex<DeviceMcpClient>>>::new();
+            // device tool call
+            let mut function_name_and_client_map = HashMap::<String, String>::new();
             if let Some(mcp_client) = self.device_mcp_client.clone() {
-                let mcp_client_item = mcp_client.lock().await;
-                let tools = mcp_client_item.get_tool().await?;
+                let mcp_client = mcp_client.lock().await;
+                let tools = mcp_client.get_tool().await?;
                 for tool in tools {
-                    function_name_and_client_map.insert(tool.name, mcp_client.clone());
+                    function_name_and_client_map.insert(tool.name.clone(), tool.name.clone());
                 }
-                let client = function_name_and_client_map
-                    .get(&param.function.name)
-                    .with_context(|| {
-                        anyhow::anyhow!(format!(
-                            "can't find function name = {}",
-                            param.function.name
-                        ))
-                    })?;
-                let client = client.lock().await;
-                client.call_tool(param).await
+                if function_name_and_client_map.contains_key(function_name) {
+                    mcp_client.call_tool(param).await
+                } else {
+                    Err(anyhow::anyhow!(format!(
+                        "can't find function name = {}",
+                        function_name
+                    )))
+                }
             } else {
                 Err(anyhow::anyhow!(format!(
                     "can't find function name = {}",
-                    param.function.name
+                    function_name
                 )))
             }
         }

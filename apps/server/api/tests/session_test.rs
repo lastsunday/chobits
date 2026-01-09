@@ -30,8 +30,9 @@ use api::{
 use framework::id::gen_id;
 use rmcp::{
     model::{
-        Icon, Implementation, InitializeResult, JsonObject, JsonRpcMessage, JsonRpcResponse,
-        JsonRpcVersion2_0, ListToolsResult, ProtocolVersion, RequestId, ServerCapabilities, object,
+        CallToolResult, Content, Icon, Implementation, InitializeResult, JsonObject,
+        JsonRpcMessage, JsonRpcResponse, JsonRpcVersion2_0, ListToolsResult, ProtocolVersion,
+        RawTextContent, RequestId, ServerCapabilities, object,
     },
     transport::{
         StreamableHttpClientTransport, streamable_http_client::StreamableHttpClientTransportConfig,
@@ -650,21 +651,6 @@ async fn test_chat_flow_break() -> anyhow::Result<()> {
 /// 5.1.1. [Server -> Device] llm text response
 /// 5.1.2. [Server -> Device] tts response
 async fn test_mcp_flow_server_client() -> anyhow::Result<()> {
-    test_mcp_flow(String::from("现在几点")).await
-}
-
-#[tokio::test]
-#[traced_test]
-#[ignore]
-/// Shell command:
-/// ``` shell
-/// cargo test --test session_test -- test_mcp_flow_device_client --ignored --nocapture
-/// ```
-async fn test_mcp_flow_device_client() -> anyhow::Result<()> {
-    test_mcp_flow(String::from("get device status")).await
-}
-
-async fn test_mcp_flow(text: String) -> anyhow::Result<()> {
     let device_mcp_tools_list_response: &'static str = r#"
 [
   {
@@ -807,7 +793,7 @@ async fn test_mcp_flow(text: String) -> anyhow::Result<()> {
         .await;
 
     let frame_result = output.next().await.unwrap().unwrap();
-    assert!(matches!(frame_result, FrameResult::McpResult(..)));
+    info!("{:?}", &frame_result);
     if let FrameResult::McpResult(request) = frame_result {
         assert_eq!(request.payload.request.method, "tools/list");
     }
@@ -827,19 +813,290 @@ async fn test_mcp_flow(text: String) -> anyhow::Result<()> {
         .accept_frame(&Frame::Listen(ListenMessage {
             state: ListenState::Detect,
             mmod: Some(service::chobits::message::listen::ListenMode::Manual),
-            text: Some(&text),
+            text: Some("现在几点"),
+            ..Default::default()
+        }))
+        .await;
+
+    let frame_result = output.next().await.unwrap().unwrap();
+    info!("{:?}", &frame_result);
+    assert!(matches!(frame_result, FrameResult::STTResult(..)));
+
+    let frame_result = output.next().await.unwrap().unwrap();
+    info!("{:?}", &frame_result);
+    assert!(matches!(frame_result, FrameResult::LLMResult(..)));
+
+    assert!(matches!(
+        output.next().await.unwrap().unwrap(),
+        FrameResult::TTSResult(TtsMessage {
+            state: Some(TtsState::Start),
+            ..
+        })
+    ));
+
+    let frame_result = output.next().await.unwrap().unwrap();
+    info!("{:?}", frame_result);
+    assert!(matches!(
+        frame_result,
+        FrameResult::TTSResult(TtsMessage {
+            state: Some(TtsState::SentenceStart),
+            ..
+        })
+    ));
+
+    // has some audio result,detect first one
+    assert!(matches!(
+        output.next().await.unwrap().unwrap(),
+        FrameResult::AudioResult(AudioMessage { .. })
+    ));
+
+    while let Some(data) = output.next().await {
+        match data {
+            Ok(frame_result) => {
+                if let FrameResult::TTSResult(tts_message) = frame_result {
+                    let state = tts_message.state;
+                    if let Some(state) = state
+                        && TtsState::Stop == state
+                    {
+                        break;
+                    }
+                }
+            }
+            Err(e) => {
+                panic!("{:?}", e)
+            }
+        }
+    }
+    // join_handle.await.unwrap();
+    session.stop().await;
+    let _ = &state.conn.close().await?;
+    tear_down(&container).await;
+    Ok(())
+}
+
+#[tokio::test]
+#[traced_test]
+#[ignore]
+/// Shell command:
+/// ``` shell
+/// cargo test --test session_test -- test_mcp_flow_device_client --ignored --nocapture
+/// ```
+async fn test_mcp_flow_device_client() -> anyhow::Result<()> {
+    let device_mcp_tools_list_response: &'static str = r#"
+[
+  {
+    "name": "self.get_device_status",
+    "description": "Provides the real-time information of the device, including the current status of the audio speaker, screen, battery, network, etc.\nUse this tool for: \n1. Answering questions about current condition (e.g. what is the current volume of the audio speaker?)\n2. As the first step to control the device (e.g. turn up / down the volume of the audio speaker, etc.)",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  {
+    "name": "self.audio_speaker.set_volume",
+    "description": "Set the volume of the audio speaker. If the current volume is unknown, you must call `self.get_device_status` tool first and then call this tool.",
+    "inputSchema": {
+      "properties": {
+        "volume": {
+          "maximum": 100,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": ["volume"],
+      "type": "object"
+    }
+  },
+  {
+    "name": "self.screen.set_brightness",
+    "description": "Set the brightness of the screen.",
+    "inputSchema": {
+      "properties": {
+        "brightness": {
+          "maximum": 100,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": ["brightness"],
+      "type": "object"
+    }
+  },
+  {
+    "name": "self.screen.set_theme",
+    "description": "Set the theme of the screen. The theme can be `light` or `dark`.",
+    "inputSchema": {
+      "properties": {
+        "theme": {
+          "type": "string"
+        }
+      },
+      "required": ["theme"],
+      "type": "object"
+    }
+  },
+  {
+    "name": "self.camera.take_photo",
+    "description": "Take a photo and explain it. Use this tool after the user asks you to see something.\nArgs:\n  `question`: The question that you want to ask about the photo.\nReturn:\n  A JSON object that provides the photo information.",
+    "inputSchema": {
+      "properties": {
+        "question": {
+          "type": "string"
+        }
+      },
+      "required": ["question"],
+      "type": "object"
+    }
+  }
+]"#;
+
+    let request_id = AtomicI64::new(0);
+    let (mut session, container, state) = create_session().await?;
+    session.start().await?;
+    // let session_id = session.id.clone();
+    let mut output = session.output_frame().await;
+    // let join_handle = tokio::spawn(async move {
+    //     while let Some(data) = output.next().await {
+    //         info!("session id = {}, data = {:?}", session_id, data);
+    //         match data {
+    //             Ok(frame_result) => match frame_result {
+    //                 FrameResult::HelloResult(_hello_message) => {}
+    //                 FrameResult::STTResult(_stt_message) => {}
+    //                 FrameResult::LLMResult(_llm_message) => {}
+    //                 FrameResult::TTSResult(tts_message) => {
+    //                     let state = tts_message.state;
+    //                     if let Some(state) = state
+    //                         && TtsState::Stop == state
+    //                     {
+    //                         return;
+    //                     }
+    //                 }
+    //                 FrameResult::AudioResult(_audio_message) => {}
+    //                 FrameResult::McpResult(..) => {}
+    //                 FrameResult::CloseResult => {}
+    //             },
+    //             Err(e) => {
+    //                 error!("{:?}", e);
+    //                 break;
+    //             }
+    //         }
+    //     }
+    // });
+    session
+        .accept_frame(&Frame::Hello(HelloMessage {
+            features: Some(Feature {
+                mcp: Some(true),
+                aec: None,
+            }),
             ..Default::default()
         }))
         .await;
     assert!(matches!(
         output.next().await.unwrap().unwrap(),
-        FrameResult::STTResult(..)
+        FrameResult::HelloResult(..)
     ));
+    let frame_result = output.next().await.unwrap().unwrap();
+    assert!(matches!(frame_result, FrameResult::McpResult(..)));
+    if let FrameResult::McpResult(request) = frame_result {
+        assert_eq!(request.payload.request.method, "initialize");
+    }
 
-    assert!(matches!(
-        output.next().await.unwrap().unwrap(),
-        FrameResult::LLMResult(..)
-    ));
+    session
+        .accept_frame(&Frame::Mcp(McpMessage::new(to_json_rpc_response(
+            request_id.fetch_add(1, Ordering::Relaxed),
+            InitializeResult {
+                protocol_version: ProtocolVersion::default(),
+                capabilities: ServerCapabilities::default(),
+                server_info: Implementation {
+                    name: "icon-server".to_string(),
+                    title: None,
+                    version: "2.0.0".to_string(),
+                    icons: Some(vec![Icon {
+                        src: "https://example.com/server.png".to_string(),
+                        mime_type: Some("image/png".to_string()),
+                        sizes: None,
+                    }]),
+                    website_url: Some("https://docs.example.com".to_string()),
+                },
+                instructions: None,
+            },
+        ))))
+        .await;
+
+    let frame_result = output.next().await.unwrap().unwrap();
+    info!("{:?}", &frame_result);
+    if let FrameResult::McpResult(request) = frame_result {
+        assert_eq!(request.payload.request.method, "tools/list");
+    }
+
+    session
+        .accept_frame(&Frame::Mcp(McpMessage::new(to_json_rpc_response(
+            request_id.fetch_add(1, Ordering::Relaxed),
+            ListToolsResult {
+                next_cursor: None,
+                tools: serde_json::from_str(device_mcp_tools_list_response).unwrap(),
+                meta: None,
+            },
+        ))))
+        .await;
+
+    session
+        .accept_frame(&Frame::Listen(ListenMessage {
+            state: ListenState::Detect,
+            mmod: Some(service::chobits::message::listen::ListenMode::Manual),
+            text: Some("get device status"),
+            ..Default::default()
+        }))
+        .await;
+
+    let frame_result = output.next().await.unwrap().unwrap();
+    info!("{:?}", &frame_result);
+    assert!(matches!(frame_result, FrameResult::STTResult(..)));
+
+    let frame_result = output.next().await.unwrap().unwrap();
+    info!("{:?}", &frame_result);
+    assert!(matches!(frame_result, FrameResult::McpResult(..)));
+
+    let mcp_tool_call_response = r#"
+    {
+    "audio_speaker": {
+        "volume": 50,
+        "muted": false
+    },
+    "screen": {
+        "brightness": 80,
+        "theme": "light"
+    },
+    "battery": {
+        "level": 85,
+        "charging": false
+    },
+    "network": {
+        "connected": true,
+        "type": "wifi"
+    }
+    }"#;
+    session
+        .accept_frame(&Frame::Mcp(McpMessage::new(to_json_rpc_response(
+            request_id.fetch_add(1, Ordering::Relaxed),
+            CallToolResult {
+                content: vec![Content {
+                    raw: rmcp::model::RawContent::Text(RawTextContent {
+                        text: mcp_tool_call_response.to_string(),
+                        meta: None,
+                    }),
+                    annotations: None,
+                }],
+                structured_content: None,
+                is_error: None,
+                meta: None,
+            },
+        ))))
+        .await;
+
+    let frame_result = output.next().await.unwrap().unwrap();
+    info!("{:?}", &frame_result);
+    assert!(matches!(frame_result, FrameResult::LLMResult(..)));
 
     assert!(matches!(
         output.next().await.unwrap().unwrap(),

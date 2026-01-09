@@ -1,16 +1,16 @@
 use super::frame::{Frame, FrameError, FrameResult};
 use super::session::listener::Listener;
 use super::session::round::{Command, Round};
-use crate::config;
+use crate::config::{self};
 use crate::llm::Model;
 use crate::llm::client::ClientBuilder;
-use crate::mcp::client::device::DeviceMcpClient;
+use crate::mcp::client::device::{DeviceMcpClient, DeviceMcpPhase};
 use crate::mcp::mcp_host::{McpHost, UnionMcpHost};
 use crate::tts::TtsFactory;
 use chrono::Local;
 use core::result::Result;
 use futures::Stream;
-use rig::message::Message;
+use rig::message::{Message, ToolResult};
 use service::chobits::message::hello::{AudioParam, HelloMessage};
 use service::chobits::message::listen::ListenState;
 use service::chobits::message::{AudioFormat, Transport};
@@ -79,7 +79,7 @@ pub struct SessionConfig {
     pub close_connection_no_voice_time: Option<i64>,
 }
 
-type OutputTx = Option<Arc<Mutex<Sender<Result<FrameResult, FrameError>>>>>;
+type OutputTx = Option<Sender<Result<FrameResult, FrameError>>>;
 
 pub struct Session {
     pub id: String,
@@ -94,6 +94,8 @@ pub struct Session {
     model: Arc<Box<dyn Model>>,
     listener: Box<dyn Listener>,
     mcp_host: Arc<Mutex<UnionMcpHost>>,
+    device_mcp_phase: DeviceMcpPhase,
+    device_mcp_call_tool_result_tx: Option<Sender<anyhow::Result<ToolResult>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -140,6 +142,8 @@ impl Session {
             listener,
             model,
             mcp_host,
+            device_mcp_phase: DeviceMcpPhase::Initialize,
+            device_mcp_call_tool_result_tx: None,
         }
     }
 
@@ -153,7 +157,6 @@ impl Session {
     pub async fn stop(&mut self) {
         self.stop_round().await;
         let tx = self.output_tx.clone().expect("output tx not exists");
-        let tx = tx.lock().await;
         let result = tx.send(Ok(FrameResult::CloseResult)).await;
         if result.is_err() {
             info!("tx send frame result close result failure");
@@ -203,16 +206,30 @@ impl Session {
         //     frame.clone()
         // );
         if let Frame::Mcp(message) = frame {
-            let mcp_host = self.mcp_host.clone();
-            let mut mcp_host = mcp_host.lock().await;
-            let device_mcp_client = mcp_host
-                .get_device_client()
-                .await
-                .clone()
-                .expect("device mcp client must init before accept frame");
-            let device_mcp_client = device_mcp_client.clone();
-            let mut device_mcp_client = device_mcp_client.lock().await;
-            device_mcp_client.handle_mcp(message).await;
+            match self.device_mcp_phase {
+                DeviceMcpPhase::ToolCall => {
+                    let result = DeviceMcpClient::handle_mcp_tool_call_result(message).await;
+                    let device_mcp_call_tool_result_tx = self
+                        .device_mcp_call_tool_result_tx
+                        .clone()
+                        .expect("device mcp call tool result tx not exists");
+                    if let Err(ex) = device_mcp_call_tool_result_tx.send(result).await {
+                        panic!("can't send device mcp call tool result {:?}", ex);
+                    }
+                }
+                _ => {
+                    let mcp_host = self.mcp_host.clone();
+                    let mut mcp_host = mcp_host.lock().await;
+                    let device_mcp_client = mcp_host.get_device_client().await;
+                    let device_mcp_client = device_mcp_client.clone();
+                    if let Some(device_mcp_client) = device_mcp_client {
+                        let mut device_mcp_client = device_mcp_client.lock().await;
+                        self.device_mcp_phase = device_mcp_client.handle_mcp(message).await.clone();
+                    } else {
+                        error!("mcp device client not exists");
+                    }
+                }
+            }
             return;
         }
         match phase {
@@ -265,14 +282,20 @@ impl Session {
                 }
             }
         });
-        let output_tx = Arc::new(Mutex::new(inner_tx));
-        let mcp_device_client = DeviceMcpClient::new(Some(self.id.clone()), output_tx.clone());
+
+        let (device_mcp_call_tool_result_tx, device_mcp_call_tool_result_rx) =
+            channel::<anyhow::Result<ToolResult>>(1);
+        self.device_mcp_call_tool_result_tx = Some(device_mcp_call_tool_result_tx);
+        let mcp_device_client = DeviceMcpClient::new(
+            Some(self.id.clone()),
+            inner_tx.clone(),
+            Arc::new(Mutex::new(device_mcp_call_tool_result_rx)),
+        );
+        let mcp_device_client = Arc::new(Mutex::new(mcp_device_client));
         let mcp_host = self.mcp_host.clone();
         let mut mcp_host = mcp_host.lock().await;
-        mcp_host
-            .set_device_client(Arc::new(Mutex::new(mcp_device_client)))
-            .await;
-        self.output_tx = Some(output_tx);
+        mcp_host.set_device_client(mcp_device_client.clone()).await;
+        self.output_tx = Some(inner_tx.clone());
         ReceiverStream::new(outer_rx)
     }
 

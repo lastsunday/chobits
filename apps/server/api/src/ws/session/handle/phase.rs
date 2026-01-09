@@ -460,7 +460,6 @@ impl Session {
 
     async fn handle_connect(&mut self, _hello_message: &HelloMessage) {
         let tx = self.output_tx.clone().expect("output tx not exists");
-        let tx = tx.lock().await;
         let audio_config = config::get().audio();
         let data = HelloMessage {
             message: service::chobits::message::Message {

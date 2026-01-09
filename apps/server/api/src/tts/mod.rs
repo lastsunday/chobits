@@ -31,8 +31,8 @@ pub enum TtsError {
     Init,
     #[error("encode error {0}")]
     Encode(String),
-    #[error("text error")]
-    Text,
+    #[error("text error {0}")]
+    Text(String),
 }
 
 static INSTANCE: OnceLock<TtsFactory> = OnceLock::new();

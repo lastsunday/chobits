@@ -355,6 +355,7 @@ async fn handle_response(
             while let Some(value) = stream.next().await {
                 match value {
                     Ok(StreamedAssistantContent::Text(text)) => {
+                        info!("{:?}", text);
                         text_collector.push_str(&text.text);
                         if let Some(tx) = &tx {
                             let sentence_list = chat.accept_text(&text.text);
@@ -374,6 +375,7 @@ async fn handle_response(
                         call_id,
                         function,
                     })) => {
+                        info!("{:?}", function);
                         messages.push(Message::Assistant {
                             id: Some(id.clone()),
                             content: OneOrMany::<AssistantContent>::one(
@@ -396,7 +398,7 @@ async fn handle_response(
                         reasoning,
                         ..
                     })) => {
-                        info!("{:?}", reasoning);
+                        info!("reasoning -> {:?}", reasoning);
                     }
                     Err(e) => {
                         panic!("has completion error: {:?}", e);

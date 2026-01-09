@@ -7,30 +7,36 @@ use crate::{
     mcp::client::McpClient,
     ws::frame::{FrameError, FrameResult},
 };
+use anyhow::Context;
 use async_trait::async_trait;
 use rig::{
+    OneOrMany,
     completion::ToolDefinition,
-    message::{ToolCall, ToolResult},
+    message::{ToolCall, ToolResult, ToolResultContent},
 };
 use rmcp::model::{
-    ClientCapabilities, ConstString, Implementation, InitializeRequest, InitializeRequestParam,
-    InitializeResult, JsonObject, JsonRpcMessage, JsonRpcRequest, JsonRpcVersion2_0,
-    ListToolsRequest, ListToolsResult, PaginatedRequestParam, ProtocolVersion, Request, RequestId,
-    Tool, object,
+    CallToolRequest, CallToolRequestParam, CallToolResult, ClientCapabilities, ConstString,
+    Implementation, InitializeRequest, InitializeRequestParam, InitializeResult, JsonObject,
+    JsonRpcMessage, JsonRpcRequest, JsonRpcVersion2_0, ListToolsRequest, ListToolsResult,
+    PaginatedRequestParam, ProtocolVersion, RawContent, Request, RequestId, Tool, object,
 };
 use serde::Serialize;
 use service::chobits::message::{
     hello::HelloMessage,
     mcp::{McpMessage, McpRequest},
 };
-use tokio::sync::Mutex;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::{
+    Mutex,
+    mpsc::{Receiver, Sender},
+};
+
 use tracing::{error, info};
 
 #[derive(Debug, Clone)]
 pub enum DeviceMcpPhase {
     Initialize,
     GetToolList,
+    ToolCall,
 }
 
 pub struct DeviceMcpClient {
@@ -40,7 +46,8 @@ pub struct DeviceMcpClient {
     next_cursor: Option<String>,
     pub tools: Vec<Tool>,
     pub phase: DeviceMcpPhase,
-    output_tx: Arc<Mutex<Sender<Result<FrameResult, FrameError>>>>,
+    output_tx: Sender<Result<FrameResult, FrameError>>,
+    call_tool_result_rx: Arc<Mutex<Receiver<anyhow::Result<ToolResult>>>>,
 }
 
 #[async_trait]
@@ -57,16 +64,50 @@ impl McpClient for DeviceMcpClient {
         Ok(result)
     }
 
-    // TODO:
     async fn call_tool(&self, param: ToolCall) -> anyhow::Result<ToolResult> {
-        todo!()
+        let id = RequestId::Number(self.request_id.fetch_add(1, Ordering::Relaxed));
+        let request = CallToolRequest::new(CallToolRequestParam {
+            name: param.function.name.clone().into(),
+            arguments: Some(to_json_object(param.function.arguments.clone())),
+        });
+        let tx = self.output_tx.clone();
+        let result = tx
+            .send(Ok(FrameResult::McpResult(McpRequest::new(
+                self.session_id.clone(),
+                JsonRpcRequest {
+                    jsonrpc: JsonRpcVersion2_0,
+                    id,
+                    request: Request {
+                        method: request.method.as_str().to_string(),
+                        params: to_json_object(request.params),
+                        ..Default::default()
+                    },
+                },
+            ))))
+            .await;
+        if result.is_err() {
+            Err(anyhow::anyhow!(
+                "tx send mcp tool call failure,name = {}",
+                param.function.name
+            ))
+        } else {
+            let call_tool_result_rx = self.call_tool_result_rx.clone();
+            let mut call_tool_result_rx = call_tool_result_rx.lock().await;
+            let result = call_tool_result_rx.recv().await;
+            if let Some(result) = result {
+                result
+            } else {
+                Err(anyhow::anyhow!("call tool result is none"))
+            }
+        }
     }
 }
 
 impl DeviceMcpClient {
     pub fn new(
         session_id: Option<String>,
-        output_tx: Arc<Mutex<Sender<Result<FrameResult, FrameError>>>>,
+        output_tx: Sender<Result<FrameResult, FrameError>>,
+        call_tool_result_rx: Arc<Mutex<Receiver<anyhow::Result<ToolResult>>>>,
     ) -> Self {
         Self {
             session_id,
@@ -76,6 +117,7 @@ impl DeviceMcpClient {
             tools: Vec::new(),
             phase: DeviceMcpPhase::Initialize,
             output_tx,
+            call_tool_result_rx,
         }
     }
 
@@ -186,7 +228,7 @@ impl DeviceMcpClient {
         false
     }
 
-    pub async fn handle_mcp(&mut self, message: &McpMessage) {
+    pub async fn handle_mcp(&mut self, message: &McpMessage) -> &DeviceMcpPhase {
         match self.phase {
             DeviceMcpPhase::Initialize => {
                 self.handle_mcp_initialize_result(message).await;
@@ -197,17 +239,49 @@ impl DeviceMcpClient {
                 if has_next {
                     self.request_mcp_tools_list().await;
                 } else {
-                    // TODO:end of get deivce mcp tools list
-                    // let tools_list = mcp_host.get_all_tools().await;
-                    // info!("{:?}", tools_list);
+                    self.phase = DeviceMcpPhase::ToolCall;
                 }
             }
+            DeviceMcpPhase::ToolCall => {
+                panic!("not support handle tool call in device mcp client");
+            }
+        }
+        &self.phase
+    }
+
+    pub async fn handle_mcp_tool_call_result(message: &McpMessage) -> anyhow::Result<ToolResult> {
+        let message = &message.payload;
+        if let Some((response, id)) = message.clone().into_response() {
+            let result: CallToolResult =
+                serde_json::from_value(serde_json::Value::Object(response))
+                    .with_context(|| anyhow::anyhow!("parse call tool result failure"))?;
+            let content = result.content.first();
+            if let Some(content) = content {
+                match &content.raw {
+                    RawContent::Text(raw_text_content) => {
+                        let tool_result = ToolResult {
+                            id: id.to_string(),
+                            call_id: Some(id.to_string()),
+                            content: OneOrMany::one(ToolResultContent::text(
+                                raw_text_content.text.to_string(),
+                            )),
+                        };
+                        Ok(tool_result)
+                    }
+                    _ => Err(anyhow::anyhow!(
+                        "mcp tool call result content is not text type"
+                    )),
+                }
+            } else {
+                Err(anyhow::anyhow!("mcp tool call result content is none"))
+            }
+        } else {
+            Err(anyhow::anyhow!("mcp tool call result is none"))
         }
     }
 
     pub async fn request_mcp_initialize(&mut self, _hello_message: &HelloMessage) {
         let tx = self.output_tx.clone();
-        let tx = tx.lock().await;
         let request = self.create_initialize_request().await;
         // mcp request send
         let result = tx.send(Ok(FrameResult::McpResult(request))).await;
@@ -222,7 +296,6 @@ impl DeviceMcpClient {
 
     async fn request_mcp_tools_list(&mut self) {
         let tx = self.output_tx.clone();
-        let tx = tx.lock().await;
         let result = tx
             .send(Ok(FrameResult::McpResult(
                 self.create_tools_list_request().await,

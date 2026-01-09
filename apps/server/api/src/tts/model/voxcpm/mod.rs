@@ -132,7 +132,7 @@ impl Tts for TtsVoxCPM {
                         }
                         Err(e) => {
                             tracing::error!("tts text stream error = {}", e.to_string());
-                            if let Err(e) = tx.send(Err(TtsError::Text)).await {
+                            if let Err(e) = tx.send(Err(TtsError::Text(e.to_string()))).await {
                                 tracing::error!("send error failure = {}", e);
                             }
                             break;

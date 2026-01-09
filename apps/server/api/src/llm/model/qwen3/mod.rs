@@ -78,7 +78,7 @@ fn convert_request_to_prompt(request: &CompletionRequest) -> String {
     if let Some(text) = &request.preamble {
         prompt.push_str(text);
     }
-    prompt.push_str(" /no_think\n");
+    // prompt.push_str(" /no_think\n");
     //<|im_start|>system\n{} /no_think
     // tools handle
     if !request.tools.is_empty() {
