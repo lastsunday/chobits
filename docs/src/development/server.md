@@ -1,10 +1,8 @@
-# server
+# Server
 
-## File struct
+## File structure
 
 > <https://learning-rust.github.io/docs/cargo-crates-and-basic-project-structure/>
-
-> tree . -L 3 -a >> tree.md
 
 ```
 .
@@ -52,11 +50,11 @@
 └── web
 ```
 
-## data flow
+## Data flow
 
 **_TODO_**
 
-## CUDA Toolkit install in fedora 43 & develop
+## CUDA Toolkit install in fedora 43 & setup env
 
 ```shell
 sudo sh cuda_12.8.1_570.124.06_linux.run --toolkit --no-drm --silent --override
@@ -78,7 +76,7 @@ conda activate cuda
 # develop...
 ````
 
-## spec
+## Spec
 
 <https://rust-lang.github.io/api-guidelines/>
 

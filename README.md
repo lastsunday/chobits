@@ -28,9 +28,9 @@ To make an self contained chatbot(self host all component,eg: llm,tts etc..), li
 
 ## Documentation
 
-You can find user guide documentation on [here](./docs/guide/README.md).
+You can find user guide documentation on [here](./docs/src/guide/README.md).
 
-You can find user development documentation on [here](/docs/development/README.md).
+You can find user development documentation on [here](/docs/src/development/README.md).
 
 ## Quick start
 
@@ -87,7 +87,7 @@ Expected workflow is: Fork -> Patch -> Push -> Pull Request
 
 ## FAQ
 
-See the [FAQ](./docs/guide/faq.md) file
+See the [FAQ](./docs/src/faq.md) file
 
 ## License
 

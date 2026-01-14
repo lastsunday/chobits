@@ -1,6 +1,6 @@
 # Development
 
-## File struct
+## File structure
 
 > tree . -L 2 -a >> tree.md
 
@@ -99,7 +99,7 @@ flowchart TB
   WebSocket <--> ServerSession
 ```
 
-1. 握手阶段
+### 握手阶段
 
 ```mermaid
 sequenceDiagram
@@ -120,7 +120,7 @@ sequenceDiagram
     end
 ```
 
-1. 通讯阶段
+### 通讯阶段
 
 ```mermaid
 sequenceDiagram
@@ -424,11 +424,3 @@ sequenceDiagram
   ```
 
   - 让设备在界面上显示当前要播放或朗读的文本片段（例如用于显示给用户）。
-
-## [server](./server.md)
-
-## [server-ui](./server-ui.md)
-
-## [app](./app.md)
-
-## [esp32](./esp32.md)

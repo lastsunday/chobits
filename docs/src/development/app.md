@@ -1,4 +1,7 @@
-# app
+# App
+
+> [!WARNING]
+> App not implement any chobits feature right now,just make a basic framework.
 
 ## Framework
 
