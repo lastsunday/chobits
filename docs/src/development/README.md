@@ -2,8 +2,6 @@
 
 ## File structure
 
-> tree . -L 2 -a >> tree.md
-
 ```
 .
 ├── .cargo

@@ -2,8 +2,6 @@
 
 ## File structure
 
-> <https://learning-rust.github.io/docs/cargo-crates-and-basic-project-structure/>
-
 ```
 .
 ├── api
