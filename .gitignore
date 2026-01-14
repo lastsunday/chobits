@@ -64,6 +64,4 @@ asr_result*.wav
 .fvm/
 
 # book
-/index.html
 docs/book/
-docs/index.html
