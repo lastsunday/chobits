@@ -62,3 +62,8 @@ asr_result*.wav
 
 # FVM Version Cache
 .fvm/
+
+# book
+/index.html
+docs/book/
+docs/index.html
