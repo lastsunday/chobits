@@ -147,10 +147,8 @@ sequenceDiagram
           ServerSession ->> ServerSession: asr handle
           ServerSession ->> ServerSession: llm handle
           loop if last llm messages is tools call response
+            ServerSession ->> ServerSession: mcp handle
             ServerSession ->> ServerSession: llm handle
-            opt has tools call
-              ServerSession ->> ServerSession: mcp handle
-            end
           end
           loop
             ServerSession -->> DeviceSession: llm message
@@ -434,7 +432,3 @@ sequenceDiagram
 ## [app](./app.md)
 
 ## [esp32](./esp32.md)
-
-```
-
-```
