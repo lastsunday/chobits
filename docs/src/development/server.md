@@ -2,51 +2,7 @@
 
 ## File structure
 
-```
-.
-├── api
-│   ├── Cargo.toml
-│   ├── locales
-│   │   ├── en.yml
-│   │   └── zh.yml
-│   ├── resources
-│   │   └── test
-│   ├── src
-│   │   ├── asr
-│   │   ├── auth_error.rs
-│   │   ├── auth.rs
-│   │   ├── common
-│   │   ├── config
-│   │   ├── i18n.rs
-│   │   ├── index.rs
-│   │   ├── lib.rs
-│   │   ├── llm
-│   │   ├── mcp
-│   │   ├── ota_data.rs
-│   │   ├── ota_error.rs
-│   │   ├── ota.rs
-│   │   ├── tts
-│   │   ├── util
-│   │   ├── vad
-│   │   └── ws
-│   └── tests
-├── Cargo.toml
-├── CHANGELOG.md
-├── docker-compose.yml
-├── Dockerfile
-├── entity
-├── framework
-├── migration
-├── project.json
-├── README.md
-├── script
-│   ├── download_device_assets.sh
-│   └── download_model.sh
-├── service
-├── src
-│   └── main.rs
-└── web
-```
+_TODO_
 
 ## Data flow
 

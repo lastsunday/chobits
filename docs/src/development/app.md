@@ -247,7 +247,7 @@ The commit message should be structured as follows:
 
 ---
 
-```
+```txt
 <type>[optional scope]: <description>
 
 [optional body]
