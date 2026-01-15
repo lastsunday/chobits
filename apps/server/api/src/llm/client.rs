@@ -24,11 +24,9 @@ use tracing::error;
 #[derive(Clone)]
 pub struct Client {
     model: Arc<Box<dyn Model>>,
-    preamble: Option<String>,
-    chat_history: Option<Vec<Message>>,
     temperature: Option<f64>,
     max_tokens: Option<u64>,
-
+    history: Arc<Mutex<History>>,
     mcp_host: Option<Arc<Mutex<dyn McpHost>>>,
 }
 
@@ -36,18 +34,18 @@ pub struct ChatRequest {
     pub message: Message,
 }
 
+pub struct History {
+    pub preamble: Option<String>,
+    pub chat_history: Vec<Message>,
+}
+
 impl Client {
     pub fn builder() -> ClientBuilder {
         ClientBuilder::new()
     }
 
-    pub fn with_preamble(mut self, preamble: Option<String>) -> Self {
-        self.preamble = preamble;
-        self
-    }
-
-    pub fn with_chat_history(mut self, chat_history: Option<Vec<Message>>) -> Self {
-        self.chat_history = chat_history;
+    pub fn with_history(mut self, history: Arc<Mutex<History>>) -> Self {
+        self.history = history;
         self
     }
 
@@ -64,26 +62,12 @@ impl Client {
     pub fn chat(
         &self,
         request: ChatRequest,
-    ) -> impl Stream<Item = core::result::Result<String, ModelError>> + Unpin + Send + 'static // TODO:return text or mcp result?
-    {
+    ) -> impl Stream<Item = core::result::Result<String, ModelError>> + Unpin + Send + 'static {
         let (tx, rx) = channel::<core::result::Result<String, ModelError>>(10);
         let model = self.model.clone();
         let mcp_host = self.mcp_host.clone();
         let tx_main = tx.clone();
-        let preamble = self.preamble.clone();
-        let chat_history = {
-            if let Some(chat_history) = &self.chat_history {
-                if !chat_history.is_empty() {
-                    let mut result = OneOrMany::many(chat_history.clone()).unwrap();
-                    result.push(request.message);
-                    result
-                } else {
-                    OneOrMany::one(request.message)
-                }
-            } else {
-                OneOrMany::one(request.message)
-            }
-        };
+        let clone_history = self.history.clone();
         let temperature = self.temperature;
         let max_tokens = self.max_tokens;
         thread::spawn(move || {
@@ -97,8 +81,21 @@ impl Client {
                     }
                 };
                 let mut has_next_step = true;
-                let mut chat_history = chat_history.clone();
                 while has_next_step {
+                    let history = clone_history.clone();
+                    let mut history = history.lock().await;
+                    let chat_history = {
+                        if !history.chat_history.is_empty() {
+                            let mut result = OneOrMany::many(history.chat_history.clone()).unwrap();
+                            result.push(request.message.clone());
+                            result
+                        } else {
+                            OneOrMany::one(request.message.clone())
+                        }
+                    };
+                    history.chat_history.push(request.message.clone());
+                    let preamble = history.preamble.clone();
+                    drop(history);
                     let request = CompletionRequest {
                         preamble: preamble.clone(),
                         chat_history: chat_history.clone(),
@@ -115,7 +112,10 @@ impl Client {
                         Ok(messages) => {
                             has_next_step = false;
                             for message in &messages {
-                                chat_history.push(message.clone());
+                                let history = clone_history.clone();
+                                let mut history = history.lock().await;
+                                history.chat_history.push(message.clone());
+                                drop(history);
                                 match message {
                                     Message::User { content: _content } => {
                                         //skip
@@ -137,11 +137,14 @@ impl Client {
                                                                 function: function.clone(),
                                                             })
                                                             .await?;
-                                                        chat_history.push(Message::User {
+                                                        let history = clone_history.clone();
+                                                        let mut history = history.lock().await;
+                                                        history.chat_history.push(Message::User {
                                                             content: OneOrMany::<UserContent>::one(
                                                                 UserContent::ToolResult(result),
                                                             ),
                                                         });
+                                                        drop(history);
                                                         has_next_step = true;
                                                     }
                                                 }
@@ -288,10 +291,12 @@ impl ClientBuilder {
     pub fn build(self) -> Client {
         Client {
             model: self.model,
-            preamble: None,
-            chat_history: None,
             temperature: None,
             max_tokens: None,
+            history: Arc::new(Mutex::new(History {
+                preamble: None,
+                chat_history: vec![],
+            })),
             mcp_host: self.mcp_host,
         }
     }

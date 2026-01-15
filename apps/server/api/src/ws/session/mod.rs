@@ -3,14 +3,14 @@ use super::session::listener::Listener;
 use super::session::round::{Command, Round};
 use crate::config::{self};
 use crate::llm::Model;
-use crate::llm::client::ClientBuilder;
+use crate::llm::client::{ClientBuilder, History};
 use crate::mcp::client::device::{DeviceMcpClient, DeviceMcpPhase};
 use crate::mcp::mcp_host::{McpHost, UnionMcpHost};
 use crate::tts::TtsFactory;
 use chrono::Local;
 use core::result::Result;
 use futures::Stream;
-use rig::message::{Message, ToolResult};
+use rig::message::ToolResult;
 use service::chobits::message::hello::{AudioParam, HelloMessage};
 use service::chobits::message::listen::ListenState;
 use service::chobits::message::{AudioFormat, Transport};
@@ -112,11 +112,6 @@ pub enum ListenMode {
     RealTime,
 }
 
-pub struct History {
-    pub preamble: Option<String>,
-    pub chat_history: Vec<Message>,
-}
-
 impl Session {
     pub fn new(
         id: String,
@@ -172,12 +167,11 @@ impl Session {
             .output_tx
             .clone()
             .expect("tx not create,maybe new round method before output frame method");
-        // TODO: need consider client chat history
         let client = ClientBuilder::new()
             .with_model(self.model.clone())
             .with_mcp_host(self.mcp_host.clone())
             .build()
-            .with_chat_history(Some(self.history.lock().await.chat_history.clone()));
+            .with_history(self.history.clone());
         let tts = TtsFactory::global().default().clone();
         self.current_round = Some(Box::new(Round::new(
             self.id.clone(),

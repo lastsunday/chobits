@@ -1,7 +1,7 @@
 use api::{
     llm::{
         LlmFactory,
-        client::{self, ChatRequest, ClientBuilder},
+        client::{self, ChatRequest, ClientBuilder, History},
     },
     mcp::{
         client::server::ServerMcpClient,
@@ -34,10 +34,14 @@ use crate::common::router_client::RouterClient;
 async fn test_chat_simple() {
     let model = LlmFactory::create_model();
     let system_prompt = "你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等并且数字使用中文字代替。".to_string();
+    let hisotry = Arc::new(Mutex::new(History {
+        preamble: Some(system_prompt),
+        chat_history: vec![],
+    }));
     let client = ClientBuilder::new()
         .with_model(Arc::new(model))
         .build()
-        .with_preamble(Some(system_prompt));
+        .with_history(hisotry);
     let request = ChatRequest {
         message: Message::User {
             content: OneOrMany::<UserContent>::one(UserContent::Text(Text {
@@ -69,10 +73,14 @@ async fn test_chat_simple() {
 async fn test_short_question() {
     let model = LlmFactory::create_model();
     let system_prompt = "你是一个助手。".to_string();
+    let history = Arc::new(Mutex::new(History {
+        preamble: Some(system_prompt),
+        chat_history: vec![],
+    }));
     let client = ClientBuilder::new()
         .with_model(Arc::new(model))
         .build()
-        .with_preamble(Some(system_prompt));
+        .with_history(history);
     let request = ChatRequest {
         message: Message::User {
             content: OneOrMany::<UserContent>::one(UserContent::Text(Text {
@@ -104,14 +112,12 @@ async fn test_short_question() {
 async fn test_chat_history() {
     let model = LlmFactory::create_model();
     let system_prompt = "你是一个助手，协助用户进行记录，查询和提供建议，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等并且数字使用中文字代替。".to_string();
-    let client = ClientBuilder::new()
-        .with_model(Arc::new(model))
-        .build()
-        .with_preamble(Some(system_prompt))
-        .with_chat_history(Some(vec![
+    let history = Arc::new(Mutex::new(History {
+        preamble: Some(system_prompt),
+        chat_history: vec![
             Message::User {
                 content: OneOrMany::<UserContent>::one(UserContent::Text(Text {
-                    text: r#"记录一下，小小的电话号码为12349876"#.to_string(),
+                    text: r#"小小电话号码为12349876"#.to_string(),
                 })),
             },
             Message::Assistant {
@@ -120,11 +126,16 @@ async fn test_chat_history() {
                     text: r#"小小电话号码为12349876"#.to_string(),
                 })),
             },
-        ]));
+        ],
+    }));
+    let client = ClientBuilder::new()
+        .with_model(Arc::new(model))
+        .build()
+        .with_history(history);
     let request = ChatRequest {
         message: Message::User {
             content: OneOrMany::<UserContent>::one(UserContent::Text(Text {
-                text: r#"告诉我小小的电话号码"#.to_string(),
+                text: r#"小小的电话号码是多少"#.to_string(),
             })),
         },
     };
@@ -142,8 +153,8 @@ async fn test_chat_history() {
     }
     let result: String = result.into_iter().collect();
     assert_ne!(0, result.len());
-    assert!(result.contains("12349876"));
     info!("{}", result);
+    assert!(result.contains("12349876"));
 }
 
 #[tokio::test]
@@ -171,12 +182,10 @@ async fn test_chat_mcp() -> anyhow::Result<()> {
     server_client.init().await?;
     union_mcp_host.add_client(Box::new(server_client)).await;
 
-    let system_prompt = "".to_string();
     let client = client::ClientBuilder::new()
         .with_model(Arc::new(model))
         .with_mcp_host(Arc::new(Mutex::new(union_mcp_host)))
-        .build()
-        .with_preamble(Some(system_prompt));
+        .build();
     // let request = ChatRequest {
     //     message: Message::User {
     //         content: OneOrMany::<UserContent>::one(UserContent::Text(Text {
