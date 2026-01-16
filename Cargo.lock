@@ -28,8 +28,9 @@ checksum = "aae1277d39aeec15cb388266ecc24b11c80469deae6067e17a1a7aa9e5c1f234"
 
 [[package]]
 name = "aha"
-version = "0.1.8"
-source = "git+https://github.com/jhqxxx/aha.git#45b53e41cdaa523e71110910b6648f99720ba636"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac9b4b2f512b404130ed86f477268382bcb8e862028c15488a08bcde0d9c597f"
 dependencies = [
  "aha_openai_dive",
  "anyhow",
@@ -51,7 +52,6 @@ dependencies = [
  "rocket",
  "serde",
  "serde_json",
- "serde_yaml",
  "symphonia",
  "tokenizers",
  "tokio",
