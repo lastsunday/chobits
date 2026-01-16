@@ -80,7 +80,7 @@ pub fn filter(text: &str) -> String {
     for r in regex {
         content = String::from(r.replace_all(&content, ""));
     }
-    content.trim().to_string()
+    content.to_string()
 }
 
 #[cfg(test)]

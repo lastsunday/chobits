@@ -18,7 +18,7 @@ intel-mkl-src = { version = "0.8.1", features = [
 ], optional = true }
 accelerate-src = { version = "0.3.2", optional = true }
 # llm end
-aha = { version = "0.1.6" }
+aha = { git = "https://github.com/jhqxxx/aha.git", features = ["cuda"] }
 [build-dependencies]
 # llm start
 bindgen_cuda = { version = "0.1.5", optional = true }

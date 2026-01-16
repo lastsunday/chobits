@@ -206,7 +206,7 @@ mod tests {
 
     #[tokio::test]
     #[traced_test]
-    /// cargo test --package api --lib -- ws::llm::models::token_converter::tests::test_token_convert_think_in_one --show-output
+    /// cargo test --package api --lib -- llm::model::token_converter::tests::test_token_convert_think_in_one --nocapture
     async fn test_token_convert_think_in_one() {
         let mut token_converter = TokenConverter::new();
         let messages = token_converter
@@ -242,7 +242,7 @@ mod tests {
 
     #[tokio::test]
     #[traced_test]
-    /// cargo test --package api --lib -- ws::llm::models::token_converter::tests::test_token_convert_think_start --show-output
+    /// cargo test --package api --lib -- llm::model::token_converter::tests::test_token_convert_think_start --nocapture
     async fn test_token_convert_think_start() {
         let mut token_converter = TokenConverter::new();
         let messages = token_converter
@@ -285,7 +285,7 @@ mod tests {
 
     #[tokio::test]
     #[traced_test]
-    /// cargo test --package api --lib -- ws::llm::models::token_converter::tests::test_token_convert_tool_call_in_think_mode --show-output
+    /// cargo test --package api --lib -- llm::model::token_converter::tests::test_token_convert_tool_call_in_think_mode --nocapture
     async fn test_token_convert_tool_call_in_think_mode() {
         let mut token_converter = TokenConverter::new();
         let mut messages = token_converter.accept_text(
@@ -344,7 +344,7 @@ mod tests {
 
     #[tokio::test]
     #[traced_test]
-    /// cargo test --package api --lib -- ws::llm::models::token_converter::tests::test_token_convert_tool_call_in_no_think_mode --show-output
+    /// cargo test --package api --lib -- llm::model::token_converter::tests::test_token_convert_tool_call_in_no_think_mode --nocapture
     async fn test_token_convert_tool_call_in_no_think_mode() {
         let mut token_converter = TokenConverter::new();
         let mut messages = token_converter.accept_text(
@@ -388,7 +388,7 @@ mod tests {
 
     #[tokio::test]
     #[traced_test]
-    /// cargo test --package api --lib -- ws::llm::models::token_converter::tests::test_token_convert_tool_call_example1 --show-output
+    /// cargo test --package api --lib -- llm::model::token_converter::tests::test_token_convert_tool_call_example1 --nocapture
     async fn test_token_convert_tool_call_example1() {
         let mut token_converter = TokenConverter::new();
         let text = "<tool_call>{\"name\": \"getweather\", \"arguments\": {\"location\": \"San Francisco\"}}</tool_call>";
@@ -420,7 +420,7 @@ mod tests {
 
     #[tokio::test]
     #[traced_test]
-    /// cargo test --package api --lib -- ws::llm::models::token_converter::tests::test_token_convert_tool_call_example2 --show-output
+    /// cargo test --package api --lib -- llm::model::token_converter::tests::test_token_convert_tool_call_example2 --nocapture
     async fn test_token_convert_tool_call_example2() {
         let mut token_converter = TokenConverter::new();
         let text = "<tool_call>{\"name\": \"getweather\", \"arguments\": {\"location\": \"San Francisco\"}}</tool_call";

@@ -108,6 +108,47 @@ async fn test_short_question() {
 #[tokio::test]
 #[traced_test]
 #[ignore]
+/// cargo test --test llm_client_test -- test_english_question --ignored --nocapture
+async fn test_english_question() {
+    let model = LlmFactory::create_model();
+    let system_prompt =
+        "你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等。"
+            .to_string();
+    let history = Arc::new(Mutex::new(History {
+        preamble: Some(system_prompt),
+        chat_history: vec![],
+    }));
+    let client = ClientBuilder::new()
+        .with_model(Arc::new(model))
+        .build()
+        .with_history(history);
+    let request = ChatRequest {
+        message: Message::User {
+            content: OneOrMany::<UserContent>::one(UserContent::Text(Text {
+                text: r#"Who is Albert Einstein"#.to_string(),
+            })),
+        },
+    };
+    let mut output = client.chat(request);
+    let mut result = Vec::new();
+    while let Some(text) = output.next().await {
+        match text {
+            Ok(text) => {
+                result.push(text);
+            }
+            Err(e) => {
+                error!("{}", e.to_string());
+            }
+        }
+    }
+    let result: String = result.into_iter().collect();
+    info!("{}", result);
+    assert_ne!(0, result.len());
+}
+
+#[tokio::test]
+#[traced_test]
+#[ignore]
 /// cargo test --test llm_client_test -- test_chat_history --ignored --nocapture
 async fn test_chat_history() {
     let model = LlmFactory::create_model();
