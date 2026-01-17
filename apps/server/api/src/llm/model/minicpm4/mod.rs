@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use futures::{SinkExt, StreamExt, executor::block_on};
 use futures_channel::mpsc::unbounded;
 use rig::{
-    completion::{CompletionError, CompletionRequest},
+    completion::{CompletionError, CompletionRequest, ToolDefinition},
     message::{Message, UserContent},
     streaming::{RawStreamingChoice, StreamingCompletionResponse},
 };
@@ -100,6 +100,18 @@ impl<'a> Model for Minicpm4<'a> {
             }
         });
         Ok(StreamingCompletionResponse::stream(Box::pin(rx)))
+    }
+
+    fn calculate_system_prompt_len(&self, _system_prompt: &Option<String>) -> u64 {
+        todo!()
+    }
+
+    fn calculate_tools_prompt_len(&self, _tools: &[ToolDefinition]) -> u64 {
+        todo!()
+    }
+
+    fn calculate_message_prompt_len(&self, _message: &Message) -> u64 {
+        todo!()
     }
 }
 

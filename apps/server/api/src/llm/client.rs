@@ -1,4 +1,4 @@
-use std::{sync::Arc, thread};
+use std::{collections::VecDeque, sync::Arc, thread};
 
 use crate::{
     common::ModelError,
@@ -26,6 +26,7 @@ pub struct Client {
     model: Arc<Box<dyn Model>>,
     temperature: Option<f64>,
     max_tokens: Option<u64>,
+    max_prompt_len: Option<u64>,
     history: Arc<Mutex<History>>,
     mcp_host: Option<Arc<Mutex<dyn McpHost>>>,
 }
@@ -59,6 +60,11 @@ impl Client {
         self
     }
 
+    pub fn with_max_prompt_len(mut self, max_prompt_len: Option<u64>) -> Self {
+        self.max_prompt_len = max_prompt_len;
+        self
+    }
+
     pub fn chat(
         &self,
         request: ChatRequest,
@@ -70,6 +76,7 @@ impl Client {
         let clone_history = self.history.clone();
         let temperature = self.temperature;
         let max_tokens = self.max_tokens;
+        let max_prompt_len = self.max_prompt_len;
         thread::spawn(move || {
             let output = block_on(async move {
                 let tools = {
@@ -84,6 +91,28 @@ impl Client {
                 while has_next_step {
                     let history = clone_history.clone();
                     let mut history = history.lock().await;
+                    if let Some(max_prompt_len) = max_prompt_len {
+                        // cut prompt
+                        let mut current_len: u64 = 0;
+                        if let Some(item) = &history.preamble {
+                            current_len += item.len() as u64;
+                        }
+                        current_len += model.calculate_tools_prompt_len(&tools);
+                        let mut target_message_list = VecDeque::new();
+                        // TODO: remove clone?
+                        let chat_history: Vec<_> =
+                            history.chat_history.clone().into_iter().rev().collect();
+                        for message in chat_history {
+                            let len = model.calculate_message_prompt_len(&message);
+                            current_len += len;
+                            if current_len <= max_prompt_len {
+                                target_message_list.push_front(message);
+                            } else {
+                                break;
+                            }
+                        }
+                        history.chat_history = target_message_list.into();
+                    }
                     let chat_history = {
                         if !history.chat_history.is_empty() {
                             let mut result = OneOrMany::many(history.chat_history.clone()).unwrap();
@@ -293,6 +322,7 @@ impl ClientBuilder {
             model: self.model,
             temperature: None,
             max_tokens: None,
+            max_prompt_len: Some(3000),
             history: Arc::new(Mutex::new(History {
                 preamble: None,
                 chat_history: vec![],

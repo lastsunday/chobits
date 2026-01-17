@@ -18,7 +18,7 @@ use futures::{SinkExt, executor::block_on};
 use futures_channel::mpsc::{Sender, channel};
 use quantized::ModelWeights as Qwen3;
 use rig::{
-    completion::{CompletionError, CompletionRequest},
+    completion::{CompletionError, CompletionRequest, ToolDefinition},
     message::{AssistantContent, Message, UserContent},
     providers::openai::Usage,
     streaming::{RawStreamingChoice, StreamingCompletionResponse},
@@ -71,32 +71,31 @@ impl LlmQwen {
     }
 }
 
-fn convert_request_to_prompt(request: &CompletionRequest) -> String {
-    //control tokens see https://qwen.readthedocs.io/en/latest/getting_started/concepts.html
+fn create_system_prompt(system_prompt: &Option<String>) -> String {
     let mut prompt = String::new();
     prompt.push_str("<|im_start|>system\n");
-    if let Some(text) = &request.preamble {
+    if let Some(text) = system_prompt {
         prompt.push_str(text);
     }
-    // prompt.push_str(" /no_think\n");
-    //<|im_start|>system\n{} /no_think
-    // tools handle
-    if !request.tools.is_empty() {
-        // llm tool call agent example see: https://github.com/QwenLM/Qwen-Agent/blob/main/docs/llm.md
-        // llm tool call template see:
-        // 1. https://qwen.readthedocs.io/en/latest/getting_started/concepts.html#tool-calling
-        // 2. https://qwen.readthedocs.io/en/latest/run_locally/ollama.html
-        // 3. https://github.com/NousResearch/Hermes-Function-Calling#prompt-format-for-function-calling
-        // reqeust object see: https://github.com/0xPlaygrounds/rig/blob/main/rig-core/src/completion/request.rs
-        let mut tools_str = String::new();
-        let tools = &request.tools;
-        for tool in tools.iter() {
-            let tool = rig::providers::openai::ToolDefinition::from(tool.clone());
-            let tool_json_str = serde_json::to_string(&tool).unwrap();
-            tools_str.push_str(&format!("{}\n", tool_json_str));
-        }
-        let mut tools_prompt = String::new();
-        tools_prompt.push_str(&format!(
+    prompt
+}
+
+fn create_tools_prompt(tools: &[ToolDefinition]) -> String {
+    let mut prompt = String::new();
+    // llm tool call agent example see: https://github.com/QwenLM/Qwen-Agent/blob/main/docs/llm.md
+    // llm tool call template see:
+    // 1. https://qwen.readthedocs.io/en/latest/getting_started/concepts.html#tool-calling
+    // 2. https://qwen.readthedocs.io/en/latest/run_locally/ollama.html
+    // 3. https://github.com/NousResearch/Hermes-Function-Calling#prompt-format-for-function-calling
+    // reqeust object see: https://github.com/0xPlaygrounds/rig/blob/main/rig-core/src/completion/request.rs
+    let mut tools_str = String::new();
+    for tool in tools.iter() {
+        let tool = rig::providers::openai::ToolDefinition::from(tool.clone());
+        let tool_json_str = serde_json::to_string(&tool).unwrap();
+        tools_str.push_str(&format!("{}\n", tool_json_str));
+    }
+    let mut tools_prompt = String::new();
+    tools_prompt.push_str(&format!(
             "# Tools\n
             You may call one or more functions to assist with the user query.\n
             You are provided with function signatures within <tools></tools> XML tags:\n
@@ -110,77 +109,89 @@ fn convert_request_to_prompt(request: &CompletionRequest) -> String {
             ",
         tools_str
         ));
-        prompt.push_str(&tools_prompt);
-    }
-    prompt.push_str("<|im_end|>\n");
+    prompt.push_str(&tools_prompt);
+    prompt
+}
 
-    let chat_history = &request.chat_history;
-    for message in chat_history.iter() {
-        match message {
-            Message::User { content } => {
-                let items = content.iter();
-                for item in items {
-                    match item {
-                        UserContent::Text(text) => {
-                            prompt
-                                .push_str(&format!("<|im_start|>user\n{}<|im_end|>\n", text.text));
-                        }
+fn create_message_prompt(message: &Message) -> String {
+    let mut prompt = String::new();
+    match message {
+        Message::User { content } => {
+            let items = content.iter();
+            for item in items {
+                match item {
+                    UserContent::Text(text) => {
+                        prompt.push_str(&format!("<|im_start|>user\n{}<|im_end|>\n", text.text));
+                    }
 
-                        UserContent::ToolResult(tool_result) => {
-                            let content = tool_result.content.iter();
-                            for item in content {
-                                match item {
-                                    rig::message::ToolResultContent::Text(text) => {
-                                        let mut tool_result_text = String::from("");
-                                        tool_result_text.push_str(&format!(
-                                            "<tool_response>{}</tool_response>",
-                                            text
-                                        ));
-                                        prompt.push_str(&format!(
-                                            "<|im_start|>user\n{}<|im_end|>\n",
-                                            tool_result_text
-                                        ));
-                                    }
-                                    rig::message::ToolResultContent::Image(image) => {
-                                        // TODO:
-                                    }
+                    UserContent::ToolResult(tool_result) => {
+                        let content = tool_result.content.iter();
+                        for item in content {
+                            match item {
+                                rig::message::ToolResultContent::Text(text) => {
+                                    let mut tool_result_text = String::from("");
+                                    tool_result_text.push_str(&format!(
+                                        "<tool_response>{}</tool_response>",
+                                        text
+                                    ));
+                                    prompt.push_str(&format!(
+                                        "<|im_start|>user\n{}<|im_end|>\n",
+                                        tool_result_text
+                                    ));
+                                }
+                                rig::message::ToolResultContent::Image(image) => {
+                                    // TODO:
                                 }
                             }
                         }
-                        _ => {
-                            // TODO: fix other
-                        }
                     }
-                }
-            }
-            Message::Assistant { id: _, content } => {
-                let items = content.iter();
-                for item in items {
-                    match item {
-                        AssistantContent::Text(text) => {
-                            prompt.push_str(&format!(
-                                "<|im_start|>assistant\n{}<|im_end|>\n",
-                                text.text
-                            ));
-                        }
-                        AssistantContent::ToolCall(tool_call) => {
-                            let mut tool_call_text = String::from("");
-                            tool_call_text.push_str(&format!(
-                                "<tool_call>{}</tool_call>",
-                                &serde_json::to_string(&tool_call.function).unwrap()
-                            ));
-                            prompt.push_str(&format!(
-                                "<|im_start|>assistant\n{}<|im_end|>\n",
-                                tool_call_text
-                            ));
-                        }
-                        _ => {
-                            // TODO: fix other
-                        }
+                    _ => {
+                        // TODO: fix other
                     }
                 }
             }
         }
+        Message::Assistant { id: _, content } => {
+            let items = content.iter();
+            for item in items {
+                match item {
+                    AssistantContent::Text(text) => {
+                        prompt
+                            .push_str(&format!("<|im_start|>assistant\n{}<|im_end|>\n", text.text));
+                    }
+                    AssistantContent::ToolCall(tool_call) => {
+                        let mut tool_call_text = String::from("");
+                        tool_call_text.push_str(&format!(
+                            "<tool_call>{}</tool_call>",
+                            &serde_json::to_string(&tool_call.function).unwrap()
+                        ));
+                        prompt.push_str(&format!(
+                            "<|im_start|>assistant\n{}<|im_end|>\n",
+                            tool_call_text
+                        ));
+                    }
+                    _ => {
+                        // TODO: fix other
+                    }
+                }
+            }
+        }
+    }
+    prompt
+}
+
+fn convert_request_to_prompt(request: &CompletionRequest) -> String {
+    //control tokens see https://qwen.readthedocs.io/en/latest/getting_started/concepts.html
+    let mut prompt = String::new();
+    prompt.push_str(&create_system_prompt(&request.preamble));
+    // prompt.push_str(" /no_think\n");
+    //<|im_start|>system\n{} /no_think
+    // tools handle
+    prompt.push_str(&create_tools_prompt(&request.tools));
+    prompt.push_str("<|im_end|>\n");
+    let chat_history = &request.chat_history;
+    for message in chat_history.iter() {
+        prompt.push_str(&create_message_prompt(message));
     }
     prompt.push_str("<|im_start|>assistant\n");
     prompt
@@ -201,13 +212,14 @@ async fn handle(
     let mut tos = TokenOutputStream::new(tokenizer);
     let prompt_str = convert_request_to_prompt(request);
     debug!("formatted prompt: {}", &prompt_str);
+    debug!("prompt str len = : {}", prompt_str.len());
 
     let tokens = tos
         .tokenizer()
         .encode(prompt_str, true)
         .map_err(|e| ModelError::Chat(format!("tokenizer encode error {}", e)))?;
     let tokens = tokens.get_ids();
-
+    debug!("tokens len = {}", tokens.len());
     // TODO:setting
     // https://huggingface.co/Qwen/Qwen3-1.7B
     let to_sample = request.max_tokens.unwrap_or(32768) as usize;
@@ -372,6 +384,18 @@ impl Model for LlmQwen {
             })
         });
         Ok(StreamingCompletionResponse::stream(Box::pin(rx)))
+    }
+
+    fn calculate_system_prompt_len(&self, system_prompt: &Option<String>) -> u64 {
+        create_system_prompt(system_prompt).len() as u64
+    }
+
+    fn calculate_tools_prompt_len(&self, tools: &[ToolDefinition]) -> u64 {
+        create_tools_prompt(tools).len() as u64
+    }
+
+    fn calculate_message_prompt_len(&self, message: &Message) -> u64 {
+        create_message_prompt(message).len() as u64
     }
 }
 

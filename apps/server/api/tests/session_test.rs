@@ -546,7 +546,7 @@ async fn test_chat_flow_handle_text_message_multiple_time() -> anyhow::Result<()
     ));
     // let mut user_answer = vec![String::from("世界上第高的山是什么，只回答结果不用详细介绍")];
     let mut user_answer = vec![String::from("世界上第高的山是什么")];
-    for index in 2..10 {
+    for index in 2..20 {
         let text = format!("第{}高的呢?", index).to_owned();
         user_answer.push(text);
     }
@@ -1313,6 +1313,7 @@ async fn create_session()
         close_connection_no_voice_time: Some(
             config::get().logic().close_connection_no_voice_time(),
         ),
+        max_prompt_len: Some(3000),
     };
     let session = SessionBuilder::new()
         .with_listener(Box::new(DefaultListener::new(

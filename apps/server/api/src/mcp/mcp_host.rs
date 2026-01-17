@@ -7,7 +7,6 @@ use rig::{
     message::{ToolCall, ToolResult},
 };
 use tokio::sync::Mutex;
-use tracing::info;
 
 use crate::mcp::client::{McpClient, device::DeviceMcpClient};
 use std::sync::Arc;

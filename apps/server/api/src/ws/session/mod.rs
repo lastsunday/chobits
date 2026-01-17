@@ -77,6 +77,7 @@ impl SessionBuilder {
 
 pub struct SessionConfig {
     pub close_connection_no_voice_time: Option<i64>,
+    pub max_prompt_len: Option<u64>,
 }
 
 type OutputTx = Option<Sender<Result<FrameResult, FrameError>>>;
@@ -171,7 +172,8 @@ impl Session {
             .with_model(self.model.clone())
             .with_mcp_host(self.mcp_host.clone())
             .build()
-            .with_history(self.history.clone());
+            .with_history(self.history.clone())
+            .with_max_prompt_len(self.config.max_prompt_len);
         let tts = TtsFactory::global().default().clone();
         self.current_round = Some(Box::new(Round::new(
             self.id.clone(),

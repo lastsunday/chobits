@@ -93,10 +93,10 @@ where
     W: Sink<Message> + Unpin + Send + 'static,
     R: Stream<Item = Result<Message, axum::Error>> + Unpin + Send + 'static,
 {
+    let logic = config::get().logic();
     let config = SessionConfig {
-        close_connection_no_voice_time: Some(
-            config::get().logic().close_connection_no_voice_time(),
-        ),
+        close_connection_no_voice_time: Some(logic.close_connection_no_voice_time()),
+        max_prompt_len: Some(logic.max_prompt_len()),
     };
     let id = gen_id();
     let mut mcp_host = UnionMcpHost::new(Some(id.clone()));

@@ -8,7 +8,8 @@ use crate::{
 };
 use async_trait::async_trait;
 use rig::{
-    completion::{CompletionError, CompletionRequest},
+    completion::{CompletionError, CompletionRequest, ToolDefinition},
+    message::Message,
     streaming::StreamingCompletionResponse,
 };
 use std::sync::{Arc, OnceLock};
@@ -22,6 +23,12 @@ pub trait Model: Send + Sync {
         StreamingCompletionResponse<rig::providers::openai::streaming::StreamingCompletionResponse>,
         CompletionError,
     >;
+
+    fn calculate_system_prompt_len(&self, system_prompt: &Option<String>) -> u64;
+
+    fn calculate_tools_prompt_len(&self, tools: &[ToolDefinition]) -> u64;
+
+    fn calculate_message_prompt_len(&self, message: &Message) -> u64;
 }
 
 #[derive(Default, Clone)]
@@ -36,6 +43,18 @@ impl Model for DummyModel {
         StreamingCompletionResponse<rig::providers::openai::streaming::StreamingCompletionResponse>,
         CompletionError,
     > {
+        todo!()
+    }
+
+    fn calculate_system_prompt_len(&self, _system_prompt: &Option<String>) -> u64 {
+        todo!()
+    }
+
+    fn calculate_tools_prompt_len(&self, _tools: &[ToolDefinition]) -> u64 {
+        todo!()
+    }
+
+    fn calculate_message_prompt_len(&self, _message: &Message) -> u64 {
         todo!()
     }
 }
