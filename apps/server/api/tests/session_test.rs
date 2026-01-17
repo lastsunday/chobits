@@ -50,7 +50,7 @@ use testcontainers::ContainerAsync;
 use testcontainers_modules::postgres::Postgres;
 use tokio::{sync::Mutex, time::sleep};
 use tokio_stream::StreamExt;
-use tracing::info;
+use tracing::debug;
 use tracing_test::traced_test;
 use utoipa_axum::router::OpenApiRouter;
 
@@ -97,9 +97,9 @@ async fn test_chat_flow_listen_manual() -> anyhow::Result<()> {
     ]
     .iter()
     .collect();
-    info!("{}", wav_file.display());
+    debug!("{}", wav_file.display());
     let (pcm_data, sample_rate) = pcm_decode(wav_file).unwrap();
-    info!(
+    debug!(
         "pcm_data len = {},sample_rate = {}",
         pcm_data.len(),
         sample_rate
@@ -122,13 +122,13 @@ async fn test_chat_flow_listen_manual() -> anyhow::Result<()> {
     // 16000Hz * 1 channel * 60 ms / 1000 = 960
     const MONO_60MS: usize = ENCODE_SAMPLE_RATE as usize * 60 / 1000;
     let size = MONO_60MS;
-    info!("size = {}", size);
+    debug!("size = {}", size);
     let len = pcm_data.len();
     let mut count = len / size;
     if len % size > 0 {
         count += 1;
     }
-    info!("count = {}", count);
+    debug!("count = {}", count);
     let mut audio: Vec<Vec<u8>> = Vec::new();
 
     for n in 0..count {
@@ -147,7 +147,7 @@ async fn test_chat_flow_listen_manual() -> anyhow::Result<()> {
     // TODO: need refactor,remove tokio::spawn
     let join_handle = tokio::spawn(async move {
         while let Some(data) = output.next().await {
-            info!("session id = {}, data = {:?}", session_id, data);
+            debug!("session id = {}, data = {:?}", session_id, data);
             match data {
                 Ok(frame_result) => match frame_result {
                     FrameResult::HelloResult(_hello_message) => {}
@@ -219,9 +219,9 @@ async fn test_chat_flow_listen_auto() -> anyhow::Result<()> {
     ]
     .iter()
     .collect();
-    info!("{}", wav_file.display());
+    debug!("{}", wav_file.display());
     let (pcm_data, sample_rate) = pcm_decode(wav_file).unwrap();
-    info!(
+    debug!(
         "pcm_data len = {},sample_rate = {}",
         pcm_data.len(),
         sample_rate
@@ -244,13 +244,13 @@ async fn test_chat_flow_listen_auto() -> anyhow::Result<()> {
     // 16000Hz * 1 channel * 60 ms / 1000 = 960
     const MONO_60MS: usize = ENCODE_SAMPLE_RATE as usize * 60 / 1000;
     let size = MONO_60MS;
-    info!("size = {}", size);
+    debug!("size = {}", size);
     let len = pcm_data.len();
     let mut count = len / size;
     if len % size > 0 {
         count += 1;
     }
-    info!("count = {}", count);
+    debug!("count = {}", count);
     let mut audio: Vec<Vec<u8>> = Vec::new();
 
     for n in 0..count {
@@ -272,7 +272,7 @@ async fn test_chat_flow_listen_auto() -> anyhow::Result<()> {
     let join_handle = tokio::spawn(async move {
         let mut count = 0;
         while let Some(data) = output.next().await {
-            info!("session id = {}, data = {:?}", session_id, data);
+            debug!("session id = {}, data = {:?}", session_id, data);
             match data {
                 Ok(frame_result) => match frame_result {
                     FrameResult::HelloResult(_hello_message) => {}
@@ -323,6 +323,11 @@ async fn test_chat_flow_listen_auto() -> anyhow::Result<()> {
             ..Default::default()
         }))
         .await;
+    let mut to_next_step = false;
+    while !to_next_step {
+        to_next_step = next_step_for_sender.load(Ordering::Relaxed);
+        sleep(Duration::from_millis(500)).await;
+    }
     session
         .accept_frame(&Frame::Listen(ListenMessage {
             state: ListenState::Start,
@@ -330,19 +335,21 @@ async fn test_chat_flow_listen_auto() -> anyhow::Result<()> {
             ..Default::default()
         }))
         .await;
-    let mut to_next_step = false;
-    info!("before next step");
-    while !to_next_step {
-        to_next_step = next_step_for_sender.load(Ordering::Relaxed);
-        sleep(Duration::from_millis(500)).await;
-    }
-    info!("after next step");
     for n in 0..audio.len() {
         session
             .accept_frame(&Frame::Voice {
                 data: audio.get(n).unwrap(),
             })
             .await;
+    }
+    // silent time = 1800ms > config setting
+    for _ in 0..30 {
+        session
+            .accept_frame(&Frame::Voice {
+                data: vec![].as_ref(),
+            })
+            .await;
+        sleep(Duration::from_millis(60)).await;
     }
     join_handle.await?;
     session.stop().await;
@@ -352,11 +359,17 @@ async fn test_chat_flow_listen_auto() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-#[traced_test]
 #[ignore]
 /// listen voice by realtime mode and output the asr text result
 /// cargo test --test session_test -- test_chat_flow_listen_realtime --ignored --nocapture
 async fn test_chat_flow_listen_realtime() -> anyhow::Result<()> {
+    tracing::subscriber::set_global_default(
+        tracing_subscriber::fmt::Subscriber::builder()
+            .compact()
+            .with_max_level(tracing::Level::TRACE)
+            .finish(),
+    )
+    .expect("Failed to set tracing subscriber");
     use std::path::PathBuf;
 
     let wav_file: PathBuf = [
@@ -367,9 +380,9 @@ async fn test_chat_flow_listen_realtime() -> anyhow::Result<()> {
     ]
     .iter()
     .collect();
-    info!("{}", wav_file.display());
+    debug!("{}", wav_file.display());
     let (pcm_data, sample_rate) = pcm_decode(wav_file).unwrap();
-    info!(
+    debug!(
         "pcm_data len = {},sample_rate = {}",
         pcm_data.len(),
         sample_rate
@@ -392,13 +405,13 @@ async fn test_chat_flow_listen_realtime() -> anyhow::Result<()> {
     // 16000Hz * 1 channel * 60 ms / 1000 = 960
     const MONO_60MS: usize = ENCODE_SAMPLE_RATE as usize * 60 / 1000;
     let size = MONO_60MS;
-    info!("size = {}", size);
+    debug!("size = {}", size);
     let len = pcm_data.len();
     let mut count = len / size;
     if len % size > 0 {
         count += 1;
     }
-    info!("count = {}", count);
+    debug!("count = {}", count);
     let mut audio: Vec<Vec<u8>> = Vec::new();
 
     for n in 0..count {
@@ -411,6 +424,9 @@ async fn test_chat_flow_listen_realtime() -> anyhow::Result<()> {
     }
 
     let (mut session, container, state) = create_session().await?;
+    let next_step = Arc::new(AtomicBool::new(false));
+    let next_step_for_sender = next_step.clone();
+
     let session_id = session.id.clone();
     session.start().await?;
     let mut output = session.output_frame().await;
@@ -418,7 +434,7 @@ async fn test_chat_flow_listen_realtime() -> anyhow::Result<()> {
     let join_handle = tokio::spawn(async move {
         let mut count = 0;
         while let Some(data) = output.next().await {
-            info!("session id = {}, data = {:?}", session_id, data);
+            debug!("session id = {}, data = {:?}", session_id, data);
             match data {
                 Ok(frame_result) => match frame_result {
                     FrameResult::HelloResult(_hello_message) => {}
@@ -430,6 +446,7 @@ async fn test_chat_flow_listen_realtime() -> anyhow::Result<()> {
                             && TtsState::Stop == state
                         {
                             count += 1;
+                            next_step.store(true, Ordering::Relaxed);
                             //when next round tts stop after wake tts round
                             if count >= 2 {
                                 return;
@@ -468,6 +485,11 @@ async fn test_chat_flow_listen_realtime() -> anyhow::Result<()> {
             ..Default::default()
         }))
         .await;
+    let mut to_next_step = false;
+    while !to_next_step {
+        to_next_step = next_step_for_sender.load(Ordering::Relaxed);
+        sleep(Duration::from_millis(500)).await;
+    }
     session
         .accept_frame(&Frame::Listen(ListenMessage {
             state: ListenState::Start,
@@ -482,7 +504,112 @@ async fn test_chat_flow_listen_realtime() -> anyhow::Result<()> {
             })
             .await;
     }
+    // silent time = 1800ms > config setting
+    for _ in 0..30 {
+        session
+            .accept_frame(&Frame::Voice {
+                data: vec![].as_ref(),
+            })
+            .await;
+        sleep(Duration::from_millis(60)).await;
+    }
     join_handle.await?;
+    session.stop().await;
+    let _ = &state.conn.close().await?;
+    tear_down(&container).await;
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore]
+/// get text message and output the asr text result
+/// cargo test --test session_test -- test_chat_flow_handle_text_message_multiple_time --ignored --nocapture
+async fn test_chat_flow_handle_text_message_multiple_time() -> anyhow::Result<()> {
+    tracing::subscriber::set_global_default(
+        tracing_subscriber::fmt::Subscriber::builder()
+            .compact()
+            .with_max_level(tracing::Level::TRACE)
+            .finish(),
+    )
+    .expect("Failed to set tracing subscriber");
+    let (mut session, container, state) = create_session().await?;
+    session.start().await?;
+    let mut output = session.output_frame().await;
+    session
+        .accept_frame(&Frame::Hello(HelloMessage {
+            ..Default::default()
+        }))
+        .await;
+    assert!(matches!(
+        output.next().await.unwrap().unwrap(),
+        FrameResult::HelloResult(..)
+    ));
+    // let mut user_answer = vec![String::from("世界上第高的山是什么，只回答结果不用详细介绍")];
+    let mut user_answer = vec![String::from("世界上第高的山是什么")];
+    for index in 2..10 {
+        let text = format!("第{}高的呢?", index).to_owned();
+        user_answer.push(text);
+    }
+    for index in 0..user_answer.len() {
+        session
+            .accept_frame(&Frame::Listen(ListenMessage {
+                state: ListenState::Detect,
+                mmod: Some(service::chobits::message::listen::ListenMode::Manual),
+                text: Some(user_answer.get(index).unwrap()),
+                ..Default::default()
+            }))
+            .await;
+        let frame_result = output.next().await.unwrap().unwrap();
+        debug!("{:?}", &frame_result);
+        assert!(matches!(frame_result, FrameResult::STTResult(..)));
+
+        assert!(matches!(
+            output.next().await.unwrap().unwrap(),
+            FrameResult::TTSResult(TtsMessage {
+                state: Some(TtsState::Start),
+                ..
+            })
+        ));
+
+        let frame_result = output.next().await.unwrap().unwrap();
+        debug!("{:?}", &frame_result);
+        assert!(matches!(frame_result, FrameResult::LLMResult(..)));
+
+        let frame_result = output.next().await.unwrap().unwrap();
+        debug!("{:?}", frame_result);
+        assert!(matches!(
+            frame_result,
+            FrameResult::TTSResult(TtsMessage {
+                state: Some(TtsState::SentenceStart),
+                ..
+            })
+        ));
+        // has some audio result,detect first one
+        let frame_result = output.next().await.unwrap().unwrap();
+        debug!("{:?}", frame_result);
+        assert!(matches!(
+            frame_result,
+            FrameResult::AudioResult(AudioMessage { .. })
+        ));
+
+        while let Some(data) = output.next().await {
+            match data {
+                Ok(frame_result) => {
+                    if let FrameResult::TTSResult(tts_message) = frame_result {
+                        let state = tts_message.state;
+                        if let Some(state) = state
+                            && TtsState::Stop == state
+                        {
+                            break;
+                        }
+                    }
+                }
+                Err(e) => {
+                    panic!("{:?}", e)
+                }
+            }
+        }
+    }
     session.stop().await;
     let _ = &state.conn.close().await?;
     tear_down(&container).await;
@@ -502,7 +629,7 @@ async fn test_chat_flow_handle_text_message() -> anyhow::Result<()> {
     // TODO: need refactor,remove tokio::spawn
     let join_handle = tokio::spawn(async move {
         while let Some(data) = output.next().await {
-            info!("session id = {}, data = {:?}", session_id, data);
+            debug!("session id = {}, data = {:?}", session_id, data);
             match data {
                 Ok(frame_result) => match frame_result {
                     FrameResult::HelloResult(_hello_message) => {}
@@ -562,7 +689,7 @@ async fn test_chat_flow_break() -> anyhow::Result<()> {
     // TODO: need refactor,remove tokio::spawn
     let join_handle = tokio::spawn(async move {
         while let Some(data) = output.next().await {
-            info!("session id = {}, data = {:?}", session_id, data);
+            debug!("session id = {}, data = {:?}", session_id, data);
             match data {
                 Ok(frame_result) => match frame_result {
                     FrameResult::HelloResult(_hello_message) => {}
@@ -726,7 +853,7 @@ async fn test_mcp_flow_server_client() -> anyhow::Result<()> {
     let mut output = session.output_frame().await;
     // let join_handle = tokio::spawn(async move {
     //     while let Some(data) = output.next().await {
-    //         info!("session id = {}, data = {:?}", session_id, data);
+    //         debug!("session id = {}, data = {:?}", session_id, data);
     //         match data {
     //             Ok(frame_result) => match frame_result {
     //                 FrameResult::HelloResult(_hello_message) => {}
@@ -793,7 +920,7 @@ async fn test_mcp_flow_server_client() -> anyhow::Result<()> {
         .await;
 
     let frame_result = output.next().await.unwrap().unwrap();
-    info!("{:?}", &frame_result);
+    debug!("{:?}", &frame_result);
     if let FrameResult::McpResult(request) = frame_result {
         assert_eq!(request.payload.request.method, "tools/list");
     }
@@ -819,12 +946,8 @@ async fn test_mcp_flow_server_client() -> anyhow::Result<()> {
         .await;
 
     let frame_result = output.next().await.unwrap().unwrap();
-    info!("{:?}", &frame_result);
+    debug!("{:?}", &frame_result);
     assert!(matches!(frame_result, FrameResult::STTResult(..)));
-
-    let frame_result = output.next().await.unwrap().unwrap();
-    info!("{:?}", &frame_result);
-    assert!(matches!(frame_result, FrameResult::LLMResult(..)));
 
     assert!(matches!(
         output.next().await.unwrap().unwrap(),
@@ -835,7 +958,11 @@ async fn test_mcp_flow_server_client() -> anyhow::Result<()> {
     ));
 
     let frame_result = output.next().await.unwrap().unwrap();
-    info!("{:?}", frame_result);
+    debug!("{:?}", &frame_result);
+    assert!(matches!(frame_result, FrameResult::LLMResult(..)));
+
+    let frame_result = output.next().await.unwrap().unwrap();
+    debug!("{:?}", frame_result);
     assert!(matches!(
         frame_result,
         FrameResult::TTSResult(TtsMessage {
@@ -957,7 +1084,7 @@ async fn test_mcp_flow_device_client() -> anyhow::Result<()> {
     let mut output = session.output_frame().await;
     // let join_handle = tokio::spawn(async move {
     //     while let Some(data) = output.next().await {
-    //         info!("session id = {}, data = {:?}", session_id, data);
+    //         debug!("session id = {}, data = {:?}", session_id, data);
     //         match data {
     //             Ok(frame_result) => match frame_result {
     //                 FrameResult::HelloResult(_hello_message) => {}
@@ -1024,7 +1151,7 @@ async fn test_mcp_flow_device_client() -> anyhow::Result<()> {
         .await;
 
     let frame_result = output.next().await.unwrap().unwrap();
-    info!("{:?}", &frame_result);
+    debug!("{:?}", &frame_result);
     if let FrameResult::McpResult(request) = frame_result {
         assert_eq!(request.payload.request.method, "tools/list");
     }
@@ -1050,11 +1177,19 @@ async fn test_mcp_flow_device_client() -> anyhow::Result<()> {
         .await;
 
     let frame_result = output.next().await.unwrap().unwrap();
-    info!("{:?}", &frame_result);
+    debug!("{:?}", &frame_result);
     assert!(matches!(frame_result, FrameResult::STTResult(..)));
 
+    assert!(matches!(
+        output.next().await.unwrap().unwrap(),
+        FrameResult::TTSResult(TtsMessage {
+            state: Some(TtsState::Start),
+            ..
+        })
+    ));
+
     let frame_result = output.next().await.unwrap().unwrap();
-    info!("{:?}", &frame_result);
+    debug!("{:?}", &frame_result);
     assert!(matches!(frame_result, FrameResult::McpResult(..)));
 
     let mcp_tool_call_response = r#"
@@ -1095,19 +1230,11 @@ async fn test_mcp_flow_device_client() -> anyhow::Result<()> {
         .await;
 
     let frame_result = output.next().await.unwrap().unwrap();
-    info!("{:?}", &frame_result);
+    debug!("{:?}", &frame_result);
     assert!(matches!(frame_result, FrameResult::LLMResult(..)));
 
-    assert!(matches!(
-        output.next().await.unwrap().unwrap(),
-        FrameResult::TTSResult(TtsMessage {
-            state: Some(TtsState::Start),
-            ..
-        })
-    ));
-
     let frame_result = output.next().await.unwrap().unwrap();
-    info!("{:?}", frame_result);
+    debug!("{:?}", frame_result);
     assert!(matches!(
         frame_result,
         FrameResult::TTSResult(TtsMessage {
@@ -1148,18 +1275,18 @@ async fn test_mcp_flow_device_client() -> anyhow::Result<()> {
 
 async fn create_session()
 -> Result<(Session, Option<ContainerAsync<Postgres>>, AppState), anyhow::Error> {
-    info!("init vad factory");
+    debug!("init vad factory");
     VadFactory::init().await;
-    info!("init vad factory successfully");
-    info!("init asr factory");
+    debug!("init vad factory successfully");
+    debug!("init asr factory");
     AsrFactory::init().await;
-    info!("init asr factory successfully");
-    tracing::info!("init llm factory");
+    debug!("init asr factory successfully");
+    tracing::debug!("init llm factory");
     LlmFactory::init().await;
-    tracing::info!("init llm factory successfully");
-    tracing::info!("init tts factory");
+    tracing::debug!("init llm factory successfully");
+    tracing::debug!("init tts factory");
     TtsFactory::init().await?;
-    tracing::info!("init tts factory successfully");
+    tracing::debug!("init tts factory successfully");
 
     let (container, state) = setup_database().await;
 

@@ -125,7 +125,7 @@ impl Session {
                         let text = &listen_message.text;
                         match text {
                             Some(text) => {
-                                info!("detect text = {}", text.to_string());
+                                debug!("detect text = {}", text.to_string());
                                 self.update_latest_activity_time().await;
                                 self.new_round().await;
                                 //if match walk word
@@ -136,8 +136,8 @@ impl Session {
                                     let command = self.listener.get_result().await;
                                     match command {
                                         Ok(command) => {
-                                            info!("command  = {:?}", command);
                                             let mode = &listen_message.mmod;
+                                            debug!("mode = {:?},command = {:?}", mode, command);
                                             let mut is_text_message = false;
                                             if let Some(mode) = mode {
                                                 is_text_message = mode.clone() == service::chobits::message::listen::ListenMode::Manual;
@@ -185,7 +185,7 @@ impl Session {
                 match &self.current_round {
                     Some(round) => {
                         round_end = round.end.load(Ordering::Relaxed);
-                        // info!(
+                        // debug!(
                         //     "listener listen round end = {} state = {:?}",
                         //     round_end, state,
                         // );
@@ -231,10 +231,14 @@ impl Session {
                         let offset_time = Local::now().timestamp_millis() - latest_activity_time;
                         if offset_time >= close_connection_no_voice_time {
                             self.stop().await;
+                            debug!(
+                                "session stop: offset_time = {} >= close_connection_no_voice_time = {}",
+                                offset_time, close_connection_no_voice_time
+                            );
                         }
                     }
                 }
-                // info!("latest_activity_time = {:?}", self.latest_activity_time);
+                // debug!("latest_activity_time = {:?}", self.latest_activity_time);
             }
             _ => {
                 error!(
@@ -286,7 +290,7 @@ impl Session {
                         let text = &listen_message.text;
                         match text {
                             Some(text) => {
-                                info!("detect text = {}", text.to_string());
+                                debug!("detect text = {}", text.to_string());
                                 self.new_round().await;
                                 //if match walk word
                                 if let Some(round) = &mut self.current_round {
@@ -355,7 +359,7 @@ impl Session {
                         let text = &listen_message.text;
                         match text {
                             Some(text) => {
-                                info!("detect text = {}", text.to_string());
+                                debug!("detect text = {}", text.to_string());
                                 self.update_latest_activity_time().await;
                                 self.new_round().await;
                                 //if match walk word
@@ -366,7 +370,7 @@ impl Session {
                                     let command = self.listener.get_result().await;
                                     match command {
                                         Ok(command) => {
-                                            info!("command  = {:?}", command);
+                                            debug!("command = {:?}", command);
                                             //say hello
                                             round.accept_command(Command::Wake { text }).await;
                                         }
@@ -402,7 +406,7 @@ impl Session {
                 let state = self.listener.get_state();
                 match &self.current_round {
                     Some(_round) => {
-                        // info!(
+                        // debug!(
                         //     "listener listen round end = {} state = {:?}",
                         //     round_end, state,
                         // );
@@ -441,13 +445,17 @@ impl Session {
                     ) {
                         //connection timeout handle
                         let offset_time = Local::now().timestamp_millis() - latest_activity_time;
-                        // info!("offset_time = {}", offset_time);
+                        // debug!("offset_time = {}", offset_time);
                         if offset_time >= close_connection_no_voice_time {
                             self.stop().await;
+                            debug!(
+                                "session stop: offset_time = {} >= close_connection_no_voice_time = {}",
+                                offset_time, close_connection_no_voice_time
+                            );
                         }
                     }
                 }
-                // info!("latest_activity_time = {:?}", self.latest_activity_time);
+                // debug!("latest_activity_time = {:?}", self.latest_activity_time);
             }
             _ => {
                 error!(
@@ -478,7 +486,7 @@ impl Session {
         };
         let result = tx.send(Ok(FrameResult::HelloResult(data))).await;
         if result.is_err() {
-            info!("tx send hello result failure");
+            debug!("tx send hello result failure");
         }
     }
 
@@ -487,7 +495,7 @@ impl Session {
         match command {
             Ok(command) => {
                 self.new_round().await;
-                info!("command = {:?}", command.clone());
+                debug!("command = {:?}", command.clone());
                 let text = command.text.as_str();
                 let is_speech_clear = self.is_speech_clear(command.prob);
                 if let Some(round) = &mut self.current_round {

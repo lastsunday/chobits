@@ -20,7 +20,7 @@ use std::sync::atomic::Ordering;
 use tokio::sync::mpsc::{Sender, channel};
 use tokio::sync::{Mutex, Notify};
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{error, info, instrument};
+use tracing::{debug, error, instrument};
 
 pub mod listener;
 pub mod round;
@@ -142,26 +142,26 @@ impl Session {
         }
     }
 
-    #[instrument(skip(self), name="Session start",fields(id = %self.id))]
+    #[instrument(skip(self), name="Session start",fields(session_id = %self.id))]
     pub async fn start(&mut self) -> anyhow::Result<()> {
-        info!("start");
+        debug!("start");
         Ok(())
     }
 
-    #[instrument(skip(self), name="Session stop" fields(id = %self.id))]
+    #[instrument(skip(self), name="Session stop" fields(session_id = %self.id))]
     pub async fn stop(&mut self) {
         self.stop_round().await;
         let tx = self.output_tx.clone().expect("output tx not exists");
         let result = tx.send(Ok(FrameResult::CloseResult)).await;
         if result.is_err() {
-            info!("tx send frame result close result failure");
+            debug!("tx send frame result close result failure");
         }
-        info!("end");
+        debug!("end");
     }
 
-    #[instrument(skip(self), name="Session new round",fields(id = %self.id))]
+    #[instrument(skip(self), name="Session new round",fields(session_id = %self.id))]
     pub async fn new_round(&mut self) {
-        info!("new round");
+        debug!("new round");
         self.stop_round().await;
         let tx = self
             .output_tx
@@ -194,11 +194,11 @@ impl Session {
 
     pub async fn accept_frame<'a>(&mut self, frame: &Frame<'a>) {
         let phase = self.phase.clone();
-        // info!(
-        //     "current phase = {:?}, frame = {:?}",
-        //     phase.clone(),
-        //     frame.clone()
-        // );
+        debug!(
+            "current phase = {:?}, frame = {:?}",
+            phase.clone(),
+            frame.clone()
+        );
         if let Frame::Mcp(message) = frame {
             match self.device_mcp_phase {
                 DeviceMcpPhase::ToolCall => {
@@ -266,7 +266,7 @@ impl Session {
                         *time = Some(Local::now().timestamp_millis());
                         let result = outer_tx.send(frame_result).await;
                         if result.is_err() {
-                            info!("outer tx send frame result failure");
+                            debug!("outer tx send frame result failure");
                             break;
                         }
                     }

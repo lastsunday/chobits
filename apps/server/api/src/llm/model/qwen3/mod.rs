@@ -25,7 +25,7 @@ use rig::{
 };
 use std::thread;
 use tokenizers::Tokenizer;
-use tracing::{error, info};
+use tracing::{debug, error};
 
 #[derive(Clone)]
 pub struct LlmQwen {
@@ -51,7 +51,7 @@ impl LlmQwen {
                 total_size_in_bytes +=
                     elem_count * tensor.ggml_dtype.type_size() / tensor.ggml_dtype.block_size();
             }
-            info!(
+            debug!(
                 "loaded {:?} tensors ({}) in {:.2}s",
                 model.tensor_infos.len(),
                 &format_size(total_size_in_bytes),
@@ -60,7 +60,7 @@ impl LlmQwen {
             Qwen3::from_gguf(model, &mut file, &device)
                 .map_err(|_e| ModelError::ModelInitFailure(model_path.clone()))?
         };
-        info!("model built");
+        debug!("model built");
         let tokenizer = Tokenizer::from_file(token_path.clone())
             .map_err(|_e| ModelError::TokenInitFailure(token_path.clone()))?;
         Ok(Self {
@@ -200,7 +200,7 @@ async fn handle(
 ) -> Result<(), CompletionError> {
     let mut tos = TokenOutputStream::new(tokenizer);
     let prompt_str = convert_request_to_prompt(request);
-    info!("formatted prompt: {}", &prompt_str);
+    debug!("formatted prompt: {}", &prompt_str);
 
     let tokens = tos
         .tokenizer()
@@ -209,7 +209,8 @@ async fn handle(
     let tokens = tokens.get_ids();
 
     // TODO:setting
-    let to_sample = request.max_tokens.unwrap_or(999) as usize;
+    // https://huggingface.co/Qwen/Qwen3-1.7B
+    let to_sample = request.max_tokens.unwrap_or(32768) as usize;
     let temperature = request.temperature.unwrap_or(0.8);
     let seed = 299792458;
     let repeat_last_n = 64;
@@ -317,12 +318,12 @@ async fn handle(
     }
 
     let dt = start_post_prompt.elapsed();
-    info!(
+    debug!(
         "\n\n{:4} prompt tokens processed: {:.2} token/s",
         tokens.len(),
         tokens.len() as f64 / prompt_dt.as_secs_f64(),
     );
-    info!(
+    debug!(
         "{sampled:4} tokens generated: {:.2} token/s",
         sampled as f64 / dt.as_secs_f64(),
     );
@@ -382,7 +383,7 @@ mod tests {
         completion::{CompletionRequest, ToolDefinition},
         message::{AssistantContent, Message, UserContent},
     };
-    use tracing::info;
+    use tracing::debug;
     use tracing_test::traced_test;
 
     use crate::llm::model::qwen3::convert_request_to_prompt;
@@ -474,6 +475,6 @@ mod tests {
             additional_params: None,
         };
         let result = convert_request_to_prompt(&request);
-        info!("{}", result);
+        debug!("{}", result);
     }
 }

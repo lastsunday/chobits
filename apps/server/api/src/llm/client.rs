@@ -19,7 +19,7 @@ use tokio::sync::{
     mpsc::{Sender, channel},
 };
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::error;
+use tracing::{debug, error};
 
 #[derive(Clone)]
 pub struct Client {
@@ -193,7 +193,6 @@ pub async fn handle_response(
     let mut chat = Chat::new();
     match response {
         Ok(mut stream) => {
-            // TODO:
             while let Some(value) = stream.next().await {
                 match value {
                     Ok(StreamedAssistantContent::Text(text)) => {
@@ -207,9 +206,10 @@ pub async fn handle_response(
                         }
                     }
                     Ok(StreamedAssistantContent::Final(
-                        rig::providers::openai::StreamingCompletionResponse { usage: _usage },
+                        rig::providers::openai::StreamingCompletionResponse { usage },
                     )) => {
                         // TODO:
+                        debug!("{:?}", usage);
                     }
                     Ok(StreamedAssistantContent::ToolCall(ToolCall {
                         id,
@@ -227,21 +227,23 @@ pub async fn handle_response(
                             ),
                         });
                     }
-                    Ok(StreamedAssistantContent::ToolCallDelta {
-                        id: _id,
-                        delta: _delta,
-                    }) => {
+                    Ok(StreamedAssistantContent::ToolCallDelta { id: _id, delta }) => {
                         // TODO:
+                        debug!("{:?}", delta);
                     }
                     Ok(StreamedAssistantContent::Reasoning(Reasoning {
                         id: _id,
-                        reasoning: _reasoning,
+                        reasoning,
                         ..
                     })) => {
                         // TODO:
+                        debug!("{:?}", reasoning);
                     }
                     Err(e) => {
-                        panic!("has completion error: {:?}", e);
+                        if let Some(tx) = &tx {
+                            tx.send(Err(ModelError::ModelCompletionError(e.to_string())))
+                                .await?;
+                        }
                     }
                 }
             }
@@ -262,9 +264,7 @@ pub async fn handle_response(
             }
             Ok(messages)
         }
-        Err(_e) => {
-            panic!("has completion error");
-        }
+        Err(e) => Err(anyhow::anyhow!(e.to_string())),
     }
 }
 

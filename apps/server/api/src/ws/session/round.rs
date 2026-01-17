@@ -20,7 +20,7 @@ use tokio::sync::Mutex;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::mpsc::error::SendError;
 use tokio::time::{Duration, sleep};
-use tracing::{error, info, instrument};
+use tracing::{debug, error, instrument};
 
 pub struct Round {
     pub parent_id: String,
@@ -94,12 +94,14 @@ impl Round {
         }
     }
 
-    #[instrument(skip(self), name="Round start",fields(id = %self.id,parent_id = %self.parent_id))]
+    #[instrument(skip(self), name="Round start",fields(round_id = %self.id))]
     pub async fn start(&self) {
-        info!("start");
+        debug!("start");
     }
 
+    #[instrument(skip(self), name="Accept command",fields(round_id = %self.id))]
     pub async fn accept_command<'a>(&mut self, command: Command<'a>) {
+        debug!("accept command = {:?}", command);
         match command {
             Command::Chat { text } => {
                 self.llm_tts_handle(text).await;
@@ -119,6 +121,7 @@ impl Round {
 
     async fn llm_tts_handle(&mut self, text: &str) {
         let tx = self.tx.clone();
+        let id = self.id.clone();
         let stop_me = self.stop.clone();
         let session_id = self.parent_id.clone();
         let client = self.client.clone();
@@ -137,28 +140,14 @@ impl Round {
                 .await
                 .is_err()
             {
-                info!("send stt result failure");
+                debug!("send stt result failure");
                 return;
             }
-            // let mut history = history.lock().await;
-            // history.chat_history.push(Message::User {
-            //     content: OneOrMany::one(UserContent::Text(Text { text })),
-            // });
-            // let chat_history = {
-            //     if history.chat_history.len() > 1 {
-            //         OneOrMany::<Message>::many(history.chat_history.clone()).unwrap()
-            //     } else if !history.chat_history.is_empty() {
-            //         OneOrMany::<Message>::one(history.chat_history.first().unwrap().clone())
-            //     } else {
-            //         panic!("chat history len is empty")
-            //     }
-            // };
             let request = ChatRequest {
                 message: Message::User {
                     content: OneOrMany::one(UserContent::Text(Text { text: text.clone() })),
                 },
             };
-            // drop(history);
             let llm_output = client.chat(request);
             let mut tts_output = tts.stream(Box::pin(llm_output)).await;
             let audio_config = config::get().audio();
@@ -169,6 +158,19 @@ impl Round {
             let mut send_frame_count: u64 = 0;
             let speaking = speaking.clone();
             let stop_me = stop_me.clone();
+            if send_tts_frame_and_change_state(
+                tts_state_clone.clone(),
+                tx.clone(),
+                session_id.clone(),
+                TtsState::Start,
+                None,
+            )
+            .await
+            .is_err()
+            {
+                debug!("send tts state start failure");
+                stop_me.store(true, Ordering::Relaxed);
+            }
             while let Some(result) = tts_output.next().await {
                 match result {
                     Ok(result) => {
@@ -200,14 +202,6 @@ impl Round {
                                 tts_state_clone.clone(),
                                 tx.clone(),
                                 session_id.clone(),
-                                TtsState::Start,
-                                None,
-                            )
-                            .await?;
-                            send_tts_frame_and_change_state(
-                                tts_state_clone.clone(),
-                                tx.clone(),
-                                session_id.clone(),
                                 TtsState::SentenceStart,
                                 Some(text.to_string()),
                             )
@@ -216,8 +210,8 @@ impl Round {
                             //real time send audio
                             let data = audio_data.into_iter();
                             speaking.store(true, Ordering::Relaxed);
-                            info!("set speaking = true");
-                            info!("send audio frame start");
+                            debug!("set speaking = true");
+                            debug!("send audio frame start");
                             for packet in data {
                                 if stop_me_by_tts_packet.load(Ordering::Relaxed) {
                                     break;
@@ -240,22 +234,14 @@ impl Round {
                                 .context("send audio result failure")?;
                                 send_frame_count += 1;
                             }
-                            info!("send audio frame end");
+                            debug!("send audio frame end");
                             speaking.store(false, Ordering::Relaxed);
-                            info!("set speaking = false");
+                            debug!("set speaking = false");
                             send_tts_frame_and_change_state(
                                 tts_state_clone.clone(),
                                 tx.clone(),
                                 session_id.clone(),
                                 TtsState::SentenceEnd,
-                                None,
-                            )
-                            .await?;
-                            send_tts_frame_and_change_state(
-                                tts_state_clone.clone(),
-                                tx.clone(),
-                                session_id.clone(),
-                                TtsState::Stop,
                                 None,
                             )
                             .await?;
@@ -278,12 +264,29 @@ impl Round {
                     }
                 }
             }
+            if send_tts_frame_and_change_state(
+                tts_state_clone.clone(),
+                tx.clone(),
+                session_id.clone(),
+                TtsState::Stop,
+                None,
+            )
+            .await
+            .is_err()
+            {
+                debug!("send tts state stop failure");
+                stop_me.store(true, Ordering::Relaxed);
+            }
             if stop_me.load(Ordering::Relaxed) {
                 let tts_state = tts_state_clone.lock().await;
+                debug!(
+                    "trigger stop me,round id = {}, current tts state = {:?}",
+                    id.clone(),
+                    tts_state
+                );
                 if let Some(tts_state) = tts_state.as_ref() {
                     let result: Result<(), anyhow::Error> = async {
-                        info!("{:?}", tts_state);
-                        if tts_state > &TtsState::Start {
+                        if tts_state < &TtsState::Start {
                             send_tts_frame(
                                 tx.clone(),
                                 session_id.clone(),
@@ -291,8 +294,12 @@ impl Round {
                                 None,
                             )
                             .await?;
+                            debug!(
+                                "after trigger stop me send tts state = {:?}",
+                                TtsState::SentenceStart
+                            );
                         }
-                        if tts_state > &TtsState::SentenceStart {
+                        if tts_state < &TtsState::SentenceStart {
                             send_tts_frame(
                                 tx.clone(),
                                 session_id.clone(),
@@ -300,10 +307,18 @@ impl Round {
                                 None,
                             )
                             .await?;
+                            debug!(
+                                "after trigger stop me send tts state = {:?}",
+                                TtsState::SentenceEnd
+                            );
                         }
-                        if tts_state > &TtsState::SentenceEnd {
+                        if tts_state < &TtsState::SentenceEnd {
                             send_tts_frame(tx.clone(), session_id.clone(), TtsState::Stop, None)
                                 .await?;
+                            debug!(
+                                "after trigger stop me send tts state = {:?}",
+                                TtsState::Stop
+                            );
                         }
                         Ok(())
                     }
@@ -313,16 +328,14 @@ impl Round {
                     }
                 }
             }
-            // TODO: add llm text to chat history
-            // TODO: save chat history to database?
             end.store(true, Ordering::Relaxed);
-            info!("round setting end = true");
+            debug!("round setting end = true");
         });
     }
 
-    #[instrument(skip(self), name="Round stop",fields(id = %self.id,parent_id = %self.parent_id))]
+    #[instrument(skip(self), name="Round stop",fields(round_id = %self.id))]
     pub async fn stop(&self) {
-        info!("stop");
+        debug!("stop");
         self.stop.store(true, Ordering::Relaxed);
     }
 }

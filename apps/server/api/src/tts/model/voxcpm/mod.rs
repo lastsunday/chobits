@@ -10,6 +10,7 @@ use std::{pin::Pin, sync::Arc};
 use tokio::sync::{Mutex, mpsc::channel};
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
+use tracing::{debug, error};
 
 pub struct TtsVoxCPM {
     instance: Arc<Mutex<VoxCPMGenerate>>,
@@ -69,11 +70,11 @@ impl Tts for TtsVoxCPM {
         thread::spawn(move || {
             block_on(async move {
                 while let Some(text) = text_stream.next().await {
-                    let instance = instance.clone();
+                    // let instance = instance.clone();
                     let tx = tx.clone();
                     match &text {
                         Ok(text) => {
-                            tracing::info!("[TTS] receive, text = {}", text);
+                            debug!("[TTS] receive, text = {}", text);
                             let mut instance = instance.lock().await;
                             match instance.generate_with_prompt_simple(
                                 text.to_string(),
@@ -97,43 +98,41 @@ impl Tts for TtsVoxCPM {
                                                 text: text.to_string(),
                                             };
                                             if let Err(e) = tx.send(Ok(data)).await {
-                                                tracing::error!("output packet error = {}", e);
+                                                error!("output packet error = {}", e);
                                                 break;
                                             } else {
-                                                tracing::info!(
-                                                    "[TTS] encode and send audio success"
-                                                );
+                                                debug!("[TTS] encode and send audio success");
                                             }
                                         }
                                         Err(e) => {
-                                            tracing::error!(
+                                            error!(
                                                 "tts tensor to sample error = {}",
                                                 e.to_string()
                                             );
                                             if let Err(e) =
                                                 tx.send(Err(TtsError::Encode(e.to_string()))).await
                                             {
-                                                tracing::error!("send error failure = {}", e);
+                                                error!("send error failure = {}", e);
                                             }
                                             break;
                                         }
                                     }
                                 }
                                 Err(e) => {
-                                    tracing::error!("tts synth error = {}", e.to_string());
+                                    error!("tts synth error = {}", e.to_string());
                                     if let Err(e) =
                                         tx.send(Err(TtsError::Encode(e.to_string()))).await
                                     {
-                                        tracing::error!("send error failure = {}", e);
+                                        error!("send error failure = {}", e);
                                     }
                                     break;
                                 }
                             }
                         }
                         Err(e) => {
-                            tracing::error!("tts text stream error = {}", e.to_string());
+                            error!("tts text stream error = {}", e.to_string());
                             if let Err(e) = tx.send(Err(TtsError::Text(e.to_string()))).await {
-                                tracing::error!("send error failure = {}", e);
+                                error!("send error failure = {}", e);
                             }
                             break;
                         }
