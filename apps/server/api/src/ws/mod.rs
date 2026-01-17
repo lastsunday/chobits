@@ -228,7 +228,7 @@ where
                                 "session_id = {},abort message = {:?}",
                                 session_id, abort_message
                             );
-                            session.stop().await;
+                            session.new_round().await;
                         }
                         frame::Frame::Ping { data } => {
                             info!("session_id = {},ping,len = {}", session_id, data.len());
