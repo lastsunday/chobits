@@ -187,7 +187,9 @@ fn convert_request_to_prompt(request: &CompletionRequest) -> String {
     // prompt.push_str(" /no_think\n");
     //<|im_start|>system\n{} /no_think
     // tools handle
-    prompt.push_str(&create_tools_prompt(&request.tools));
+    if !&request.tools.is_empty() {
+        prompt.push_str(&create_tools_prompt(&request.tools));
+    }
     prompt.push_str("<|im_end|>\n");
     let chat_history = &request.chat_history;
     for message in chat_history.iter() {
