@@ -15,10 +15,10 @@ use rig::{
     message::{ToolCall, ToolResult, ToolResultContent},
 };
 use rmcp::model::{
-    CallToolRequest, CallToolRequestParam, CallToolResult, ClientCapabilities, ConstString,
-    Implementation, InitializeRequest, InitializeRequestParam, InitializeResult, JsonObject,
+    CallToolRequest, CallToolRequestParams, CallToolResult, ClientCapabilities, ConstString,
+    Implementation, InitializeRequest, InitializeRequestParams, InitializeResult, JsonObject,
     JsonRpcMessage, JsonRpcRequest, JsonRpcVersion2_0, ListToolsRequest, ListToolsResult,
-    PaginatedRequestParam, ProtocolVersion, RawContent, Request, RequestId, Tool, object,
+    PaginatedRequestParams, ProtocolVersion, RawContent, Request, RequestId, Tool, object,
 };
 use serde::Serialize;
 use service::chobits::message::{
@@ -66,9 +66,11 @@ impl McpClient for DeviceMcpClient {
 
     async fn call_tool(&self, param: ToolCall) -> anyhow::Result<ToolResult> {
         let id = RequestId::Number(self.request_id.fetch_add(1, Ordering::Relaxed));
-        let request = CallToolRequest::new(CallToolRequestParam {
+        let request = CallToolRequest::new(CallToolRequestParams {
+            meta: None,
             name: param.function.name.clone().into(),
             arguments: Some(to_json_object(param.function.arguments.clone())),
+            task: None,
         });
         let tx = self.output_tx.clone();
         let result = tx
@@ -124,7 +126,8 @@ impl DeviceMcpClient {
     pub async fn create_initialize_request(&mut self) -> McpRequest {
         let id = RequestId::Number(self.request_id.fetch_add(1, Ordering::Relaxed));
         self.current_request_id = Some(id.clone());
-        let request = InitializeRequest::new(InitializeRequestParam {
+        let request = InitializeRequest::new(InitializeRequestParams {
+            meta: None,
             protocol_version: ProtocolVersion::V_2025_06_18,
             capabilities: ClientCapabilities {
                 ..Default::default()
@@ -180,7 +183,8 @@ impl DeviceMcpClient {
     pub async fn create_tools_list_request(&mut self) -> McpRequest {
         let id = RequestId::Number(self.request_id.fetch_add(1, Ordering::Relaxed));
         self.current_request_id = Some(id.clone());
-        let request = ListToolsRequest::with_param(PaginatedRequestParam {
+        let request = ListToolsRequest::with_param(PaginatedRequestParams {
+            meta: None,
             cursor: self.next_cursor.clone(),
         });
         McpRequest::new(

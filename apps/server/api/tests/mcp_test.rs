@@ -1,7 +1,7 @@
 use api::setup_mcp;
 use rmcp::{
     ServiceExt as _rmcp_ServiceExt,
-    model::{CallToolRequestParam, ClientCapabilities, ClientInfo, Implementation},
+    model::{CallToolRequestParams, ClientCapabilities, ClientInfo, Implementation},
     transport::{
         StreamableHttpClientTransport, streamable_http_client::StreamableHttpClientTransportConfig,
     },
@@ -31,6 +31,7 @@ async fn test_administrator_mcp() -> anyhow::Result<()> {
     let client = RouterClient { router };
     let transport = StreamableHttpClientTransport::with_client(client, config);
     let client_info = ClientInfo {
+        meta: None,
         protocol_version: Default::default(),
         capabilities: ClientCapabilities::default(),
         client_info: Implementation {
@@ -54,7 +55,9 @@ async fn test_administrator_mcp() -> anyhow::Result<()> {
 
     let tool_name = "sum";
     let tool_result = client
-        .call_tool(CallToolRequestParam {
+        .call_tool(CallToolRequestParams {
+            meta: None,
+            task: None,
             name: tool_name.into(),
             arguments: serde_json::json!({
                 "a":1,
@@ -68,7 +71,9 @@ async fn test_administrator_mcp() -> anyhow::Result<()> {
 
     let tool_name = "datetime";
     let tool_result = client
-        .call_tool(CallToolRequestParam {
+        .call_tool(CallToolRequestParams {
+            meta: None,
+            task: None,
             name: tool_name.into(),
             arguments: None,
         })

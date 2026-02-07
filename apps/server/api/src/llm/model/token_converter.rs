@@ -1,5 +1,5 @@
 use framework::id::gen_id;
-use rig::streaming::RawStreamingChoice;
+use rig::streaming::{RawStreamingChoice, RawStreamingToolCall};
 use serde::{Deserialize, Serialize};
 
 use crate::common::ModelError;
@@ -125,12 +125,15 @@ impl TokenConverter {
                         serde_json::from_str(tag_content);
                     match tool_call {
                         Ok(tool_call) => {
-                            result.push(RawStreamingChoice::ToolCall {
+                            result.push(RawStreamingChoice::ToolCall(RawStreamingToolCall {
                                 id: gen_id(),
                                 call_id: Some(gen_id()),
                                 name: tool_call.name,
                                 arguments: tool_call.arguments,
-                            });
+                                internal_call_id: gen_id(),
+                                signature: None,
+                                additional_params: None,
+                            }));
                         }
                         Err(e) => {
                             return Err(ModelError::TokenConvertFailure(format!(
@@ -200,6 +203,7 @@ enum Phase {
 
 #[cfg(test)]
 mod tests {
+    use rig::streaming::RawStreamingToolCall;
     use tracing_test::traced_test;
 
     use super::TokenConverter;
@@ -309,12 +313,15 @@ mod tests {
             panic!("error type,it not message");
         }
         let message = messages.remove(0);
-        if let rig::streaming::RawStreamingChoice::ToolCall {
+        if let rig::streaming::RawStreamingChoice::ToolCall(RawStreamingToolCall {
             id: _id,
             call_id: _call_id,
             name,
             arguments,
-        } = message
+            internal_call_id: _internal_call_id,
+            signature: _signature,
+            additional_params: _additional_params,
+        }) = message
         {
             assert_eq!("get_current_temperature", name);
             assert_eq!(
@@ -325,12 +332,15 @@ mod tests {
             panic!("error type,it not tool call");
         }
         let message = messages.remove(0);
-        if let rig::streaming::RawStreamingChoice::ToolCall {
+        if let rig::streaming::RawStreamingChoice::ToolCall(RawStreamingToolCall {
             id: _id,
             call_id: _call_id,
             name,
             arguments,
-        } = message
+            internal_call_id: _internal_call_id,
+            signature: _signature,
+            additional_params: _additional_params,
+        }) = message
         {
             assert_eq!("get_temperature_date", name);
             assert_eq!(
@@ -353,12 +363,15 @@ mod tests {
             "#,
         ).unwrap();
         let message = messages.remove(0);
-        if let rig::streaming::RawStreamingChoice::ToolCall {
+        if let rig::streaming::RawStreamingChoice::ToolCall(RawStreamingToolCall {
             id: _id,
             call_id: _call_id,
             name,
             arguments,
-        } = message
+            internal_call_id: _internal_call_id,
+            signature: _signature,
+            additional_params: _additional_params,
+        }) = message
         {
             assert_eq!("get_current_temperature", name);
             assert_eq!(
@@ -369,12 +382,15 @@ mod tests {
             panic!("error type,it not tool call");
         }
         let message = messages.remove(0);
-        if let rig::streaming::RawStreamingChoice::ToolCall {
+        if let rig::streaming::RawStreamingChoice::ToolCall(RawStreamingToolCall {
             id: _id,
             call_id: _call_id,
             name,
             arguments,
-        } = message
+            internal_call_id: _internal_call_id,
+            signature: _signature,
+            additional_params: _additional_params,
+        }) = message
         {
             assert_eq!("get_temperature_date", name);
             assert_eq!(
@@ -398,12 +414,15 @@ mod tests {
             if !messages.is_empty() {
                 msg_count += 1;
                 let message = messages.remove(0);
-                if let rig::streaming::RawStreamingChoice::ToolCall {
+                if let rig::streaming::RawStreamingChoice::ToolCall(RawStreamingToolCall {
                     id: _id,
                     call_id: _call_id,
                     name,
                     arguments,
-                } = message
+                    internal_call_id: _internal_call_id,
+                    signature: _signature,
+                    additional_params: _additional_params,
+                }) = message
                 {
                     assert_eq!("getweather", name);
                     assert_eq!(
@@ -431,12 +450,15 @@ mod tests {
         assert_eq!(1, messages.len());
         for message in messages.iter() {
             match message {
-                rig::streaming::RawStreamingChoice::ToolCall {
+                rig::streaming::RawStreamingChoice::ToolCall(RawStreamingToolCall {
                     id: _id,
                     call_id: _call_id,
                     name: _name,
                     arguments: _arguments,
-                } => {
+                    internal_call_id: _internal_call_id,
+                    signature: _signature,
+                    additional_params: _additional_params,
+                }) => {
                     //skip
                 }
                 _ => {

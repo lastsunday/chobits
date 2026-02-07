@@ -4,23 +4,23 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-sea-orm = { version = "1.1.19", features = [
+sea-orm = { workspace = true, features = [
   "sqlx-postgres",
   "sqlx-sqlite",
   "runtime-tokio-rustls",
   "macros",
   "debug-print",
 ] }
-anyhow = { version = "1.0.100" }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-chrono = "0.4.42"
-testcontainers = "0.26.3"
-testcontainers-modules = { version = "0.14.0", features = ["postgres"] }
-uuid = { version = "1.19.0", features = ["v4"] }
-tokio = { version = "1.48.0", features = ["full"] }
-serde = { version = "1.0.228", features = ["derive"] }
-rmcp = { version = "0.11.0" }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+chrono = { workspace = true }
+testcontainers = { workspace = true }
+testcontainers-modules = { workspace = true, features = ["postgres"] }
+uuid = { workspace = true, features = ["v4"] }
+tokio = { workspace = true, features = ["full"] }
+serde = { workspace = true, features = ["derive"] }
+rmcp = { workspace = true }
 migration = { path = "../migration" }
 entity = { path = "../entity" }
 framework = { path = "../framework" }

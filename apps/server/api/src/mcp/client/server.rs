@@ -8,8 +8,8 @@ use rig::{
 use rmcp::{
     RoleClient, ServiceExt,
     model::{
-        CallToolRequestParam, ClientCapabilities, ClientInfo, Implementation,
-        InitializeRequestParam, PaginatedRequestParam,
+        CallToolRequestParams, ClientCapabilities, ClientInfo, Implementation,
+        InitializeRequestParams, PaginatedRequestParams,
     },
     service::RunningService,
     transport::IntoTransport,
@@ -18,7 +18,7 @@ use rmcp::{
 use crate::mcp::client::McpClient;
 
 pub struct ServerMcpClient {
-    client: RunningService<RoleClient, InitializeRequestParam>,
+    client: RunningService<RoleClient, InitializeRequestParams>,
     tools: Vec<ToolDefinition>,
 }
 
@@ -29,6 +29,7 @@ impl ServerMcpClient {
         E: std::error::Error + Send + Sync + 'static,
     {
         let client_info = ClientInfo {
+            meta: None,
             protocol_version: Default::default(),
             capabilities: ClientCapabilities::default(),
             client_info: Implementation {
@@ -52,7 +53,7 @@ impl ServerMcpClient {
             // List tools
             let tools_result = self
                 .client
-                .list_tools(Some(PaginatedRequestParam { cursor }))
+                .list_tools(Some(PaginatedRequestParams { meta: None, cursor }))
                 .await?;
             for tool in tools_result.tools {
                 self.tools.push(ToolDefinition {
@@ -82,7 +83,7 @@ impl McpClient for ServerMcpClient {
         let call_id = param.call_id.clone();
         let function = &param.function;
         let function_json_text = serde_json::to_string(function)?;
-        let request: CallToolRequestParam = serde_json::from_str(function_json_text.as_str())?;
+        let request: CallToolRequestParams = serde_json::from_str(function_json_text.as_str())?;
         let response = self.client.call_tool(request).await?;
 
         let content = &response.content;

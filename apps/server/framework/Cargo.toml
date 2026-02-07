@@ -4,12 +4,12 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-xid = { version = "1.1.1" }
-bcrypt = { version = "0.17.1" }
-axum = { version = "0.8.8", features = ["macros"] }
-axum-valid = { version = "0.24.0", features = ["full_validator"] }
-tracing = { version = "0.1.44", features = ["async-await"] }
-tower-http = { version = "0.6.8", features = [
+xid = { workspace = true }
+bcrypt = { workspace = true }
+axum = { workspace = true, features = ["macros"] }
+axum-valid = { workspace = true, features = ["full_validator"] }
+tracing = { workspace = true, features = ["async-await"] }
+tower-http = { workspace = true, features = [
   "trace",
   "timeout",
   "limit",
@@ -18,12 +18,12 @@ tower-http = { version = "0.6.8", features = [
   "auth",
   "compression-full",
 ] }
-tracing-subscriber = { version = "0.3.22", features = ["env-filter", "chrono"] }
-validator = { version = "0.20.0", features = ["derive"] }
-thiserror = { version = "2.0.17" }
-anyhow = { version = "1.0.100" }
-jsonwebtoken = { version = "10.2.0" }
-sea-orm = { version = "1.1.19", features = [
+tracing-subscriber = { workspace = true, features = ["env-filter", "chrono"] }
+validator = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+jsonwebtoken = { workspace = true }
+sea-orm = { workspace = true, features = [
   "with-chrono",
   "debug-print",
   "sqlx-postgres",
@@ -32,8 +32,8 @@ sea-orm = { version = "1.1.19", features = [
   "runtime-tokio-rustls",
   "macros",
 ] }
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.147"
-utoipa = { version = "5.4.0", features = ["axum_extras", "debug", "chrono"] }
-config = { version = "0.15.19", features = ["yaml"] }
-num_cpus = { version = "1.17.0" }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+utoipa = { workspace = true, features = ["axum_extras", "debug", "chrono"] }
+config = { workspace = true, features = ["yaml"] }
+num_cpus = { workspace = true }

@@ -4,16 +4,16 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-axum = { version = "0.8.8", features = ["macros", "ws"] }
-axum-extra = { version = "0.12.3", features = ["typed-header"] }
-tokio = { version = "1.48.0", features = ["full"] }
-tracing = { version = "0.1.44", features = ["async-await"] }
-tracing-subscriber = { version = "0.3.22", features = ["env-filter", "chrono"] }
-config = { version = "0.15.19", features = ["yaml"] }
-serde = { version = "1.0.228", features = ["derive"] }
-serde_yaml = { version = "0.9.34" }
-anyhow = { version = "1.0.100" }
-sea-orm = { version = "1.1.19", features = [
+axum = { workspace = true, features = ["macros", "ws"] }
+axum-extra = { workspace = true, features = ["typed-header"] }
+tokio = { workspace = true, features = ["full"] }
+tracing = { workspace = true, features = ["async-await"] }
+tracing-subscriber = { workspace = true, features = ["env-filter", "chrono"] }
+config = { workspace = true, features = ["yaml"] }
+serde = { workspace = true, features = ["derive"] }
+serde_yaml = { workspace = true }
+anyhow = { workspace = true }
+sea-orm = { workspace = true, features = [
   "with-chrono",
   "debug-print",
   "sqlx-postgres",
@@ -22,8 +22,8 @@ sea-orm = { version = "1.1.19", features = [
   "runtime-tokio-rustls",
   "macros",
 ] }
-thiserror = { version = "2.0.17" }
-tower-http = { version = "0.6.8", features = [
+thiserror = { workspace = true }
+tower-http = { workspace = true, features = [
   "trace",
   "timeout",
   "limit",
@@ -32,81 +32,73 @@ tower-http = { version = "0.6.8", features = [
   "auth",
   "compression-full",
 ] }
-tower-layer = { version = "0.3.3" }
-xid = { version = "1.1.1" }
-bytesize = { version = "2.3.1" }
-validator = { version = "0.20.0", features = ["derive"] }
-axum-valid = { version = "0.24.0", features = ["full_validator"] }
-regex = { version = "1.12.2" }
-bcrypt = { version = "0.17.1" }
-jsonwebtoken = { version = "10.2.0", features = ["rust_crypto"] }
-utoipa = { version = "5.4.0", features = ["axum_extras", "debug", "chrono"] }
-utoipa-axum = { version = "0.2.0", features = ["debug"] }
-utoipa-scalar = { version = "0.3.0", features = ["axum"] }
-serde_json = "1.0.147"
-serde-aux = { version = "4.7.0" }
-http-body-util = "0.1.3"
-mime = "0.3"
-chrono = "0.4.42"
-testcontainers = "0.26.3"
-testcontainers-modules = { version = "0.14.0", features = [
-  "postgres",
-  "gitea",
-] }
-rust-i18n = { version = "3.1.5" }
-futures-util = { version = "0.3.31", default-features = false, features = [
-  "sink",
-  "std",
-] }
-futures-channel = { version = "0.3.31" }
-jiff = { version = "0.2.17" }
-opus = { version = "0.3.0" }
-tokio-stream = { version = "0.1.17" }
-tokio-util = { version = "0.7.17" }
-futures = { version = "0.3.31" }
-openssl = { version = "0.10.75", features = ["vendored"] }
-async-trait = { version = "0.1.89" }
+tower-layer = { workspace = true }
+xid = { workspace = true }
+bytesize = { workspace = true }
+validator = { workspace = true, features = ["derive"] }
+axum-valid = { workspace = true, features = ["full_validator"] }
+regex = { workspace = true }
+bcrypt = { workspace = true }
+jsonwebtoken = { workspace = true, features = ["rust_crypto"] }
+utoipa = { workspace = true, features = ["axum_extras", "debug", "chrono"] }
+utoipa-axum = { workspace = true, features = ["debug"] }
+utoipa-scalar = { workspace = true, features = ["axum"] }
+serde_json = { workspace = true }
+serde-aux = { workspace = true }
+http-body-util = { workspace = true }
+mime = { workspace = true }
+chrono = { workspace = true }
+testcontainers = { workspace = true }
+testcontainers-modules = { workspace = true, features = ["postgres", "gitea"] }
+rust-i18n = { workspace = true }
+futures-util = { workspace = true, features = ["sink", "std"] }
+futures-channel = { workspace = true }
+jiff = { workspace = true }
+opus = { workspace = true }
+tokio-stream = { workspace = true }
+tokio-util = { workspace = true }
+futures = { workspace = true }
+openssl = { workspace = true, features = ["vendored"] }
+async-trait = { workspace = true }
 # audio start
-symphonia = { version = "0.5.5" }
-wavers = { version = "1.5.1" }
+symphonia = { workspace = true }
+wavers = { workspace = true }
 # audio end
 # llm start
-candle-core = { version = "0.9.1" }
-tokenizers = { version = "0.22.2", default-features = false, features = [
-  "fancy-regex",
-] }
-candle-transformers = { version = "0.9.1" }
-candle-nn = { version = "0.9.1" }
-fancy-regex = { version = "0.17.0" }
-intel-mkl-src = { version = "0.8.1", features = [
+candle-core = { workspace = true }
+tokenizers = { workspace = true, features = ["fancy-regex"] }
+candle-transformers = { workspace = true }
+candle-nn = { workspace = true }
+fancy-regex = { workspace = true }
+intel-mkl-src = { workspace = true, features = [
   "mkl-static-lp64-iomp",
 ], optional = true }
-accelerate-src = { version = "0.3.2", optional = true }
-candle-onnx = { version = "0.9.1" }
-rig-core = { version = "0.26.0" }
-aha = { version = "0.1.7" }
-aha_openai_dive = { version = "1.4.0", features = ["stream"] }
+accelerate-src = { workspace = true, optional = true }
+candle-onnx = { workspace = true }
+rig-core = { workspace = true }
+aha = { workspace = true }
+aha_openai_dive = { workspace = true, features = ["stream"] }
 # llm end
 # asr start
-byteorder = { version = "1.5.0" }
-rand = { version = "0.9.2" }
-rand_distr = { version = "0.5.1" }
+byteorder = { workspace = true }
+rand = { workspace = true }
+rand_distr = { workspace = true }
 # asr end
 # tts start
-kokoro-tts = { version = "0.3.1" }
+kokoro-tts = { workspace = true }
 # tts end
 # mcp start
-rmcp = { version = "0.11.0", features = [
+rmcp = { workspace = true, features = [
   "transport-streamable-http-server",
   "client",
   "transport-streamable-http-client",
   "reqwest",
   "transport-streamable-http-client-reqwest",
 ] }
-sse-stream = { version = "0.2.1" }
+sse-stream = { workspace = true }
 # mcp end
 
-tracing-test = { version = "0.2.5" }
+tracing-test = { workspace = true }
 entity = { path = "../entity" }
 migration = { path = "../migration" }
 service = { path = "../service" }
@@ -114,13 +106,13 @@ framework = { path = "../framework" }
 web = { path = "../web" }
 
 [dev-dependencies]
-tower = { version = "0.5.2", features = ["util"] }
-cucumber = { version = "0.22.1", features = ["tracing", "output-json"] }
-futures = "0.3.31"
+tower = { workspace = true, features = ["util"] }
+cucumber = { workspace = true, features = ["tracing", "output-json"] }
+futures = { workspace = true }
 
 [build-dependencies]
 # llm start
-bindgen_cuda = { version = "0.1.5", optional = true }
+bindgen_cuda = { workspace = true, optional = true }
 # llm end
 
 [features]
