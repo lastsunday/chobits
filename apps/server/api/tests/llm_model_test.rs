@@ -21,8 +21,8 @@ use api::setup_mcp;
 use rmcp::{
     ServiceExt as _rmcp_ServiceExt,
     model::{
-        CallToolRequestParam, ClientCapabilities, ClientInfo, Implementation,
-        PaginatedRequestParam, Tool,
+        CallToolRequestParams, ClientCapabilities, ClientInfo, Implementation,
+        PaginatedRequestParams, Tool,
     },
     transport::{
         StreamableHttpClientTransport, streamable_http_client::StreamableHttpClientTransportConfig,
@@ -43,14 +43,6 @@ async fn test_chat_server_mcp() -> anyhow::Result<()> {
     test_chat_mcp(r#"Calculate the sum of 24.5 and 17.3 using the calculator service"#).await
 }
 
-#[tokio::test]
-#[traced_test]
-#[ignore]
-/// cargo test --test llm_model_test -- test_chat_device_mcp --ignored --nocapture
-async fn test_chat_device_mcp() -> anyhow::Result<()> {
-    test_chat_mcp(r#"get device status"#).await
-}
-
 async fn test_chat_mcp(text: &str) -> anyhow::Result<()> {
     let (container, state) = setup_database().await;
     let router = OpenApiRouter::new();
@@ -65,6 +57,7 @@ async fn test_chat_mcp(text: &str) -> anyhow::Result<()> {
     let client = RouterClient { router };
     let transport = StreamableHttpClientTransport::with_client(client, config);
     let client_info = ClientInfo {
+        meta: None,
         protocol_version: Default::default(),
         capabilities: ClientCapabilities::default(),
         client_info: Implementation {
@@ -87,7 +80,7 @@ async fn test_chat_mcp(text: &str) -> anyhow::Result<()> {
     loop {
         // List tools
         let tools_result = client
-            .list_tools(Some(PaginatedRequestParam { cursor }))
+            .list_tools(Some(PaginatedRequestParams { meta: None, cursor }))
             .await?;
         for tool in tools_result.tools {
             tools.push(ToolDefinition {
@@ -223,7 +216,7 @@ async fn test_chat_mcp(text: &str) -> anyhow::Result<()> {
                                 function,
                             }) => {
                                 let function_json_text = serde_json::to_string(&function)?;
-                                let param: CallToolRequestParam =
+                                let param: CallToolRequestParams =
                                     serde_json::from_str(function_json_text.as_str())?;
                                 let result = client.call_tool(param).await?;
                                 let content = &result.content;

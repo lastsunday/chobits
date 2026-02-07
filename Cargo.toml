@@ -76,7 +76,7 @@ rand_distr = "0.5.1"
 kokoro-tts = "0.3.2"
 # tts end
 # mcp start
-rmcp = "0.11.0"
+rmcp = "0.14.0"
 sse-stream = "0.2.1"
 # mcp end
 tracing-test = "0.2.5"
