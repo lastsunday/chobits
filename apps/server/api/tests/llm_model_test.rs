@@ -214,6 +214,8 @@ async fn test_chat_mcp(text: &str) -> anyhow::Result<()> {
                                 id,
                                 call_id,
                                 function,
+                                signature: _signature,
+                                additional_params: _additional_params,
                             }) => {
                                 let function_json_text = serde_json::to_string(&function)?;
                                 let param: CallToolRequestParams =
@@ -363,27 +365,25 @@ async fn handle_response(
                     )) => {
                         info!("{:?}", usage);
                     }
-                    Ok(StreamedAssistantContent::ToolCall(ToolCall {
-                        id,
-                        call_id,
-                        function,
-                    })) => {
-                        info!("{:?}", function);
+                    Ok(StreamedAssistantContent::ToolCall {
+                        tool_call,
+                        internal_call_id: _internal_call_id,
+                    }) => {
+                        info!("{:?}", tool_call.function);
                         messages.push(Message::Assistant {
-                            id: Some(id.clone()),
+                            id: Some(tool_call.id.clone()),
                             content: OneOrMany::<AssistantContent>::one(
                                 AssistantContent::ToolCall(ToolCall {
-                                    id: id.clone(),
-                                    call_id: call_id.clone(),
-                                    function,
+                                    id: tool_call.id.clone(),
+                                    call_id: tool_call.call_id.clone(),
+                                    function: tool_call.function,
+                                    signature: None,
+                                    additional_params: None,
                                 }),
                             ),
                         });
                     }
-                    Ok(StreamedAssistantContent::ToolCallDelta {
-                        id: _id,
-                        delta: _delta,
-                    }) => {
+                    Ok(StreamedAssistantContent::ToolCallDelta { .. }) => {
                         // TODO:
                     }
                     Ok(StreamedAssistantContent::Reasoning(Reasoning {
@@ -391,6 +391,9 @@ async fn handle_response(
                         reasoning,
                         ..
                     })) => {
+                        info!("reasoning -> {:?}", reasoning);
+                    }
+                    Ok(StreamedAssistantContent::ReasoningDelta { id: _id, reasoning }) => {
                         info!("reasoning -> {:?}", reasoning);
                     }
                     Err(e) => {

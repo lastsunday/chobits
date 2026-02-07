@@ -4866,6 +4866,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "nanoid"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ffa00dec017b5b1a8b7cf5e2c008bfda1aa7e0697ac1508b491fdf2622fb4d8"
+dependencies = [
+ "rand 0.8.5",
+]
+
+[[package]]
 name = "native-tls"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6649,20 +6658,23 @@ checksum = "0c6a884d2998352bb4daf0183589aec883f16a6da1f4dde84d8e2e9a5409a1ce"
 
 [[package]]
 name = "rig-core"
-version = "0.26.0"
+version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01be6d1a1f71ac7fb77c1d84bff8f2b54bf51a1e8111935b9c87799c4e8c1970"
+checksum = "a8f7a3f0c7c00eaced15a68ee16e1bd6bb709ff598d11b9aedac8b628217dc09"
 dependencies = [
  "as-any",
  "async-stream",
  "base64 0.22.1",
  "bytes",
  "eventsource-stream",
+ "fastrand",
  "futures",
  "futures-timer",
  "glob",
  "http 1.4.0",
+ "mime",
  "mime_guess",
+ "nanoid",
  "ordered-float 5.1.0",
  "pin-project-lite",
  "reqwest 0.12.28",

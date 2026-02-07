@@ -156,6 +156,8 @@ impl Client {
                                                     id,
                                                     call_id,
                                                     function,
+                                                    signature,
+                                                    additional_params,
                                                 }) => {
                                                     if let Some(mcp_host) = mcp_host.clone() {
                                                         let mcp_host = mcp_host.lock().await;
@@ -164,6 +166,9 @@ impl Client {
                                                                 id: id.clone(),
                                                                 call_id: call_id.clone(),
                                                                 function: function.clone(),
+                                                                signature: signature.clone(),
+                                                                additional_params:
+                                                                    additional_params.clone(),
                                                             })
                                                             .await?;
                                                         let history = clone_history.clone();
@@ -240,25 +245,30 @@ pub async fn handle_response(
                         // TODO:
                         debug!("{:?}", usage);
                     }
-                    Ok(StreamedAssistantContent::ToolCall(ToolCall {
-                        id,
-                        call_id,
-                        function,
-                    })) => {
+                    Ok(StreamedAssistantContent::ToolCall {
+                        tool_call,
+                        internal_call_id: _internal_call_id,
+                    }) => {
                         messages.push(Message::Assistant {
-                            id: Some(id.clone()),
+                            id: Some(tool_call.id.clone()),
                             content: OneOrMany::<AssistantContent>::one(
                                 AssistantContent::ToolCall(ToolCall {
-                                    id: id.clone(),
-                                    call_id: call_id.clone(),
-                                    function,
+                                    id: tool_call.id.clone(),
+                                    call_id: tool_call.call_id.clone(),
+                                    function: tool_call.function,
+                                    signature: tool_call.signature.clone(),
+                                    additional_params: tool_call.additional_params.clone(),
                                 }),
                             ),
                         });
                     }
-                    Ok(StreamedAssistantContent::ToolCallDelta { id: _id, delta }) => {
+                    Ok(StreamedAssistantContent::ToolCallDelta {
+                        id: _id,
+                        internal_call_id: _internal_call_id,
+                        content,
+                    }) => {
                         // TODO:
-                        debug!("{:?}", delta);
+                        debug!("{:?}", content);
                     }
                     Ok(StreamedAssistantContent::Reasoning(Reasoning {
                         id: _id,
@@ -266,6 +276,9 @@ pub async fn handle_response(
                         ..
                     })) => {
                         // TODO:
+                        debug!("{:?}", reasoning);
+                    }
+                    Ok(StreamedAssistantContent::ReasoningDelta { id: _id, reasoning }) => {
                         debug!("{:?}", reasoning);
                     }
                     Err(e) => {

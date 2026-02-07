@@ -346,6 +346,7 @@ async fn handle(
             usage: Usage {
                 prompt_tokens: tokens.len(),
                 total_tokens: sampled,
+                prompt_tokens_details: None,
             },
         },
     );
