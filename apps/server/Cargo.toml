@@ -7,21 +7,20 @@ publish = false
 [dependencies]
 api = { path = "api" }
 # llm start
-candle-core = { version = "0.9.1" }
-tokenizers = { version = "0.22.2", default-features = false, features = [
-  "fancy-regex",
-] }
-candle-transformers = { version = "0.9.1" }
-candle-nn = { version = "0.9.1" }
-intel-mkl-src = { version = "0.8.1", features = [
+candle-core = { workspace = true }
+candle-transformers = { workspace = true }
+candle-nn = { workspace = true }
+tokenizers = { workspace = true, features = ["fancy-regex"] }
+intel-mkl-src = { workspace = true, features = [
   "mkl-static-lp64-iomp",
 ], optional = true }
-accelerate-src = { version = "0.3.2", optional = true }
+accelerate-src = { workspace = true, optional = true }
+aha = { workspace = true }
 # llm end
-aha = { version = "0.1.7" }
+
 [build-dependencies]
 # llm start
-bindgen_cuda = { version = "0.1.5", optional = true }
+bindgen_cuda = { workspace = true, optional = true }
 # llm end
 
 [features]
@@ -34,4 +33,3 @@ cuda = [
   "dep:bindgen_cuda",
   "aha/cuda",
 ]
-# llm end
