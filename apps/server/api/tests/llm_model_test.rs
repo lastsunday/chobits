@@ -66,6 +66,7 @@ async fn test_chat_mcp(text: &str) -> anyhow::Result<()> {
             version: "0.0.1".to_string(),
             website_url: None,
             icons: None,
+            description: None,
         },
     };
     let client = client_info.serve(transport).await.inspect_err(|e| {

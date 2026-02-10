@@ -38,6 +38,7 @@ impl ServerMcpClient {
                 version: "0.0.1".to_string(),
                 website_url: None,
                 icons: None,
+                description: None,
             },
         };
         let client = client_info.serve(transport).await?;

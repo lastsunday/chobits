@@ -92,6 +92,7 @@ async fn start() -> anyhow::Result<()> {
     // router
     let (app, ct) = create_router(state, ct);
     // app start
+    tracing::info!("app start");
     let listener = TcpListener::bind(format!("0.0.0.0:{port}")).await?;
     tracing::info!("listening on http://0.0.0.0:{port}");
     let app = NormalizePathLayer::trim_trailing_slash().layer(app);
@@ -104,6 +105,7 @@ async fn start() -> anyhow::Result<()> {
         ct.cancel();
     })
     .await?;
+    tracing::info!("app successfully");
     Ok(())
 }
 
