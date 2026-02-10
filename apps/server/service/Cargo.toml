@@ -1,7 +1,9 @@
 [package]
 name = "service"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+publish = false
 
 [dependencies]
 sea-orm = { workspace = true, features = [

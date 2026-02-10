@@ -1,8 +1,10 @@
 [package]
 name = "chobits-server"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
 publish = false
+
 
 [dependencies]
 api = { path = "api" }

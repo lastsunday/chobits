@@ -1,7 +1,11 @@
-
 [workspace]
 resolver = '2'
 members = ['apps/server']
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+authors = ["lastsunday"]
 
 [workspace.dependencies]
 axum = "0.8.8"
@@ -19,6 +23,7 @@ thiserror = "2.0.18"
 tower-http = "0.6.8"
 tower-layer = "0.3.3"
 xid = "1.1.1"
+idgenerator = "2.0.0"
 bytesize = "2.3.1"
 validator = "0.20.0"
 axum-valid = "0.24.0"
@@ -49,6 +54,8 @@ uuid = "1.20.0"
 async-std = "1.13.2"
 num_cpus = "1.17.0"
 rust-embed = "8.11.0"
+git2 = "0.20.4"
+ssh-key = "0.6.7"
 # audio start
 symphonia = "0.5.5"
 wavers = "1.5.1"
