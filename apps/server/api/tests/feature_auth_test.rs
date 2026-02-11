@@ -12,6 +12,7 @@ use cucumber::when;
 use cucumber::{World, given};
 use framework::auth::Jwt;
 use framework::auth::Principal;
+use framework::config::auth::AuthConfig;
 use futures::FutureExt;
 use serde_json::json;
 use std::net::SocketAddr;
@@ -218,7 +219,17 @@ async fn main() {
                 let (container, state) = setup_database().await;
                 world.container = container;
                 world.state = Some(state.clone());
-                Jwt::init(api::config::get().auth().clone());
+                let config = api::config::get();
+                Jwt::init(AuthConfig {
+                    access_token_secret: config.auth_access_token_secret.clone(),
+                    access_token_expires_in: config.auth_access_token_expires_in,
+                    refresh_token_secret: config.auth_refresh_token_secret.clone(),
+                    refresh_token_expires_in: config.auth_refresh_token_expires_in,
+                    audience: config.auth_audience.clone(),
+                    issuer: config.auth_issuer.clone(),
+                    client_id: config.auth_client_id.clone(),
+                    client_secret: config.auth_client_secret.clone(),
+                });
                 let app = OpenApiRouter::new();
                 let app = setup_auth(app, state).split_for_parts().0;
                 let app = setup_default(app);

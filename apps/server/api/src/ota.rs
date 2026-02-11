@@ -5,10 +5,11 @@ use axum::{
     http::HeaderMap,
 };
 use axum_extra::extract::Host;
-use framework::{config::get, data::valid::ValidJson, error::ApiResult, id::gen_id};
+use framework::{data::valid::ValidJson, error::ApiResult, id::gen_id};
 use std::net::SocketAddr;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
+use crate::config;
 use crate::ota_data::*;
 use crate::{AppState, ota_error::*};
 
@@ -199,7 +200,14 @@ async fn ota(
     Ok(Json(OtaResult {
         mqtt: None,
         websocket: Websocket {
-            url: format!("{}://{}/chobits/v1", get().ws().schema(), hostname),
+            url: format!(
+                "{}://{}/chobits/v1",
+                config::get()
+                    .ws_schema
+                    .as_ref()
+                    .expect("ws schema is empty"),
+                hostname
+            ),
             token: String::from(""),
         },
         server_time: ServerTime {

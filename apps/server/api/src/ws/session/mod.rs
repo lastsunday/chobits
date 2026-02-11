@@ -1,6 +1,7 @@
 use super::frame::{Frame, FrameError, FrameResult};
 use super::session::listener::Listener;
 use super::session::round::{Command, Round};
+use crate::config::audio::AudioConfig;
 use crate::config::{self};
 use crate::llm::Model;
 use crate::llm::client::{ClientBuilder, History};
@@ -32,6 +33,7 @@ pub struct SessionBuilder {
     model: Option<Arc<Box<dyn Model>>>,
     mcp_host: Option<Arc<Mutex<UnionMcpHost>>>,
     config: Option<SessionConfig>,
+    audio_config: Option<AudioConfig>,
 }
 
 impl SessionBuilder {
@@ -64,6 +66,11 @@ impl SessionBuilder {
         self
     }
 
+    pub fn with_audio_config(mut self, config: AudioConfig) -> SessionBuilder {
+        self.audio_config = Some(config);
+        self
+    }
+
     pub fn build(self) -> Session {
         Session::new(
             self.id.expect("id is required"),
@@ -71,12 +78,15 @@ impl SessionBuilder {
             self.model.expect("model is required"),
             self.mcp_host.expect("mcp host is required"),
             self.config.expect("config is required"),
+            self.audio_config.expect("audio is required"),
         )
     }
 }
 
 pub struct SessionConfig {
     pub close_connection_no_voice_time: Option<i64>,
+    pub silence_voice_timeout: Option<i64>,
+    pub system_prompt: Option<String>,
     pub max_prompt_len: Option<u64>,
 }
 
@@ -91,6 +101,7 @@ pub struct Session {
     history: Arc<Mutex<History>>,
 
     config: SessionConfig,
+    audio_config: AudioConfig,
 
     model: Arc<Box<dyn Model>>,
     listener: Box<dyn Listener>,
@@ -120,8 +131,12 @@ impl Session {
         model: Arc<Box<dyn Model>>,
         mcp_host: Arc<Mutex<UnionMcpHost>>,
         config: SessionConfig,
+        audio_config: AudioConfig,
     ) -> Self {
-        let system_prompt = config::get().logic().system_prompt();
+        let system_prompt = config
+            .system_prompt
+            .as_ref()
+            .expect("logic system prompt is empty");
         Self {
             id,
             current_round: None,
@@ -134,6 +149,7 @@ impl Session {
             })),
 
             config,
+            audio_config,
 
             listener,
             model,
@@ -180,6 +196,7 @@ impl Session {
             tx.clone(),
             Arc::new(client),
             tts,
+            self.audio_config.output_frame_duration,
         )));
         if let Some(round) = &mut self.current_round {
             round.start().await;

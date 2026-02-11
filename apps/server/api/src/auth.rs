@@ -116,8 +116,16 @@ async fn access_token(
     headers: HeaderMap,
     ValidQuery(param): ValidQuery<AccessTokenParam>,
 ) -> ApiResult<ApiResponse<LoginResult>> {
-    let auth = config::get().auth();
-    if !param.client_id.eq(auth.client_id()) || !param.client_secret.eq(auth.client_secret()) {
+    let config = config::get();
+    if !param.client_id.eq(config
+        .auth_client_id
+        .as_ref()
+        .expect("auth client id is empty"))
+        || !param.client_secret.eq(config
+            .auth_client_secret
+            .as_ref()
+            .expect("auth client secret is empty"))
+    {
         return Err(ERROR_CLIENT_ID_OR_CLINET_SECRET_INVALID.gen_api_error(&headers));
     } else if !param.grant_type.eq("refresh_token") {
         return Err(ERROR_GRANT_TYPE_MUST_BE_REFERSH_TOKEN.gen_api_error(&headers));

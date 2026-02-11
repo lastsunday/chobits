@@ -7,6 +7,7 @@ extern crate accelerate_src;
 pub mod model;
 use crate::common::ModelError;
 use crate::config;
+use crate::config::vad::VadConfig;
 use async_trait::async_trait;
 use model::silero::VadSilero;
 use std::sync::OnceLock;
@@ -46,8 +47,11 @@ impl VadFactory {
     }
 
     pub fn create_model() -> Box<dyn Vad> {
-        let app_config = config::get();
-        let config = app_config.vad();
-        Box::new(VadSilero::new(String::from(config.path())).unwrap())
+        let config = config::get();
+        let config = VadConfig {
+            path: config.vad_path.clone(),
+            num_threads: config.vad_num_threads,
+        };
+        Box::new(VadSilero::new(config.path.expect("vad path is empty")).unwrap())
     }
 }

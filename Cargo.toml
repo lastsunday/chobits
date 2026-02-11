@@ -86,6 +86,11 @@ kokoro-tts = "0.3.2"
 rmcp = "0.15.0"
 sse-stream = "0.2.1"
 # mcp end
+# matrix start
+ruma = "0.14.1"
+ruma-client = "0.17.0"
+hyper = "1.8.1"
+# matrix end
 tracing-test = "0.2.6"
 # dev start
 tower = "0.5.3"

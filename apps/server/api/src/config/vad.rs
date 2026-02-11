@@ -1,24 +1,18 @@
 use serde::Deserialize;
 
-#[derive(Debug, Default, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct VadConfig {
-    path: Option<String>,
-    num_threads: Option<i32>,
+    #[serde(default)]
+    pub path: Option<String>,
+    #[serde(default)]
+    pub num_threads: Option<i32>,
 }
 
-impl VadConfig {
-    pub fn new() -> Self {
+impl Default for VadConfig {
+    fn default() -> Self {
         Self {
             path: Some(String::from("data/vad/model/onnx-community/silero-vad/")),
             num_threads: Some(4),
         }
-    }
-
-    pub fn path(&self) -> &str {
-        self.path.as_deref().unwrap_or_default()
-    }
-
-    pub fn num_threads(&self) -> i32 {
-        self.num_threads.unwrap_or_default()
     }
 }

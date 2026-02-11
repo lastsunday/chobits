@@ -99,6 +99,14 @@ rmcp = { workspace = true, features = [
 ] }
 sse-stream = { workspace = true }
 # mcp end
+# matrix start
+ruma = { workspace = true, features = ["client-api-c", "rand"] }
+ruma-client = { workspace = true, features = [
+  "client-api",
+  "hyper-native-tls",
+] }
+hyper = { workspace = true }
+# matrix end
 
 tracing-test = { workspace = true }
 entity = { path = "../entity" }

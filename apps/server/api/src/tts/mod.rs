@@ -3,6 +3,8 @@ pub mod model;
 use self::model::voxcpm::TtsVoxCPM;
 use crate::common::ModelError;
 use crate::config;
+use crate::config::audio::AudioConfig;
+use crate::config::tts::TtsConfig;
 use async_trait::async_trait;
 use futures::Stream;
 use model::kokoro::TtsKokoro;
@@ -56,27 +58,51 @@ impl TtsFactory {
     }
 
     pub async fn create_model() -> Result<Box<dyn Tts>, anyhow::Error> {
-        let app_config = config::get();
-        let tts_config = app_config.tts();
-        let audio_config = app_config.audio();
-        match tts_config.model() {
-            config::tts::Model::Kokoro => Ok(Box::new(
+        let config = config::get();
+        let tts_config = TtsConfig {
+            model: config.tts_model.clone(),
+            path: config.tts_path.clone(),
+            reference_prompt_text: config.tts_reference_prompt_text.clone(),
+            reference_prompt_wav_path: config.tts_reference_prompt_wav_path.clone(),
+        };
+        let audio_config = AudioConfig {
+            input_sample_rate: config.audio_input_sample_rate,
+            input_frame_duration: config.audio_input_frame_duration,
+            input_channel: config.audio_input_channel,
+            output_sample_rate: config.audio_output_sample_rate,
+            output_channel: config.audio_output_channel,
+            output_frame_duration: config.audio_output_frame_duration,
+        };
+        match tts_config.model.clone().expect("tts model is empty") {
+            config::TtsModel::Kokoro => Ok(Box::new(
                 TtsKokoro::new(
-                    tts_config.path(),
-                    audio_config.output_sample_rate(),
-                    audio_config.output_channel(),
-                    audio_config.output_frame_duration(),
+                    &tts_config.path.clone().expect("tts path is empty"),
+                    audio_config
+                        .output_sample_rate
+                        .expect("tts output sample rate is empty"),
+                    audio_config
+                        .output_channel
+                        .expect("tts output channel is empty"),
+                    audio_config
+                        .output_frame_duration
+                        .expect("tts output frame duration is empty"),
                 )
                 .await?,
             )),
-            config::tts::Model::Voxcpm => Ok(Box::new(
+            config::TtsModel::Voxcpm => Ok(Box::new(
                 TtsVoxCPM::new(
-                    tts_config.path(),
-                    audio_config.output_sample_rate(),
-                    audio_config.output_channel(),
-                    audio_config.output_frame_duration(),
-                    Some(tts_config.reference_prompt_text().to_string()),
-                    Some(tts_config.reference_prompt_wav_path().to_string()),
+                    &tts_config.path.clone().expect("tts path is empty"),
+                    audio_config
+                        .output_sample_rate
+                        .expect("tts output sample rate is empty"),
+                    audio_config
+                        .output_channel
+                        .expect("tts output channel is empty"),
+                    audio_config
+                        .output_frame_duration
+                        .expect("tts output frame duration is empty"),
+                    tts_config.reference_prompt_text.clone(),
+                    tts_config.reference_prompt_wav_path.clone(),
                 )
                 .await?,
             )),

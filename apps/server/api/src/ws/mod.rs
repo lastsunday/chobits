@@ -5,7 +5,7 @@ pub mod session;
 use crate::{
     AppState,
     asr::AsrFactory,
-    config,
+    config::{self, audio::AudioConfig},
     llm::LlmFactory,
     mcp::{
         client::server::ServerMcpClient,
@@ -93,22 +93,26 @@ where
     W: Sink<Message> + Unpin + Send + 'static,
     R: Stream<Item = Result<Message, axum::Error>> + Unpin + Send + 'static,
 {
-    let logic = config::get().logic();
-    let config = SessionConfig {
-        close_connection_no_voice_time: Some(logic.close_connection_no_voice_time()),
-        max_prompt_len: Some(logic.max_prompt_len()),
+    let config = config::get();
+    let session_config = SessionConfig {
+        close_connection_no_voice_time: config.logic_close_connection_no_voice_time,
+        silence_voice_timeout: config.logic_silence_voice_timeout,
+        system_prompt: config.logic_system_prompt.clone(),
+        max_prompt_len: config.logic_max_prompt_len,
     };
     let id = gen_id();
     let mut mcp_host = UnionMcpHost::new(Some(id.clone()));
-    let uri_list = config::get().mcp().uri_list();
-    for uri in uri_list {
-        let server_mcp_client = create_server_mcp_client(uri).await;
-        match server_mcp_client {
-            Ok(server_mcp_client) => {
-                mcp_host.add_client(Box::new(server_mcp_client)).await;
-            }
-            Err(e) => {
-                error!("{:?}", e);
+    let uri_list = &config.mcp_uri_list;
+    if let Some(uri_list) = uri_list {
+        for uri in uri_list {
+            let server_mcp_client = create_server_mcp_client(uri.to_string()).await;
+            match server_mcp_client {
+                Ok(server_mcp_client) => {
+                    mcp_host.add_client(Box::new(server_mcp_client)).await;
+                }
+                Err(e) => {
+                    error!("{:?}", e);
+                }
             }
         }
     }
@@ -117,10 +121,21 @@ where
         .with_listener(Box::new(DefaultListener::new(
             Arc::new(Mutex::new(VadFactory::create_model())),
             AsrFactory::global().default().clone(),
+            config.audio_input_sample_rate,
+            config.audio_input_frame_duration,
+            config.audio_input_channel,
         )))
         .with_model(LlmFactory::global().default())
         .with_mcp_host(Arc::new(Mutex::new(mcp_host)))
-        .with_config(config)
+        .with_config(session_config)
+        .with_audio_config(AudioConfig {
+            input_sample_rate: config.audio_input_sample_rate,
+            input_frame_duration: config.audio_input_frame_duration,
+            input_channel: config.audio_input_channel,
+            output_sample_rate: config.audio_output_sample_rate,
+            output_channel: config.audio_output_channel,
+            output_frame_duration: config.audio_output_frame_duration,
+        })
         .build();
     let session_id = session.id.clone();
     if let Err(e) = session.start().await {

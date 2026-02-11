@@ -6,6 +6,7 @@ pub mod config;
 pub mod i18n;
 pub mod index;
 pub mod llm;
+pub mod matrix;
 pub mod mcp;
 pub mod ota;
 pub mod ota_data;
@@ -25,13 +26,15 @@ use axum::extract::Request;
 use axum::http::StatusCode;
 use axum::routing::get;
 use bytesize::ByteSize;
+use framework::config::auth::AuthConfig;
+use framework::error::ApiError;
+use framework::error::ApiResult;
+use framework::logger;
+use framework::trace::LatencyOnResponse;
+use futures::future::join_all;
 use migration::MigratorTrait;
 use sea_orm::DatabaseConnection;
 use tokio::net::TcpListener;
-
-use framework::error::*;
-use framework::trace::*;
-use framework::*;
 use tokio_util::sync::CancellationToken;
 use tower_http::compression::CompressionLayer;
 use tower_http::cors;
@@ -63,14 +66,24 @@ async fn start() -> anyhow::Result<()> {
     //init logger
     logger::init();
     // config
-    let port = config::get().server().port();
-    let database_url = config::get().database().url();
+    let config = config::get();
     // auth
-    Jwt::init(config::get().auth().clone());
+    Jwt::init(AuthConfig {
+        access_token_secret: config.auth_access_token_secret.clone(),
+        access_token_expires_in: config.auth_access_token_expires_in,
+        refresh_token_secret: config.auth_refresh_token_secret.clone(),
+        refresh_token_expires_in: config.auth_refresh_token_expires_in,
+        audience: config.auth_audience.clone(),
+        issuer: config.auth_issuer.clone(),
+        client_id: config.auth_client_id.clone(),
+        client_secret: config.auth_client_secret.clone(),
+    });
     // database init
+    let database_url = config.database_url.as_ref().expect("database url is empty");
     let conn: sea_orm::DatabaseConnection =
         framework::database::establish_connection(database_url).await?;
     conn.ping().await?;
+    let conn_for_app = conn.clone();
     tracing::info!("Database connected successfully");
     // database schema init or upgrade
     migration::Migrator::up(&conn, None).await?;
@@ -82,11 +95,43 @@ async fn start() -> anyhow::Result<()> {
     tracing::info!("init vad factory successfully");
     tracing::info!("init asr factory");
     AsrFactory::init().await;
-    tracing::info!("init asr factory successfully");
+    tracing::info!("init asr factor3y successfully");
     tracing::info!("init llm factory");
     LlmFactory::init().await;
     tracing::info!("init llm factory successfully");
     let ct = tokio_util::sync::CancellationToken::new();
+    let ct_for_app = ct.clone();
+    let mut handles = Vec::new();
+    let port = config.server_port.expect("server port is empty");
+    handles.push(tokio::spawn(async move {
+        if let Err(error) = start_app(conn_for_app, ct_for_app, port).await {
+            tracing::error!("{:?}", error);
+        }
+    }));
+    if config::get().matrix_enable.expect("matrix enable is empty") {
+        handles.push(tokio::spawn(async {
+            if let Err(error) = start_matrix_client().await {
+                tracing::error!("{:?}", error);
+            }
+        }));
+    }
+    let join_results = join_all(handles).await;
+    tracing::info!("all joinhandle({}) end", join_results.len());
+    Ok(())
+}
+
+async fn start_matrix_client() -> Result<(), Box<dyn std::error::Error>> {
+    tracing::info!("matrix client start");
+    matrix::client::start().await?;
+    tracing::info!("matrix client end");
+    Ok(())
+}
+
+async fn start_app(
+    conn: sea_orm::DatabaseConnection,
+    ct: CancellationToken,
+    port: u16,
+) -> anyhow::Result<()> {
     // state
     let state = AppState { conn };
     // router
@@ -105,7 +150,7 @@ async fn start() -> anyhow::Result<()> {
         ct.cancel();
     })
     .await?;
-    tracing::info!("app successfully");
+    tracing::info!("app end");
     Ok(())
 }
 

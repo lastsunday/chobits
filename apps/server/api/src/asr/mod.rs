@@ -1,7 +1,7 @@
 pub mod model;
 
-use crate::common::ModelError;
 use crate::config;
+use crate::{common::ModelError, config::asr::AsrConfig};
 use async_trait::async_trait;
 use model::whisper::AsrWhisper;
 use std::sync::{Arc, OnceLock};
@@ -47,8 +47,12 @@ impl AsrFactory {
     }
 
     pub fn create_model() -> Box<dyn Asr> {
-        let app_config = config::get();
-        let config = app_config.asr();
-        Box::new(AsrWhisper::new(config.path().to_string()).unwrap())
+        let config = config::get();
+        let config = AsrConfig {
+            path: config.asr_path.clone(),
+        };
+        Box::new(
+            AsrWhisper::new(config.path.clone().expect("asr path is empty").to_string()).unwrap(),
+        )
     }
 }

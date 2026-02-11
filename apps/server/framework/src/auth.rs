@@ -42,31 +42,67 @@ pub struct Jwt {
 impl Jwt {
     fn new(config: AuthConfig) -> Self {
         let mut access_token_validation = Validation::new(jsonwebtoken::Algorithm::HS256);
-        access_token_validation.set_audience(&[String::from(config.audience())]);
-        access_token_validation.set_issuer(&[String::from(config.issuer())]);
+        access_token_validation.set_audience(
+            config
+                .audience
+                .as_ref()
+                .expect("auth audience is empty")
+                .as_bytes(),
+        );
+        access_token_validation.set_issuer(
+            config
+                .issuer
+                .as_ref()
+                .expect("auth issuer is empty")
+                .as_bytes(),
+        );
         access_token_validation
             .set_required_spec_claims(&["jti", "sub", "aud", "iss", "iat", "exp"]);
-        let access_token_secret = config.access_token_secret().as_bytes();
+        let access_token_secret = config
+            .access_token_secret
+            .expect("auth access token secret is empty");
 
         let mut refresh_token_validation = Validation::new(jsonwebtoken::Algorithm::HS256);
-        refresh_token_validation.set_audience(&[String::from(config.audience())]);
-        refresh_token_validation.set_issuer(&[String::from(config.issuer())]);
+        refresh_token_validation.set_audience(
+            config
+                .audience
+                .as_ref()
+                .expect("auth audience is empty")
+                .as_bytes(),
+        );
+        refresh_token_validation.set_issuer(
+            config
+                .issuer
+                .as_ref()
+                .expect("auth issuer is empty")
+                .as_bytes(),
+        );
         refresh_token_validation
             .set_required_spec_claims(&["jti", "sub", "aud", "iss", "iat", "exp"]);
 
-        let refresh_token_secret = config.refresh_token_secret().as_bytes();
+        let refresh_token_secret = config
+            .refresh_token_secret
+            .expect("auth refresh token secret is empty");
         Self {
             header: Header::new(jsonwebtoken::Algorithm::HS256),
-            access_token_encode_secret: EncodingKey::from_secret(access_token_secret),
-            access_token_decode_secret: DecodingKey::from_secret(access_token_secret),
-            access_token_expires_in: Duration::from_secs(config.access_token_expires_in()),
+            access_token_encode_secret: EncodingKey::from_secret(access_token_secret.as_bytes()),
+            access_token_decode_secret: DecodingKey::from_secret(access_token_secret.as_bytes()),
+            access_token_expires_in: Duration::from_secs(
+                config
+                    .access_token_expires_in
+                    .expect("auth access token expires in is empty"),
+            ),
             access_token_validation,
-            refresh_token_encode_secret: EncodingKey::from_secret(refresh_token_secret),
-            refresh_token_decode_secret: DecodingKey::from_secret(refresh_token_secret),
-            refresh_token_expires_in: Duration::from_secs(config.refresh_token_expires_in()),
+            refresh_token_encode_secret: EncodingKey::from_secret(refresh_token_secret.as_bytes()),
+            refresh_token_decode_secret: DecodingKey::from_secret(refresh_token_secret.as_bytes()),
+            refresh_token_expires_in: Duration::from_secs(
+                config
+                    .refresh_token_expires_in
+                    .expect("auth refresh token expires in is empty"),
+            ),
             refresh_token_validation,
-            audience: String::from(config.audience()),
-            issuer: String::from(config.issuer()),
+            audience: String::from(config.audience.as_ref().expect("auth audience is empty")),
+            issuer: String::from(config.issuer.as_ref().expect("auth issuer is empty")),
         }
     }
 

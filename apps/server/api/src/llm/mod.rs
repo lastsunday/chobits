@@ -3,7 +3,7 @@ pub mod client;
 pub mod model;
 
 use crate::{
-    config,
+    config::{self, llm::LlmConfig},
     llm::model::{minicpm4::Minicpm4, qwen3::LlmQwen},
 };
 use async_trait::async_trait;
@@ -80,11 +80,18 @@ impl LlmFactory {
     }
 
     pub fn create_model() -> Box<dyn Model> {
-        let app_config = config::get();
-        let llm_config = app_config.llm();
-        match llm_config.model() {
-            config::llm::Model::Qwen3 => Box::new(LlmQwen::new(llm_config.path()).unwrap()),
-            config::llm::Model::MiniCPM4 => Box::new(Minicpm4::new(llm_config.path()).unwrap()),
+        let config = config::get();
+        let llm_config = LlmConfig {
+            model: config.llm_model.clone(),
+            path: config.llm_path.clone(),
+        };
+        match llm_config.model.as_ref().expect("llm model is empty") {
+            config::LlmModel::Qwen3 => Box::new(
+                LlmQwen::new(llm_config.path.as_ref().expect("llm path is empty")).unwrap(),
+            ),
+            config::LlmModel::MiniCPM4 => Box::new(
+                Minicpm4::new(llm_config.path.as_ref().expect("llm path is empty")).unwrap(),
+            ),
         }
     }
 

@@ -1298,12 +1298,12 @@ async fn create_session()
     let router = setup_mcp(router, state.clone(), ct.child_token())
         .split_for_parts()
         .0;
-    let config = StreamableHttpClientTransportConfig {
+    let mcp_config = StreamableHttpClientTransportConfig {
         uri: "/mcp".into(),
         ..Default::default()
     };
     let client = RouterClient { router };
-    let transport = StreamableHttpClientTransport::with_client(client, config);
+    let transport = StreamableHttpClientTransport::with_client(client, mcp_config);
     let mut server_client = ServerMcpClient::new(transport).await?;
     server_client.init().await?;
 
@@ -1311,16 +1311,21 @@ async fn create_session()
     let mut mcp_host = UnionMcpHost::new(Some(id.clone()));
     // server client add
     mcp_host.add_client(Box::new(server_client)).await;
+    let config = config::get();
     let session_config = SessionConfig {
-        close_connection_no_voice_time: Some(
-            config::get().logic().close_connection_no_voice_time(),
-        ),
-        max_prompt_len: Some(3000),
+        close_connection_no_voice_time: config.logic_close_connection_no_voice_time,
+        silence_voice_timeout: config.logic_silence_voice_timeout,
+        system_prompt: config.logic_system_prompt.clone(),
+        max_prompt_len: config.logic_max_prompt_len,
     };
+    let config = config::get();
     let session = SessionBuilder::new()
         .with_listener(Box::new(DefaultListener::new(
             Arc::new(Mutex::new(VadFactory::create_model())),
             AsrFactory::global().default(),
+            config.audio_input_sample_rate,
+            config.audio_input_frame_duration,
+            config.audio_input_channel,
         )))
         .with_id(id.clone())
         .with_model(LlmFactory::global().default())
