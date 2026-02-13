@@ -21,16 +21,15 @@ use serde_json::Value as JsonValue;
 use tokio_stream::StreamExt as _;
 use tracing::{error, info};
 
-use crate::config::{self, matrix::MatrixConfig};
+use crate::config::matrix::MatrixConfig;
 
-pub async fn start() -> Result<(), Box<dyn Error>> {
-    let config = config::get();
+pub async fn start(config: MatrixConfig) -> Result<(), Box<dyn Error>> {
     let config = MatrixConfig {
-        enable: config.matrix_enable,
-        client_name: config.matrix_client_name.clone(),
-        homeserver: config.matrix_homeserver.clone(),
-        client_username: config.matrix_client_username.clone(),
-        client_password: config.matrix_client_password.clone(),
+        enable: config.enable,
+        client_name: config.client_name.clone(),
+        homeserver: config.homeserver.clone(),
+        client_username: config.client_username.clone(),
+        client_password: config.client_password.clone(),
     };
     let bot = Bot::build(config).await?;
     bot.run().await?;

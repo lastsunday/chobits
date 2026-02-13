@@ -63,35 +63,34 @@ static INSTANCE: OnceLock<LlmFactory> = OnceLock::new();
 
 pub struct LlmFactory {
     default_llm: Arc<Box<dyn Model>>,
+    pub config: LlmConfig,
 }
 
 impl LlmFactory {
-    pub fn new(default_llm: Arc<Box<dyn Model>>) -> Self {
-        Self { default_llm }
+    pub fn new(default_llm: Arc<Box<dyn Model>>, config: LlmConfig) -> Self {
+        Self {
+            default_llm,
+            config,
+        }
     }
 
-    pub async fn init() -> &'static Self {
-        let llm = LlmFactory::create_model();
-        INSTANCE.get_or_init(|| -> Self { Self::new(Arc::new(llm)) })
+    pub async fn init(config: LlmConfig) -> &'static Self {
+        let llm = LlmFactory::create_model(&config);
+        INSTANCE.get_or_init(|| -> Self { Self::new(Arc::new(llm), config) })
     }
 
     pub fn default(&self) -> Arc<Box<dyn Model>> {
         self.default_llm.clone()
     }
 
-    pub fn create_model() -> Box<dyn Model> {
-        let config = config::get();
-        let llm_config = LlmConfig {
-            model: config.llm_model.clone(),
-            path: config.llm_path.clone(),
-        };
-        match llm_config.model.as_ref().expect("llm model is empty") {
-            config::LlmModel::Qwen3 => Box::new(
-                LlmQwen::new(llm_config.path.as_ref().expect("llm path is empty")).unwrap(),
-            ),
-            config::LlmModel::MiniCPM4 => Box::new(
-                Minicpm4::new(llm_config.path.as_ref().expect("llm path is empty")).unwrap(),
-            ),
+    pub fn create_model(config: &LlmConfig) -> Box<dyn Model> {
+        match config.model.as_ref().expect("llm model is empty") {
+            config::LlmModel::Qwen3 => {
+                Box::new(LlmQwen::new(config.path.as_ref().expect("llm path is empty")).unwrap())
+            }
+            config::LlmModel::MiniCPM4 => {
+                Box::new(Minicpm4::new(config.path.as_ref().expect("llm path is empty")).unwrap())
+            }
         }
     }
 

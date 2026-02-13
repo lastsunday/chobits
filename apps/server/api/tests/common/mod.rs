@@ -1,14 +1,16 @@
 use api::AppState;
+use api::config::Config;
 use axum::{
     Router,
     body::Body,
     http::{self, Request, Response},
 };
 use chrono::{DateTime, FixedOffset};
+use figment::Figment;
 use http_body_util::BodyExt;
 use migration::MigratorTrait;
 use serde_json::Value;
-use std::str::FromStr;
+use std::{str::FromStr, sync::Arc};
 use testcontainers::ContainerAsync;
 use testcontainers_modules::postgres::Postgres;
 use tower::ServiceExt;
@@ -29,7 +31,12 @@ pub async fn setup_database() -> (Option<ContainerAsync<Postgres>>, AppState) {
         .await
         .unwrap();
     migration::Migrator::up(&conn, None).await.unwrap();
-    let state = AppState { conn };
+    let raw = Figment::new();
+    let config = Config::new(&raw).unwrap();
+    let state = AppState {
+        conn,
+        config: Arc::new(config),
+    };
     (container, state)
 }
 

@@ -11,12 +11,14 @@ pub mod mcp;
 pub mod ota;
 pub mod ota_data;
 pub mod ota_error;
+pub mod server;
 pub mod tts;
 pub mod util;
 pub mod vad;
 pub mod ws;
 
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use axum::Router;
@@ -26,10 +28,10 @@ use axum::extract::Request;
 use axum::http::StatusCode;
 use axum::routing::get;
 use bytesize::ByteSize;
+use either::Either;
 use framework::config::auth::AuthConfig;
 use framework::error::ApiError;
 use framework::error::ApiResult;
-use framework::logger;
 use framework::trace::LatencyOnResponse;
 use futures::future::join_all;
 use migration::MigratorTrait;
@@ -53,6 +55,13 @@ use utoipa_scalar::{Scalar, Servable as ScalarServable};
 use framework::auth::Jwt;
 
 use crate::asr::AsrFactory;
+use crate::config::Config;
+use crate::config::asr::AsrConfig;
+use crate::config::audio::AudioConfig;
+use crate::config::llm::LlmConfig;
+use crate::config::matrix::MatrixConfig;
+use crate::config::tts::TtsConfig;
+use crate::config::vad::VadConfig;
 use crate::llm::LlmFactory;
 use crate::tts::TtsFactory;
 use crate::vad::VadFactory;
@@ -61,12 +70,8 @@ use crate::vad::VadFactory;
 extern crate rust_i18n;
 i18n!("locales", fallback = "zh");
 
-#[tokio::main]
-async fn start() -> anyhow::Result<()> {
-    //init logger
-    logger::init();
-    // config
-    let config = config::get();
+pub async fn start(config: Arc<Config>) -> anyhow::Result<()> {
+    let config_clone_for_app = config.clone();
     // auth
     Jwt::init(AuthConfig {
         access_token_secret: config.auth_access_token_secret.clone(),
@@ -88,29 +93,61 @@ async fn start() -> anyhow::Result<()> {
     // database schema init or upgrade
     migration::Migrator::up(&conn, None).await?;
     tracing::info!("init tts factory");
-    TtsFactory::init().await?;
+    let tts_config = TtsConfig {
+        model: config.tts_model.clone(),
+        path: config.tts_path.clone(),
+        reference_prompt_text: config.tts_reference_prompt_text.clone(),
+        reference_prompt_wav_path: config.tts_reference_prompt_wav_path.clone(),
+    };
+    let audio_config = AudioConfig {
+        input_sample_rate: config.audio_input_sample_rate,
+        input_frame_duration: config.audio_input_frame_duration,
+        input_channel: config.audio_input_channel,
+        output_sample_rate: config.audio_output_sample_rate,
+        output_channel: config.audio_output_channel,
+        output_frame_duration: config.audio_output_frame_duration,
+    };
+    TtsFactory::init(tts_config, audio_config).await?;
     tracing::info!("init tts factory successfully");
     tracing::info!("init vad factory");
-    VadFactory::init().await;
+    VadFactory::init(VadConfig {
+        path: config.vad_path.clone(),
+        num_threads: config.vad_num_threads,
+    })
+    .await;
     tracing::info!("init vad factory successfully");
     tracing::info!("init asr factory");
-    AsrFactory::init().await;
+    AsrFactory::init(AsrConfig {
+        path: config.asr_path.clone(),
+    })
+    .await;
     tracing::info!("init asr factor3y successfully");
     tracing::info!("init llm factory");
-    LlmFactory::init().await;
+    LlmFactory::init(LlmConfig {
+        model: config.llm_model.clone(),
+        path: config.llm_path.clone(),
+    })
+    .await;
     tracing::info!("init llm factory successfully");
     let ct = tokio_util::sync::CancellationToken::new();
     let ct_for_app = ct.clone();
     let mut handles = Vec::new();
-    let port = config.server_port.expect("server port is empty");
     handles.push(tokio::spawn(async move {
-        if let Err(error) = start_app(conn_for_app, ct_for_app, port).await {
+        if let Err(error) = start_app(config_clone_for_app, conn_for_app, ct_for_app).await {
             tracing::error!("{:?}", error);
         }
     }));
-    if config::get().matrix_enable.expect("matrix enable is empty") {
-        handles.push(tokio::spawn(async {
-            if let Err(error) = start_matrix_client().await {
+    if config.matrix_enable.expect("matrix enable is empty") {
+        handles.push(tokio::spawn(async move {
+            if let Err(error) = start_matrix_client(MatrixConfig {
+                enable: config.matrix_enable,
+                client_name: config.matrix_client_name.clone(),
+                homeserver: config.matrix_homeserver.clone(),
+                client_username: config.matrix_client_username.clone(),
+                client_password: config.matrix_client_password.clone(),
+            })
+            .await
+            {
                 tracing::error!("{:?}", error);
             }
         }));
@@ -120,26 +157,32 @@ async fn start() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn start_matrix_client() -> Result<(), Box<dyn std::error::Error>> {
+pub async fn start_matrix_client(config: MatrixConfig) -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("matrix client start");
-    matrix::client::start().await?;
+    matrix::client::start(config).await?;
     tracing::info!("matrix client end");
     Ok(())
 }
 
-async fn start_app(
+pub async fn start_app(
+    config: Arc<Config>,
     conn: sea_orm::DatabaseConnection,
     ct: CancellationToken,
-    port: u16,
 ) -> anyhow::Result<()> {
+    let addrs = config.clone().address.addrs.clone();
+    let port: u16 = config.server_port.expect("server port is empty");
     // state
-    let state = AppState { conn };
+    let state = AppState { conn, config };
     // router
     let (app, ct) = create_router(state, ct);
     // app start
     tracing::info!("app start");
-    let listener = TcpListener::bind(format!("0.0.0.0:{port}")).await?;
-    tracing::info!("listening on http://0.0.0.0:{port}");
+    let addr = match addrs {
+        Either::Left(value) => value.to_string(),
+        Either::Right(values) => values.first().expect("addrs is empty").to_string(),
+    };
+    let listener = TcpListener::bind(format!("{addr}:{port}")).await?;
+    tracing::info!("listening on {addr}:{port}");
     let app = NormalizePathLayer::trim_trailing_slash().layer(app);
     axum::serve(
         listener,
@@ -273,15 +316,8 @@ pub fn setup_web(router: Router) -> Router {
         )
 }
 
-pub fn main() {
-    let result = start();
-
-    if let Some(err) = result.err() {
-        println!("Error: {err}");
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct AppState {
     pub conn: DatabaseConnection,
+    pub config: Arc<Config>,
 }

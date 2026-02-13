@@ -97,16 +97,15 @@ async fn main() {
                 let (container, state) = setup_database().await;
                 world.container = container;
                 world.state = Some(state.clone());
-                let config = api::config::get();
                 Jwt::init(AuthConfig {
-                    access_token_secret: config.auth_access_token_secret.clone(),
-                    access_token_expires_in: config.auth_access_token_expires_in,
-                    refresh_token_secret: config.auth_refresh_token_secret.clone(),
-                    refresh_token_expires_in: config.auth_refresh_token_expires_in,
-                    audience: config.auth_audience.clone(),
-                    issuer: config.auth_issuer.clone(),
-                    client_id: config.auth_client_id.clone(),
-                    client_secret: config.auth_client_secret.clone(),
+                    access_token_secret: Some(String::from("QLjJTeVblAlM47de")),
+                    access_token_expires_in: Some(28800),
+                    refresh_token_secret: Some(String::from("N8lI0uitNzJl6vYK")),
+                    refresh_token_expires_in: Some(15897600),
+                    audience: Some(String::from("audience")),
+                    issuer: Some(String::from("issuer")),
+                    client_id: Some(String::from("d1aicsr57dijo7h963ig")),
+                    client_secret: Some(String::from("ujTgh2lEQYy0PXhK")),
                 });
                 let app = OpenApiRouter::new();
                 let app = setup_ota(app, state).split_for_parts().0;

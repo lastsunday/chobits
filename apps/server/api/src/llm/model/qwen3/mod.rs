@@ -139,7 +139,7 @@ fn create_message_prompt(message: &Message) -> String {
                                         tool_result_text
                                     ));
                                 }
-                                rig::message::ToolResultContent::Image(image) => {
+                                rig::message::ToolResultContent::Image(_image) => {
                                     // TODO:
                                 }
                             }

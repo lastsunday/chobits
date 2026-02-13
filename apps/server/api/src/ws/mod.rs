@@ -5,7 +5,7 @@ pub mod session;
 use crate::{
     AppState,
     asr::AsrFactory,
-    config::{self, audio::AudioConfig},
+    config::{Config, audio::AudioConfig, vad::VadConfig},
     llm::LlmFactory,
     mcp::{
         client::server::ServerMcpClient,
@@ -16,7 +16,7 @@ use crate::{
 
 use axum::{
     RequestPartsExt, debug_handler,
-    extract::{ConnectInfo, FromRequestParts, Path, WebSocketUpgrade, ws::Message},
+    extract::{ConnectInfo, FromRequestParts, Path, State, WebSocketUpgrade, ws::Message},
     http::{HeaderMap, StatusCode, request::Parts},
     response::{IntoResponse, Response},
 };
@@ -63,11 +63,12 @@ async fn ws_handler(
     user_agent: Option<TypedHeader<headers::UserAgent>>,
     _headers: HeaderMap,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    State(AppState { config, .. }): State<AppState>,
 ) -> impl IntoResponse {
     tracing::info!("user_agent = {:?}", user_agent);
-    ws.on_upgrade(|socket| {
+    ws.on_upgrade(move |socket| {
         let (write, read) = socket.split();
-        handle_socket(write, read)
+        handle_socket(config, write, read)
     })
 }
 
@@ -88,12 +89,11 @@ async fn create_server_mcp_client(uri: String) -> anyhow::Result<ServerMcpClient
     Ok(server_mcp_client)
 }
 
-pub async fn handle_socket<W, R>(mut write: W, mut read: R)
+pub async fn handle_socket<W, R>(config: Arc<Config>, mut write: W, mut read: R)
 where
     W: Sink<Message> + Unpin + Send + 'static,
     R: Stream<Item = Result<Message, axum::Error>> + Unpin + Send + 'static,
 {
-    let config = config::get();
     let session_config = SessionConfig {
         close_connection_no_voice_time: config.logic_close_connection_no_voice_time,
         silence_voice_timeout: config.logic_silence_voice_timeout,
@@ -119,7 +119,10 @@ where
     let mut session = SessionBuilder::new()
         .with_id(id.clone())
         .with_listener(Box::new(DefaultListener::new(
-            Arc::new(Mutex::new(VadFactory::create_model())),
+            Arc::new(Mutex::new(VadFactory::create_model(&VadConfig {
+                path: config.vad_path.clone(),
+                num_threads: config.vad_num_threads,
+            }))),
             AsrFactory::global().default().clone(),
             config.audio_input_sample_rate,
             config.audio_input_frame_duration,

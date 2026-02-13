@@ -1,6 +1,5 @@
 pub mod model;
 
-use crate::config;
 use crate::{common::ModelError, config::asr::AsrConfig};
 use async_trait::async_trait;
 use model::whisper::AsrWhisper;
@@ -27,15 +26,21 @@ static INSTANCE: OnceLock<AsrFactory> = OnceLock::new();
 
 pub struct AsrFactory {
     default_instance: Arc<Mutex<Box<dyn Asr>>>,
+    pub config: AsrConfig,
 }
 
 impl AsrFactory {
-    pub fn new(default_instance: Arc<Mutex<Box<dyn Asr>>>) -> Self {
-        Self { default_instance }
+    pub fn new(default_instance: Arc<Mutex<Box<dyn Asr>>>, config: AsrConfig) -> Self {
+        Self {
+            default_instance,
+            config,
+        }
     }
 
-    pub async fn init() -> &'static Self {
-        INSTANCE.get_or_init(|| -> Self { Self::new(Arc::new(Mutex::new(Self::create_model()))) })
+    pub async fn init(config: AsrConfig) -> &'static Self {
+        INSTANCE.get_or_init(|| -> Self {
+            Self::new(Arc::new(Mutex::new(Self::create_model(&config))), config)
+        })
     }
 
     pub fn global() -> &'static AsrFactory {
@@ -46,10 +51,9 @@ impl AsrFactory {
         self.default_instance.clone()
     }
 
-    pub fn create_model() -> Box<dyn Asr> {
-        let config = config::get();
+    pub fn create_model(config: &AsrConfig) -> Box<dyn Asr> {
         let config = AsrConfig {
-            path: config.asr_path.clone(),
+            path: config.path.clone(),
         };
         Box::new(
             AsrWhisper::new(config.path.clone().expect("asr path is empty").to_string()).unwrap(),

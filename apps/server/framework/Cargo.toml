@@ -6,6 +6,8 @@ edition.workspace = true
 publish = false
 
 [dependencies]
+chobits-build-metadata.workspace = true
+core_affinity = { workspace = true }
 xid = { workspace = true }
 bcrypt = { workspace = true }
 axum = { workspace = true, features = ["macros"] }

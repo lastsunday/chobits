@@ -10,7 +10,10 @@ use std::{
 use api::{
     AppState,
     asr::AsrFactory,
-    config,
+    config::{
+        LlmModel, TtsModel, asr::AsrConfig, audio::AudioConfig, llm::LlmConfig, tts::TtsConfig,
+        vad::VadConfig,
+    },
     llm::LlmFactory,
     mcp::{
         client::server::ServerMcpClient,
@@ -1278,16 +1281,46 @@ async fn test_mcp_flow_device_client() -> anyhow::Result<()> {
 async fn create_session()
 -> Result<(Session, Option<ContainerAsync<Postgres>>, AppState), anyhow::Error> {
     debug!("init vad factory");
-    VadFactory::init().await;
+    VadFactory::init(VadConfig {
+        path: Some(String::from("data/vad/model/onnx-community/silero-vad/")),
+        num_threads: Some(4),
+    })
+    .await;
     debug!("init vad factory successfully");
     debug!("init asr factory");
-    AsrFactory::init().await;
+    AsrFactory::init(AsrConfig {
+        path: Some(String::from("data/asr/model/openai/whisper-small/")),
+    })
+    .await;
     debug!("init asr factory successfully");
     tracing::debug!("init llm factory");
-    LlmFactory::init().await;
+    LlmFactory::init(LlmConfig {
+        model: Some(LlmModel::Qwen3),
+        path: Some(String::from("data/llm/model/unsloth/Qwen3-1.7B-GGUF/")),
+    })
+    .await;
     tracing::debug!("init llm factory successfully");
     tracing::debug!("init tts factory");
-    TtsFactory::init().await?;
+    let audio_config = AudioConfig {
+        input_sample_rate: Some(16000),
+        input_frame_duration: Some(60_u64),
+        input_channel: Some(1),
+        output_sample_rate: Some(16000),
+        output_channel: Some(1),
+        output_frame_duration: Some(60_u64),
+    };
+    TtsFactory::init(
+        TtsConfig {
+            model: Some(TtsModel::Voxcpm),
+            path: Some(String::from("data/tts/model/openbmb/VoxCPM-0.5B/")),
+            reference_prompt_text: Some(String::from(
+                "一定被灰太狼给吃了，我已经为他准备好了花圈了",
+            )),
+            reference_prompt_wav_path: Some(String::from("file://data/tts/reference/voice_05.wav")),
+        },
+        audio_config.clone(),
+    )
+    .await?;
     tracing::debug!("init tts factory successfully");
 
     let (container, state) = setup_database().await;
@@ -1311,26 +1344,30 @@ async fn create_session()
     let mut mcp_host = UnionMcpHost::new(Some(id.clone()));
     // server client add
     mcp_host.add_client(Box::new(server_client)).await;
-    let config = config::get();
     let session_config = SessionConfig {
-        close_connection_no_voice_time: config.logic_close_connection_no_voice_time,
-        silence_voice_timeout: config.logic_silence_voice_timeout,
-        system_prompt: config.logic_system_prompt.clone(),
-        max_prompt_len: config.logic_max_prompt_len,
+        close_connection_no_voice_time: Some(30000),
+        silence_voice_timeout: Some(1200),
+        system_prompt: Some(String::from(
+            "你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等。",
+        )),
+        max_prompt_len: Some(3000),
     };
-    let config = config::get();
     let session = SessionBuilder::new()
         .with_listener(Box::new(DefaultListener::new(
-            Arc::new(Mutex::new(VadFactory::create_model())),
+            Arc::new(Mutex::new(VadFactory::create_model(&VadConfig {
+                path: Some(String::from("data/vad/model/onnx-community/silero-vad/")),
+                num_threads: Some(4),
+            }))),
             AsrFactory::global().default(),
-            config.audio_input_sample_rate,
-            config.audio_input_frame_duration,
-            config.audio_input_channel,
+            Some(16000),
+            Some(60_u64),
+            Some(1),
         )))
         .with_id(id.clone())
         .with_model(LlmFactory::global().default())
         .with_mcp_host(Arc::new(Mutex::new(mcp_host)))
         .with_config(session_config)
+        .with_audio_config(audio_config)
         .build();
     Ok((session, container, state))
 }

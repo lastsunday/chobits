@@ -1,5 +1,6 @@
 use api::{
     common::ModelError,
+    config::{LlmModel, llm::LlmConfig},
     llm::{LlmFactory, chat::Chat},
 };
 use framework::id::gen_id;
@@ -34,6 +35,13 @@ mod common;
 use common::{setup_database, tear_down};
 
 use crate::common::router_client::RouterClient;
+
+fn create_llm_config() -> LlmConfig {
+    LlmConfig {
+        model: Some(LlmModel::Qwen3),
+        path: Some(String::from("data/llm/model/unsloth/Qwen3-1.7B-GGUF/")),
+    }
+}
 
 #[tokio::test]
 #[traced_test]
@@ -174,9 +182,9 @@ async fn test_chat_mcp(text: &str) -> anyhow::Result<()> {
         });
     }
     tracing::info!("{:?}", tools);
-
-    LlmFactory::init().await;
-    let model = LlmFactory::create_model();
+    let config = create_llm_config();
+    LlmFactory::init(config.clone()).await;
+    let model = LlmFactory::create_model(&config);
 
     let mut has_next_step = true;
 

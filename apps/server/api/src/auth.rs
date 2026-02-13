@@ -1,4 +1,3 @@
-use super::config;
 use axum::{
     Extension, debug_handler,
     extract::{ConnectInfo, State},
@@ -61,7 +60,7 @@ pub struct LoginResult {
     (status=OK,body=ApiResponse<LoginResult>)
 ))]
 async fn login(
-    State(AppState { conn }): State<AppState>,
+    State(AppState { conn, .. }): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     ValidJson(param): ValidJson<LoginParam>,
@@ -112,11 +111,11 @@ pub struct AccessTokenParam {
     (status=OK,body=ApiResponse<LoginResult>)
 ))]
 async fn access_token(
+    State(AppState { config, .. }): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     ValidQuery(param): ValidQuery<AccessTokenParam>,
 ) -> ApiResult<ApiResponse<LoginResult>> {
-    let config = config::get();
     if !param.client_id.eq(config
         .auth_client_id
         .as_ref()
@@ -160,7 +159,7 @@ pub struct ResetPasswordParam {
     (status=OK,body=ApiResponse<String>)
 ))]
 async fn reset_password(
-    State(AppState { conn }): State<AppState>,
+    State(AppState { conn, .. }): State<AppState>,
     Extension(principal): Extension<Principal>,
     headers: HeaderMap,
     ValidJson(param): ValidJson<ResetPasswordParam>,

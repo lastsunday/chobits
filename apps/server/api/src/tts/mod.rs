@@ -41,38 +41,39 @@ static INSTANCE: OnceLock<TtsFactory> = OnceLock::new();
 
 pub struct TtsFactory {
     default_instance: Arc<Box<dyn Tts>>,
+    pub tts_config: TtsConfig,
+    pub audio_config: AudioConfig,
 }
 
 impl TtsFactory {
-    pub fn new(default_instance: Arc<Box<dyn Tts>>) -> Self {
-        Self { default_instance }
+    pub fn new(
+        default_instance: Arc<Box<dyn Tts>>,
+        tts_config: TtsConfig,
+        audio_config: AudioConfig,
+    ) -> Self {
+        Self {
+            default_instance,
+            tts_config,
+            audio_config,
+        }
     }
 
-    pub async fn init() -> Result<&'static Self, anyhow::Error> {
-        let tts = Self::create_model().await?;
-        Ok(INSTANCE.get_or_init(|| -> Self { Self::new(Arc::new(tts)) }))
+    pub async fn init(
+        tts_config: TtsConfig,
+        audio_config: AudioConfig,
+    ) -> Result<&'static Self, anyhow::Error> {
+        let tts = Self::create_model(&tts_config, &audio_config).await?;
+        Ok(INSTANCE.get_or_init(|| -> Self { Self::new(Arc::new(tts), tts_config, audio_config) }))
     }
 
     pub fn default(&self) -> Arc<Box<dyn Tts>> {
         self.default_instance.clone()
     }
 
-    pub async fn create_model() -> Result<Box<dyn Tts>, anyhow::Error> {
-        let config = config::get();
-        let tts_config = TtsConfig {
-            model: config.tts_model.clone(),
-            path: config.tts_path.clone(),
-            reference_prompt_text: config.tts_reference_prompt_text.clone(),
-            reference_prompt_wav_path: config.tts_reference_prompt_wav_path.clone(),
-        };
-        let audio_config = AudioConfig {
-            input_sample_rate: config.audio_input_sample_rate,
-            input_frame_duration: config.audio_input_frame_duration,
-            input_channel: config.audio_input_channel,
-            output_sample_rate: config.audio_output_sample_rate,
-            output_channel: config.audio_output_channel,
-            output_frame_duration: config.audio_output_frame_duration,
-        };
+    pub async fn create_model(
+        tts_config: &TtsConfig,
+        audio_config: &AudioConfig,
+    ) -> Result<Box<dyn Tts>, anyhow::Error> {
         match tts_config.model.clone().expect("tts model is empty") {
             config::TtsModel::Kokoro => Ok(Box::new(
                 TtsKokoro::new(

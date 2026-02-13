@@ -2,7 +2,6 @@ use super::frame::{Frame, FrameError, FrameResult};
 use super::session::listener::Listener;
 use super::session::round::{Command, Round};
 use crate::config::audio::AudioConfig;
-use crate::config::{self};
 use crate::llm::Model;
 use crate::llm::client::{ClientBuilder, History};
 use crate::mcp::client::device::{DeviceMcpClient, DeviceMcpPhase};
