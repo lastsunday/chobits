@@ -4,6 +4,7 @@ use axum::{
     extract::{ConnectInfo, Json, State},
     http::HeaderMap,
 };
+use axum_extra::{TypedHeader, headers};
 use framework::{data::valid::ValidJson, error::ApiResult, id::gen_id};
 use std::net::SocketAddr;
 use utoipa_axum::{router::OpenApiRouter, routes};
@@ -173,6 +174,7 @@ async fn ota(
     State(AppState { config, .. }): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
+    origin: TypedHeader<headers::Origin>,
     //TODO: param not use
     ValidJson(_param): ValidJson<OtaParam>,
 ) -> ApiResult<Json<OtaResult>> {
@@ -192,13 +194,17 @@ async fn ota(
     let now = Local::now();
     let tz = TimeZone::system();
     let iana_identifier = tz.iana_name().context("get iana name failure")?;
+    let address = match origin.port() {
+        Some(port) => &format!("{}:{}", origin.hostname(), port),
+        None => origin.hostname(),
+    };
     Ok(Json(OtaResult {
         mqtt: None,
         websocket: Websocket {
             url: format!(
                 "{}://{}/chobits/v1",
                 config.ws_schema.as_ref().expect("ws schema is empty"),
-                addr.to_string()
+                address
             ),
             token: String::from(""),
         },

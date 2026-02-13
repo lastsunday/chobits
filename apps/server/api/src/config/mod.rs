@@ -83,7 +83,7 @@ pub struct Config {
     ///
     /// default: 8008
     #[serde(default = "default_port")]
-    port: ListeningPort,
+    pub port: ListeningPort,
 
     /// default: sqlite://db.sqlite?mode=rwc
     #[serde(default = "default_database_url")]
@@ -232,7 +232,7 @@ pub struct Config {
 }
 
 fn default_server_name() -> String {
-    String::from("localhost.localdomain")
+    String::from("localhost")
 }
 
 fn default_server_port() -> Option<u16> {
@@ -457,9 +457,9 @@ impl Config {
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(transparent)]
-struct ListeningPort {
+pub struct ListeningPort {
     #[serde(with = "either::serde_untagged")]
-    ports: Either<u16, Vec<u16>>,
+    pub ports: Either<u16, Vec<u16>>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
