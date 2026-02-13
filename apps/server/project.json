@@ -51,7 +51,24 @@
         "{options.target-dir}"
       ],
       "options": {
-        "target-dir": "dist/target/chobits-server"
+        "target-dir": "dist/target/chobits-server",
+        "args": "--config=application.toml"
+      },
+      "configurations": {
+        "production": {
+          "release": false
+        }
+      }
+    },
+    "dev_cuda": {
+      "executor": "@monodon/rust:run",
+      "outputs": [
+        "{options.target-dir}"
+      ],
+      "options": {
+        "target-dir": "dist/target/chobits-server",
+        "features": "cuda",
+        "args": "--config=application.toml"
       },
       "configurations": {
         "production": {
