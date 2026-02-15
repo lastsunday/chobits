@@ -232,10 +232,6 @@ fn default_server_name() -> String {
     String::from("localhost")
 }
 
-fn default_server_port() -> Option<u16> {
-    Some(3000)
-}
-
 fn default_address() -> ListeningAddr {
     ListeningAddr {
         addrs: Right(vec![Ipv4Addr::LOCALHOST.into(), Ipv6Addr::LOCALHOST.into()]),

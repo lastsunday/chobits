@@ -1,8 +1,12 @@
-use std::{collections::HashMap, error::Error, sync::Arc, time::Duration};
+use std::{collections::HashMap, error::Error, ops::Deref, sync::Arc, time::Duration};
 
+use framework::id::gen_id;
 use futures_util::future::{join, join_all};
+use rmcp::transport::{
+    StreamableHttpClientTransport, streamable_http_client::StreamableHttpClientTransportConfig,
+};
 use ruma::{
-    OwnedRoomId, OwnedUserId, UserId,
+    OwnedRoomId, OwnedUserId, TransactionId, UserId,
     api::client::{
         filter::FilterDefinition, membership::join_room_by_id, message::send_message_event,
         sync::sync_events,
@@ -10,23 +14,36 @@ use ruma::{
     assign,
     events::{
         AnySyncMessageLikeEvent, AnySyncTimelineEvent, SyncMessageLikeEvent,
-        room::message::MessageType,
+        room::message::{MessageType, RoomMessageEventContent},
     },
     presence::PresenceState,
     serde::Raw,
 };
-use ruma_client::DefaultConstructibleHttpClient as _;
-use service::chobits::message::listen::{ListenMessage, ListenMode, ListenState};
+use service::chobits::message::{
+    hello::HelloMessage,
+    listen::{ListenMessage, ListenMode, ListenState},
+    tts::TtsState,
+};
 use tokio::sync::Mutex;
 use tokio_stream::StreamExt as _;
 use tracing::{error, info};
 
 use crate::{
+    asr::AsrFactory,
     config::{
         audio::AudioConfig, matrix::MatrixConfig, mcp::McpConfig, session::SessionConfig,
         vad::VadConfig,
     },
-    ws::{frame::Frame, session::Session},
+    llm::LlmFactory,
+    mcp::{
+        client::server::ServerMcpClient,
+        mcp_host::{McpHost, UnionMcpHost},
+    },
+    vad::VadFactory,
+    ws::{
+        frame::{Frame, FrameResult},
+        session::{Session, SessionBuilder, listener::DefaultListener},
+    },
 };
 
 pub async fn start(
@@ -57,7 +74,7 @@ struct Bot {
     matrix_client: MatrixClient,
     /// The user ID of the Matrix account used by the bot.
     user_id: OwnedUserId,
-    session_map: HashMap<String, Arc<Mutex<Session>>>,
+    session_map: Arc<Mutex<HashMap<String, Arc<Mutex<Session>>>>>,
     session_config: Arc<SessionConfig>,
     mcp_config: Arc<McpConfig>,
     vad_config: Arc<VadConfig>,
@@ -106,7 +123,7 @@ impl Bot {
             vad_config,
             audio_config,
             user_id,
-            session_map: HashMap::new(),
+            session_map: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
@@ -187,36 +204,150 @@ impl Bot {
         info!("{}:\t{}", m.sender, t.body);
         // create session
         let session_key = &room_id.to_string();
-        if !self.session_map.contains_key(session_key) {
-            // TODO: init session
-            // TODO: send hello frame
-            // TODO: recv hello result frame
-            // let mut output = session.output_frame().await;
-
-            // TODO: start frame listener async task
+        let session_map = self.session_map.clone();
+        let mut session_map = session_map.lock().await;
+        if !session_map.contains_key(session_key) {
+            // init session
+            let id = gen_id();
+            let mut mcp_host = UnionMcpHost::new(Some(id.clone()));
+            let uri_list = self.mcp_config.uri_list.as_ref();
+            if let Some(uri_list) = uri_list {
+                for uri in uri_list {
+                    let server_mcp_client = create_server_mcp_client(uri.to_string()).await;
+                    match server_mcp_client {
+                        Ok(server_mcp_client) => {
+                            mcp_host.add_client(Box::new(server_mcp_client)).await;
+                        }
+                        Err(e) => {
+                            error!("{:?}", e);
+                        }
+                    }
+                }
+            }
+            let mut session = SessionBuilder::new()
+                .with_id(id.clone())
+                .with_listener(Box::new(DefaultListener::new(
+                    Arc::new(Mutex::new(VadFactory::create_model(&self.vad_config))),
+                    AsrFactory::global().default().clone(),
+                    self.audio_config.clone(),
+                )))
+                .with_model(LlmFactory::global().default())
+                .with_mcp_host(Arc::new(Mutex::new(mcp_host)))
+                .with_config(self.session_config.clone())
+                .with_audio_config(self.audio_config.clone())
+                .build();
+            session.start().await?;
+            let mut output = session.output_frame().await;
+            // send hello frame
+            session
+                .accept_frame(&Frame::Hello(HelloMessage {
+                    ..Default::default()
+                }))
+                .await;
+            if let Some(data) = output.next().await {
+                match data {
+                    Ok(frame_result) => {
+                        if let FrameResult::HelloResult(HelloMessage {
+                            message,
+                            version,
+                            transport,
+                            audio_params,
+                            features,
+                            session_id,
+                        }) = frame_result
+                        {
+                            // TODO: handle hello result
+                        } else {
+                            return Err(anyhow::anyhow!(format!(
+                                "not recv hello frame result,frame result = {:?}",
+                                frame_result
+                            ))
+                            .into());
+                        }
+                    }
+                    Err(e) => return Err(anyhow::anyhow!(e.to_string()).into()),
+                }
+            }
+            //start frame listener async task
             let matrix_client = self.matrix_client.clone();
+            let room_id_clone = room_id.clone();
             tokio::spawn(async move {
-                let client = matrix_client;
-                let id = room_id;
-                // while let Some(data) = output.next().await {
-                // let joke_content = RoomMessageEventContent::notice_plain(joke);
-                // let txn_id = TransactionId::new();
-                // let req = send_message_event::v3::Request::new(
-                //     room_id.to_owned(),
-                //     txn_id,
-                //     &joke_content,
-                // )?;
-                // // Do nothing if we can't send the message.
-                // let _ = self.matrix_client.send_request(req).await;
-                // }
+                let id = room_id_clone;
+                while let Some(data) = output.next().await {
+                    match data {
+                        Ok(frame_result) => match frame_result {
+                            FrameResult::HelloResult(hello_message) => todo!(),
+                            FrameResult::STTResult(stt_message) => {
+                                // TODO:
+                                info!("{:?}", stt_message);
+                            }
+                            FrameResult::LLMResult(llm_message) => {
+                                // TODO:
+                            }
+                            FrameResult::TTSResult(tts_message) => {
+                                match tts_message.state {
+                                    Some(state) => match state {
+                                        TtsState::Start => {
+                                            // TODO:
+                                        }
+                                        TtsState::SentenceStart => {
+                                            // TODO:
+                                            if let Some(text) = tts_message.text {
+                                                let text_content =
+                                                    RoomMessageEventContent::notice_plain(text);
+                                                let txn_id = TransactionId::new();
+                                                let req = send_message_event::v3::Request::new(
+                                                    id.to_owned(),
+                                                    txn_id,
+                                                    &text_content,
+                                                );
+                                                match req {
+                                                    Ok(req) => {
+                                                        // Do nothing if we can't send the message.
+                                                        let _ =
+                                                            matrix_client.send_request(req).await;
+                                                    }
+                                                    Err(_) => todo!(),
+                                                }
+                                            } else {
+                                                // TODO: text is none
+                                            }
+                                        }
+                                        TtsState::SentenceEnd => {
+                                            // TODO:
+                                        }
+                                        TtsState::Stop => {
+
+                                            // TODO:
+                                        }
+                                    },
+                                    None => {
+                                        // TODO:
+                                    }
+                                }
+                            }
+                            FrameResult::AudioResult(audio_message) => {
+                                // TODO:
+                            }
+                            FrameResult::CloseResult => {
+                                // TODO: shutdown session and clear session map
+                            }
+                            FrameResult::McpResult(mcp_request) => todo!(),
+                        },
+                        Err(e) => {
+                            // TODO: handle frame error
+                        }
+                    }
+                }
             });
             // TODO: add to session map
+            session_map.insert(session_key.to_string(), Arc::new(Mutex::new(session)));
         }
-        let session = self
-            .session_map
+        let session = session_map
             .get(session_key)
-            .expect("session not exists")
+            .unwrap_or_else(|| panic!("session not exists,wehre session key ={}", session_key))
             .clone();
+        drop(session_map);
         let mut session = session.lock().await;
         session
             .accept_frame(&Frame::Listen(ListenMessage {
@@ -226,7 +357,6 @@ impl Bot {
                 ..Default::default()
             }))
             .await;
-
         Ok(())
     }
 
@@ -238,4 +368,12 @@ impl Bot {
             .await?;
         Ok(())
     }
+}
+
+async fn create_server_mcp_client(uri: String) -> anyhow::Result<ServerMcpClient> {
+    let config = StreamableHttpClientTransportConfig::with_uri(uri);
+    let transport = StreamableHttpClientTransport::from_config(config);
+    let mut server_mcp_client = ServerMcpClient::new(transport).await?;
+    server_mcp_client.init().await?;
+    Ok(server_mcp_client)
 }
