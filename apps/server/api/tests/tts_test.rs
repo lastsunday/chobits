@@ -1,4 +1,4 @@
-use std::thread;
+use std::{sync::Arc, thread};
 
 use api::{
     common::ModelError,
@@ -22,22 +22,22 @@ async fn test_tts_default() -> anyhow::Result<()> {
     const MONO_60MS: usize = ENCODE_SAMPLE_RATE as usize * 60 / 1000;
     let size = MONO_60MS;
     TtsFactory::init(
-        TtsConfig {
+        Arc::new(TtsConfig {
             model: Some(TtsModel::Voxcpm),
             path: Some(String::from("data/tts/model/openbmb/VoxCPM-0.5B/")),
             reference_prompt_text: Some(String::from(
                 "一定被灰太狼给吃了，我已经为他准备好了花圈了",
             )),
             reference_prompt_wav_path: Some(String::from("file://data/tts/reference/voice_05.wav")),
-        },
-        AudioConfig {
+        }),
+        Arc::new(AudioConfig {
             input_sample_rate: Some(16000),
             input_frame_duration: Some(60_u64),
             input_channel: Some(1),
             output_sample_rate: Some(16000),
             output_channel: Some(1),
             output_frame_duration: Some(60_u64),
-        },
+        }),
     )
     .await?;
     let tts = TtsFactory::global().default();

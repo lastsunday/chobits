@@ -19,10 +19,6 @@
 #
 #server_name = localhost.localdomain
 
-# This item is undocumented. Please contribute documentation for it.
-#
-#server_port = 3000
-
 # The default address (IPv4 or IPv6) continuwuity will listen on.
 #
 # If you are using Docker or a container NAT networking setup, this must
@@ -39,9 +35,7 @@
 # If you are using Docker, don't change this, you'll need to map an
 # external port to this.
 #
-# To listen on multiple ports, specify a vector e.g. [8080, 8448]
-#
-#port = 8008
+#port = 3000
 
 # This item is undocumented. Please contribute documentation for it.
 #
@@ -145,19 +139,19 @@
 
 # This item is undocumented. Please contribute documentation for it.
 #
-#logic_close_connection_no_voice_time = 30000
+#session_close_connection_no_voice_time = 30000
 
 # This item is undocumented. Please contribute documentation for it.
 #
-#logic_silence_voice_timeout = 1200
+#session_silence_voice_timeout = 1200
 
 # This item is undocumented. Please contribute documentation for it.
 #
-#logic_system_prompt = 你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等。
+#session_system_prompt = 你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等。
 
 # This item is undocumented. Please contribute documentation for it.
 #
-#logic_max_prompt_len = 3000
+#session_max_prompt_len = 3000
 
 # This item is undocumented. Please contribute documentation for it.
 #

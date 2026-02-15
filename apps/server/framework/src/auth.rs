@@ -2,7 +2,10 @@ use jsonwebtoken::{
     DecodingKey, EncodingKey, Header, Validation, decode, encode, get_current_timestamp,
 };
 use serde::{Deserialize, Serialize};
-use std::{sync::OnceLock, time::Duration};
+use std::{
+    sync::{Arc, OnceLock},
+    time::Duration,
+};
 use utoipa::ToSchema;
 
 use crate::config::auth::AuthConfig;
@@ -40,7 +43,7 @@ pub struct Jwt {
 }
 
 impl Jwt {
-    fn new(config: AuthConfig) -> Self {
+    fn new(config: Arc<AuthConfig>) -> Self {
         let mut access_token_validation = Validation::new(jsonwebtoken::Algorithm::HS256);
         access_token_validation.set_audience(
             config
@@ -60,6 +63,7 @@ impl Jwt {
             .set_required_spec_claims(&["jti", "sub", "aud", "iss", "iat", "exp"]);
         let access_token_secret = config
             .access_token_secret
+            .as_ref()
             .expect("auth access token secret is empty");
 
         let mut refresh_token_validation = Validation::new(jsonwebtoken::Algorithm::HS256);
@@ -82,6 +86,7 @@ impl Jwt {
 
         let refresh_token_secret = config
             .refresh_token_secret
+            .as_ref()
             .expect("auth refresh token secret is empty");
         Self {
             header: Header::new(jsonwebtoken::Algorithm::HS256),
@@ -180,7 +185,7 @@ impl Jwt {
         self.refresh_token_expires_in.as_secs()
     }
 
-    pub fn init(config: AuthConfig) -> &'static Jwt {
+    pub fn init(config: Arc<AuthConfig>) -> &'static Jwt {
         JWT_INSTANCE.get_or_init(|| -> Self { Self::new(config) })
     }
 

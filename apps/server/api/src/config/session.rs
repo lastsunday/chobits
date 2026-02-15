@@ -1,7 +1,7 @@
 use serde::Deserialize;
 
-#[derive(Debug, Deserialize, Clone)]
-pub struct LogicConfig {
+#[derive(Debug, Deserialize, Clone, Default)]
+pub struct SessionConfig {
     /// unit: ms
     #[serde(default)]
     pub close_connection_no_voice_time: Option<i64>,

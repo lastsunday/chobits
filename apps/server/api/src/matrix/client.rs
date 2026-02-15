@@ -1,9 +1,8 @@
-use std::{error::Error, sync::LazyLock, time::Duration};
+use std::{collections::HashMap, error::Error, sync::Arc, time::Duration};
 
 use futures_util::future::{join, join_all};
-use http_body_util::BodyExt as _;
 use ruma::{
-    OwnedRoomId, OwnedUserId, TransactionId, UserId,
+    OwnedRoomId, OwnedUserId, UserId,
     api::client::{
         filter::FilterDefinition, membership::join_room_by_id, message::send_message_event,
         sync::sync_events,
@@ -11,85 +10,103 @@ use ruma::{
     assign,
     events::{
         AnySyncMessageLikeEvent, AnySyncTimelineEvent, SyncMessageLikeEvent,
-        room::message::{MessageType, RoomMessageEventContent},
+        room::message::MessageType,
     },
     presence::PresenceState,
     serde::Raw,
 };
 use ruma_client::DefaultConstructibleHttpClient as _;
-use serde_json::Value as JsonValue;
+use service::chobits::message::listen::{ListenMessage, ListenMode, ListenState};
+use tokio::sync::Mutex;
 use tokio_stream::StreamExt as _;
 use tracing::{error, info};
 
-use crate::config::matrix::MatrixConfig;
+use crate::{
+    config::{
+        audio::AudioConfig, matrix::MatrixConfig, mcp::McpConfig, session::SessionConfig,
+        vad::VadConfig,
+    },
+    ws::{frame::Frame, session::Session},
+};
 
-pub async fn start(config: MatrixConfig) -> Result<(), Box<dyn Error>> {
-    let config = MatrixConfig {
-        enable: config.enable,
-        client_name: config.client_name.clone(),
-        homeserver: config.homeserver.clone(),
-        client_username: config.client_username.clone(),
-        client_password: config.client_password.clone(),
-    };
-    let bot = Bot::build(config).await?;
+pub async fn start(
+    matrix_config: Arc<MatrixConfig>,
+    session_config: Arc<SessionConfig>,
+    mcp_config: Arc<McpConfig>,
+    vad_config: Arc<VadConfig>,
+    audio_config: Arc<AudioConfig>,
+) -> Result<(), Box<dyn Error>> {
+    let bot = Bot::build(
+        matrix_config,
+        session_config,
+        mcp_config,
+        vad_config,
+        audio_config,
+    )
+    .await?;
     bot.run().await?;
     Ok(())
 }
-
-/// The URI used to request a new joke.
-static JOKE_API_URI: LazyLock<hyper::Uri> = LazyLock::new(|| {
-    "https://v2.jokeapi.dev/joke/Programming,Pun,Misc?safe-mode&type=single"
-        .parse()
-        .expect("URI should be valid")
-});
 
 type HttpClient = ruma_client::http_client::HyperNativeTls;
 type MatrixClient = ruma_client::Client<HttpClient>;
 
 /// The bot.
 struct Bot {
-    /// The client to use to make HTTP requests outside of the Matrix API.
-    http_client: HttpClient,
     /// The client to use to make requests against the Matrix API.
     matrix_client: MatrixClient,
     /// The user ID of the Matrix account used by the bot.
     user_id: OwnedUserId,
+    session_map: HashMap<String, Arc<Mutex<Session>>>,
+    session_config: Arc<SessionConfig>,
+    mcp_config: Arc<McpConfig>,
+    vad_config: Arc<VadConfig>,
+    audio_config: Arc<AudioConfig>,
 }
 
 impl Bot {
     /// Build the `Bot` from the config.
     // TODO: session token save and reuse
-    async fn build(config: MatrixConfig) -> Result<Self, Box<dyn Error>> {
-        let http_client = HttpClient::default();
+    async fn build(
+        matrix_config: Arc<MatrixConfig>,
+        session_config: Arc<SessionConfig>,
+        mcp_config: Arc<McpConfig>,
+        vad_config: Arc<VadConfig>,
+        audio_config: Arc<AudioConfig>,
+    ) -> Result<Self, Box<dyn Error>> {
         let matrix_client = ruma_client::Client::builder()
             .homeserver_url(
-                config
+                matrix_config
                     .homeserver
                     .clone()
                     .expect("matrix homeserver is empty"),
             )
             .build::<HttpClient>()
             .await?;
-        let username = config
+        let username = matrix_config
             .client_username
             .clone()
             .expect("matrix client username is empty");
         matrix_client
             .log_in(
                 &username,
-                &config
+                &matrix_config
                     .client_password
                     .clone()
                     .expect("matrix client password is empty"),
                 None,
-                config.client_name.as_deref(),
+                matrix_config.client_name.as_deref(),
             )
             .await?;
         let user_id = UserId::parse(username).expect("invalid matrix user id");
         Ok(Self {
-            http_client,
             matrix_client,
+            session_config,
+            mcp_config,
+            vad_config,
+            audio_config,
             user_id,
+            session_map: HashMap::new(),
         })
     }
 
@@ -168,21 +185,47 @@ impl Bot {
         };
 
         info!("{}:\t{}", m.sender, t.body);
+        // create session
+        let session_key = &room_id.to_string();
+        if !self.session_map.contains_key(session_key) {
+            // TODO: init session
+            // TODO: send hello frame
+            // TODO: recv hello result frame
+            // let mut output = session.output_frame().await;
 
-        if !t.body.to_ascii_lowercase().contains("joke") {
-            return Ok(());
+            // TODO: start frame listener async task
+            let matrix_client = self.matrix_client.clone();
+            tokio::spawn(async move {
+                let client = matrix_client;
+                let id = room_id;
+                // while let Some(data) = output.next().await {
+                // let joke_content = RoomMessageEventContent::notice_plain(joke);
+                // let txn_id = TransactionId::new();
+                // let req = send_message_event::v3::Request::new(
+                //     room_id.to_owned(),
+                //     txn_id,
+                //     &joke_content,
+                // )?;
+                // // Do nothing if we can't send the message.
+                // let _ = self.matrix_client.send_request(req).await;
+                // }
+            });
+            // TODO: add to session map
         }
-
-        let joke = self
-            .get_joke()
-            .await
-            .unwrap_or_else(|_| "I thought of a joke... but I just forgot it.".to_owned());
-        let joke_content = RoomMessageEventContent::notice_plain(joke);
-
-        let txn_id = TransactionId::new();
-        let req = send_message_event::v3::Request::new(room_id.to_owned(), txn_id, &joke_content)?;
-        // Do nothing if we can't send the message.
-        let _ = self.matrix_client.send_request(req).await;
+        let session = self
+            .session_map
+            .get(session_key)
+            .expect("session not exists")
+            .clone();
+        let mut session = session.lock().await;
+        session
+            .accept_frame(&Frame::Listen(ListenMessage {
+                state: ListenState::Detect,
+                mmod: Some(ListenMode::Manual),
+                text: Some(&t.body),
+                ..Default::default()
+            }))
+            .await;
 
         Ok(())
     }
@@ -193,30 +236,6 @@ impl Bot {
         self.matrix_client
             .send_request(join_room_by_id::v3::Request::new(room_id.clone()))
             .await?;
-
-        let greeting = "Hello! My name is Mr. Bot! I like to tell jokes. Like this one: ";
-        let joke = self
-            .get_joke()
-            .await
-            .unwrap_or_else(|_| "err... never mind.".to_owned());
-        let content = RoomMessageEventContent::notice_plain(format!("{greeting}\n{joke}"));
-        let txn_id = TransactionId::new();
-        let message = send_message_event::v3::Request::new(room_id, txn_id, &content)?;
-        self.matrix_client.send_request(message).await?;
         Ok(())
-    }
-
-    /// Get a new joke from the API.
-    async fn get_joke(&self) -> Result<String, Box<dyn Error>> {
-        let rsp = self.http_client.get(JOKE_API_URI.clone()).await?;
-        let bytes = rsp.into_body().collect().await?.to_bytes();
-
-        let joke_obj = serde_json::from_slice::<JsonValue>(&bytes)
-            .map_err(|_| "invalid JSON returned from joke API")?;
-        let joke = joke_obj["joke"]
-            .as_str()
-            .ok_or("joke field missing from joke API response")?;
-
-        Ok(joke.to_owned())
     }
 }

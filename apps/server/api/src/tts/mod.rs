@@ -41,15 +41,15 @@ static INSTANCE: OnceLock<TtsFactory> = OnceLock::new();
 
 pub struct TtsFactory {
     default_instance: Arc<Box<dyn Tts>>,
-    pub tts_config: TtsConfig,
-    pub audio_config: AudioConfig,
+    pub tts_config: Arc<TtsConfig>,
+    pub audio_config: Arc<AudioConfig>,
 }
 
 impl TtsFactory {
     pub fn new(
         default_instance: Arc<Box<dyn Tts>>,
-        tts_config: TtsConfig,
-        audio_config: AudioConfig,
+        tts_config: Arc<TtsConfig>,
+        audio_config: Arc<AudioConfig>,
     ) -> Self {
         Self {
             default_instance,
@@ -59,8 +59,8 @@ impl TtsFactory {
     }
 
     pub async fn init(
-        tts_config: TtsConfig,
-        audio_config: AudioConfig,
+        tts_config: Arc<TtsConfig>,
+        audio_config: Arc<AudioConfig>,
     ) -> Result<&'static Self, anyhow::Error> {
         let tts = Self::create_model(&tts_config, &audio_config).await?;
         Ok(INSTANCE.get_or_init(|| -> Self { Self::new(Arc::new(tts), tts_config, audio_config) }))

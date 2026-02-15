@@ -5,7 +5,7 @@ pub mod session;
 use crate::{
     AppState,
     asr::AsrFactory,
-    config::{Config, audio::AudioConfig, vad::VadConfig},
+    config::{audio::AudioConfig, mcp::McpConfig, session::SessionConfig, vad::VadConfig},
     llm::LlmFactory,
     mcp::{
         client::server::ServerMcpClient,
@@ -28,7 +28,7 @@ use rmcp::transport::{
     StreamableHttpClientTransport, streamable_http_client::StreamableHttpClientTransportConfig,
 };
 use serde::Serialize;
-use session::{SessionBuilder, SessionConfig, listener::DefaultListener};
+use session::{SessionBuilder, listener::DefaultListener};
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
 use tracing::{error, info};
@@ -63,12 +63,25 @@ async fn ws_handler(
     user_agent: Option<TypedHeader<headers::UserAgent>>,
     _headers: HeaderMap,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    State(AppState { config, .. }): State<AppState>,
+    State(AppState {
+        session_config,
+        mcp_config,
+        vad_config,
+        audio_config,
+        ..
+    }): State<AppState>,
 ) -> impl IntoResponse {
     tracing::info!("user_agent = {:?}", user_agent);
     ws.on_upgrade(move |socket| {
         let (write, read) = socket.split();
-        handle_socket(config, write, read)
+        handle_socket(
+            session_config,
+            mcp_config,
+            vad_config,
+            audio_config,
+            write,
+            read,
+        )
     })
 }
 
@@ -89,20 +102,20 @@ async fn create_server_mcp_client(uri: String) -> anyhow::Result<ServerMcpClient
     Ok(server_mcp_client)
 }
 
-pub async fn handle_socket<W, R>(config: Arc<Config>, mut write: W, mut read: R)
-where
+pub async fn handle_socket<W, R>(
+    session_config: Arc<SessionConfig>,
+    mcp_config: Arc<McpConfig>,
+    vad_config: Arc<VadConfig>,
+    audio_config: Arc<AudioConfig>,
+    mut write: W,
+    mut read: R,
+) where
     W: Sink<Message> + Unpin + Send + 'static,
     R: Stream<Item = Result<Message, axum::Error>> + Unpin + Send + 'static,
 {
-    let session_config = SessionConfig {
-        close_connection_no_voice_time: config.logic_close_connection_no_voice_time,
-        silence_voice_timeout: config.logic_silence_voice_timeout,
-        system_prompt: config.logic_system_prompt.clone(),
-        max_prompt_len: config.logic_max_prompt_len,
-    };
     let id = gen_id();
     let mut mcp_host = UnionMcpHost::new(Some(id.clone()));
-    let uri_list = &config.mcp_uri_list;
+    let uri_list = &mcp_config.uri_list;
     if let Some(uri_list) = uri_list {
         for uri in uri_list {
             let server_mcp_client = create_server_mcp_client(uri.to_string()).await;
@@ -119,26 +132,14 @@ where
     let mut session = SessionBuilder::new()
         .with_id(id.clone())
         .with_listener(Box::new(DefaultListener::new(
-            Arc::new(Mutex::new(VadFactory::create_model(&VadConfig {
-                path: config.vad_path.clone(),
-                num_threads: config.vad_num_threads,
-            }))),
+            Arc::new(Mutex::new(VadFactory::create_model(&vad_config))),
             AsrFactory::global().default().clone(),
-            config.audio_input_sample_rate,
-            config.audio_input_frame_duration,
-            config.audio_input_channel,
+            audio_config.clone(),
         )))
         .with_model(LlmFactory::global().default())
         .with_mcp_host(Arc::new(Mutex::new(mcp_host)))
-        .with_config(session_config)
-        .with_audio_config(AudioConfig {
-            input_sample_rate: config.audio_input_sample_rate,
-            input_frame_duration: config.audio_input_frame_duration,
-            input_channel: config.audio_input_channel,
-            output_sample_rate: config.audio_output_sample_rate,
-            output_channel: config.audio_output_channel,
-            output_frame_duration: config.audio_output_frame_duration,
-        })
+        .with_config(session_config.clone())
+        .with_audio_config(audio_config.clone())
         .build();
     let session_id = session.id.clone();
     if let Err(e) = session.start().await {

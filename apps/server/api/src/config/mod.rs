@@ -1,13 +1,16 @@
 pub mod asr;
 pub mod audio;
 pub mod check;
+pub mod database;
 pub mod llm;
-pub mod logic;
 pub mod manager;
 pub mod matrix;
 pub mod mcp;
+pub mod server;
+pub mod session;
 pub mod tts;
 pub mod vad;
+pub mod ws;
 
 use anyhow::Error;
 use chobits_macros::config_example_generator;
@@ -57,10 +60,6 @@ pub struct Config {
     #[serde(default = "default_server_name")]
     pub server_name: String,
 
-    /// default: 3000
-    #[serde(default = "default_server_port")]
-    pub server_port: Option<u16>,
-
     /// The default address (IPv4 or IPv6) continuwuity will listen on.
     ///
     /// If you are using Docker or a container NAT networking setup, this must
@@ -79,9 +78,7 @@ pub struct Config {
     /// If you are using Docker, don't change this, you'll need to map an
     /// external port to this.
     ///
-    /// To listen on multiple ports, specify a vector e.g. [8080, 8448]
-    ///
-    /// default: 8008
+    /// default: 3000
     #[serde(default = "default_port")]
     pub port: ListeningPort,
 
@@ -186,20 +183,20 @@ pub struct Config {
     pub audio_output_frame_duration: Option<u64>,
 
     /// default: 30000
-    #[serde(default = "default_logic_close_connection_no_voice_time")]
-    pub logic_close_connection_no_voice_time: Option<i64>,
+    #[serde(default = "default_session_close_connection_no_voice_time")]
+    pub session_close_connection_no_voice_time: Option<i64>,
 
     /// default: 1200
-    #[serde(default = "default_logic_silence_voice_timeout")]
-    pub logic_silence_voice_timeout: Option<i64>,
+    #[serde(default = "default_session_silence_voice_timeout")]
+    pub session_silence_voice_timeout: Option<i64>,
 
     /// default: 你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等。
-    #[serde(default = "default_logic_system_prompt")]
-    pub logic_system_prompt: Option<String>,
+    #[serde(default = "default_session_system_prompt")]
+    pub session_system_prompt: Option<String>,
 
     /// default: 3000
-    #[serde(default = "default_logic_max_prompt_len")]
-    pub logic_max_prompt_len: Option<u64>,
+    #[serde(default = "default_session_max_prompt_len")]
+    pub session_max_prompt_len: Option<u64>,
 
     /// default: ["http://127.0.0.1:3000/mcp"]
     #[serde(default = "default_mcp_uri_list")]
@@ -337,21 +334,21 @@ fn default_audio_output_frame_duration() -> Option<u64> {
     Some(60_u64)
 }
 
-fn default_logic_close_connection_no_voice_time() -> Option<i64> {
+fn default_session_close_connection_no_voice_time() -> Option<i64> {
     Some(30000)
 }
 
-fn default_logic_silence_voice_timeout() -> Option<i64> {
+fn default_session_silence_voice_timeout() -> Option<i64> {
     Some(1200)
 }
 
-fn default_logic_system_prompt() -> Option<String> {
+fn default_session_system_prompt() -> Option<String> {
     Some(String::from(
         "你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等。",
     ))
 }
 
-fn default_logic_max_prompt_len() -> Option<u64> {
+fn default_session_max_prompt_len() -> Option<u64> {
     Some(3000)
 }
 

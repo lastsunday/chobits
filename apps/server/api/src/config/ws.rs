@@ -1,7 +1,7 @@
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Clone, Default)]
-pub struct McpConfig {
+pub struct WsConfig {
     #[serde(default)]
-    pub uri_list: Option<Vec<String>>,
+    pub schema: Option<String>,
 }

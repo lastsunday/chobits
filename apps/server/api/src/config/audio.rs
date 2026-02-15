@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Default)]
 pub struct AudioConfig {
     #[serde(default)]
     pub input_sample_rate: Option<u32>,

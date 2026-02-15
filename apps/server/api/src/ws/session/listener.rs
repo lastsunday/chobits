@@ -1,4 +1,4 @@
-use crate::{asr::Asr, common::ModelError, vad::Vad};
+use crate::{asr::Asr, common::ModelError, config::audio::AudioConfig, vad::Vad};
 use async_trait::async_trait;
 use chrono::Local;
 use std::sync::Arc;
@@ -36,20 +36,18 @@ pub struct DefaultListener {
     pub state: ListenState,
     silence_voice_timeout: Option<i64>,
     latest_speaking_time: Option<i64>,
-    input_sample_rate: Option<u32>,
-    input_frame_duration: Option<u64>,
-    input_channel: Option<u32>,
+    audio_config: Arc<AudioConfig>,
 }
 
 impl DefaultListener {
     pub fn new(
         vad: Arc<Mutex<Box<dyn Vad>>>,
         asr: Arc<Mutex<Box<dyn Asr>>>,
-        input_sample_rate: Option<u32>,
-        input_frame_duration: Option<u64>,
-        input_channel: Option<u32>,
+        audio_config: Arc<AudioConfig>,
     ) -> Self {
-        let sample_rate = input_sample_rate.expect("input sample rate is empty");
+        let sample_rate = audio_config
+            .input_sample_rate
+            .expect("input sample rate is empty");
         let decoder = Arc::new(Mutex::new(
             opus::Decoder::new(sample_rate, opus::Channels::Mono).unwrap(),
         ));
@@ -62,9 +60,7 @@ impl DefaultListener {
             state: ListenState::Idle,
             silence_voice_timeout: None,
             latest_speaking_time: None,
-            input_sample_rate,
-            input_frame_duration,
-            input_channel,
+            audio_config,
         }
     }
 }
@@ -80,9 +76,16 @@ impl Listener for DefaultListener {
             let temp_voice_data = self.temp_voice_data.clone();
             let voice_data = self.voice_data.clone();
             let vad = self.vad.clone();
-            let sample_rate = self.input_sample_rate.expect("input sample rate is empty");
-            let channel = self.input_channel.expect("input channel is empty");
+            let sample_rate = self
+                .audio_config
+                .input_sample_rate
+                .expect("input sample rate is empty");
+            let channel = self
+                .audio_config
+                .input_channel
+                .expect("input channel is empty");
             let frame_duration = self
+                .audio_config
                 .input_frame_duration
                 .expect("input frame duration is empty");
             // 16000Hz * 1 channel * 60 ms / 1000 = 960 samples -> frameSize
@@ -145,7 +148,10 @@ impl Listener for DefaultListener {
                 prob: 1.0,
             });
         }
-        let sample_rate: u32 = self.input_sample_rate.expect("input sample rate is empty");
+        let sample_rate: u32 = self
+            .audio_config
+            .input_sample_rate
+            .expect("input sample rate is empty");
         let asr = self.asr.clone();
         let mut asr = asr.lock().await;
         // the follow code want to output wav file to test

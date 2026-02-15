@@ -63,18 +63,18 @@ static INSTANCE: OnceLock<LlmFactory> = OnceLock::new();
 
 pub struct LlmFactory {
     default_llm: Arc<Box<dyn Model>>,
-    pub config: LlmConfig,
+    pub config: Arc<LlmConfig>,
 }
 
 impl LlmFactory {
-    pub fn new(default_llm: Arc<Box<dyn Model>>, config: LlmConfig) -> Self {
+    pub fn new(default_llm: Arc<Box<dyn Model>>, config: Arc<LlmConfig>) -> Self {
         Self {
             default_llm,
             config,
         }
     }
 
-    pub async fn init(config: LlmConfig) -> &'static Self {
+    pub async fn init(config: Arc<LlmConfig>) -> &'static Self {
         let llm = LlmFactory::create_model(&config);
         INSTANCE.get_or_init(|| -> Self { Self::new(Arc::new(llm), config) })
     }

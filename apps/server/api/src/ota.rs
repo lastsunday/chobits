@@ -171,7 +171,7 @@ pub fn create_routes(state: AppState) -> OpenApiRouter {
      ))
 ))]
 async fn ota(
-    State(AppState { config, .. }): State<AppState>,
+    State(AppState { ws_config, .. }): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     origin: TypedHeader<headers::Origin>,
@@ -203,7 +203,7 @@ async fn ota(
         websocket: Websocket {
             url: format!(
                 "{}://{}/chobits/v1",
-                config.ws_schema.as_ref().expect("ws schema is empty"),
+                ws_config.schema.as_ref().expect("ws schema is empty"),
                 address
             ),
             token: String::from(""),

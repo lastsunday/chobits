@@ -11,8 +11,8 @@ use api::{
     AppState,
     asr::AsrFactory,
     config::{
-        LlmModel, TtsModel, asr::AsrConfig, audio::AudioConfig, llm::LlmConfig, tts::TtsConfig,
-        vad::VadConfig,
+        LlmModel, TtsModel, asr::AsrConfig, audio::AudioConfig, llm::LlmConfig,
+        session::SessionConfig, tts::TtsConfig, vad::VadConfig,
     },
     llm::LlmFactory,
     mcp::{
@@ -23,7 +23,7 @@ use api::{
     tts::TtsFactory,
     util::audio::pcm_decode,
     vad::VadFactory,
-    ws::session::{SessionBuilder, SessionConfig},
+    ws::session::SessionBuilder,
 };
 
 use api::{
@@ -1281,43 +1281,43 @@ async fn test_mcp_flow_device_client() -> anyhow::Result<()> {
 async fn create_session()
 -> Result<(Session, Option<ContainerAsync<Postgres>>, AppState), anyhow::Error> {
     debug!("init vad factory");
-    VadFactory::init(VadConfig {
+    VadFactory::init(Arc::new(VadConfig {
         path: Some(String::from("data/vad/model/onnx-community/silero-vad/")),
         num_threads: Some(4),
-    })
+    }))
     .await;
     debug!("init vad factory successfully");
     debug!("init asr factory");
-    AsrFactory::init(AsrConfig {
+    AsrFactory::init(Arc::new(AsrConfig {
         path: Some(String::from("data/asr/model/openai/whisper-small/")),
-    })
+    }))
     .await;
     debug!("init asr factory successfully");
     tracing::debug!("init llm factory");
-    LlmFactory::init(LlmConfig {
+    LlmFactory::init(Arc::new(LlmConfig {
         model: Some(LlmModel::Qwen3),
         path: Some(String::from("data/llm/model/unsloth/Qwen3-1.7B-GGUF/")),
-    })
+    }))
     .await;
     tracing::debug!("init llm factory successfully");
     tracing::debug!("init tts factory");
-    let audio_config = AudioConfig {
+    let audio_config = Arc::new(AudioConfig {
         input_sample_rate: Some(16000),
         input_frame_duration: Some(60_u64),
         input_channel: Some(1),
         output_sample_rate: Some(16000),
         output_channel: Some(1),
         output_frame_duration: Some(60_u64),
-    };
+    });
     TtsFactory::init(
-        TtsConfig {
+        Arc::new(TtsConfig {
             model: Some(TtsModel::Voxcpm),
             path: Some(String::from("data/tts/model/openbmb/VoxCPM-0.5B/")),
             reference_prompt_text: Some(String::from(
                 "一定被灰太狼给吃了，我已经为他准备好了花圈了",
             )),
             reference_prompt_wav_path: Some(String::from("file://data/tts/reference/voice_05.wav")),
-        },
+        }),
         audio_config.clone(),
     )
     .await?;
@@ -1344,30 +1344,29 @@ async fn create_session()
     let mut mcp_host = UnionMcpHost::new(Some(id.clone()));
     // server client add
     mcp_host.add_client(Box::new(server_client)).await;
-    let session_config = SessionConfig {
+    let session_config = Arc::new(SessionConfig {
         close_connection_no_voice_time: Some(30000),
         silence_voice_timeout: Some(1200),
         system_prompt: Some(String::from(
             "你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等。",
         )),
         max_prompt_len: Some(3000),
+    });
+    let vad_config = VadConfig {
+        path: Some(String::from("data/vad/model/onnx-community/silero-vad/")),
+        num_threads: Some(4),
     };
     let session = SessionBuilder::new()
         .with_listener(Box::new(DefaultListener::new(
-            Arc::new(Mutex::new(VadFactory::create_model(&VadConfig {
-                path: Some(String::from("data/vad/model/onnx-community/silero-vad/")),
-                num_threads: Some(4),
-            }))),
+            Arc::new(Mutex::new(VadFactory::create_model(&Arc::new(vad_config)))),
             AsrFactory::global().default(),
-            Some(16000),
-            Some(60_u64),
-            Some(1),
+            audio_config.clone(),
         )))
         .with_id(id.clone())
         .with_model(LlmFactory::global().default())
         .with_mcp_host(Arc::new(Mutex::new(mcp_host)))
-        .with_config(session_config)
-        .with_audio_config(audio_config)
+        .with_config(session_config.clone())
+        .with_audio_config(audio_config.clone())
         .build();
     Ok((session, container, state))
 }

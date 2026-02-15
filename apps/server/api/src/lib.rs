@@ -58,10 +58,15 @@ use crate::asr::AsrFactory;
 use crate::config::Config;
 use crate::config::asr::AsrConfig;
 use crate::config::audio::AudioConfig;
+use crate::config::database::DatabaseConfig;
 use crate::config::llm::LlmConfig;
 use crate::config::matrix::MatrixConfig;
+use crate::config::mcp::McpConfig;
+use crate::config::server::ServerConfig;
+use crate::config::session::SessionConfig;
 use crate::config::tts::TtsConfig;
 use crate::config::vad::VadConfig;
+use crate::config::ws::WsConfig;
 use crate::llm::LlmFactory;
 use crate::tts::TtsFactory;
 use crate::vad::VadFactory;
@@ -70,82 +75,78 @@ use crate::vad::VadFactory;
 extern crate rust_i18n;
 i18n!("locales", fallback = "zh");
 
-pub async fn start(config: Arc<Config>) -> anyhow::Result<()> {
-    let config_clone_for_app = config.clone();
+#[allow(clippy::too_many_arguments)]
+pub async fn start(
+    server_config: Arc<ServerConfig>,
+    database_config: Arc<DatabaseConfig>,
+    session_config: Arc<SessionConfig>,
+    mcp_config: Arc<McpConfig>,
+    vad_config: Arc<VadConfig>,
+    audio_config: Arc<AudioConfig>,
+    auth_config: Arc<AuthConfig>,
+    ws_config: Arc<WsConfig>,
+    tts_config: Arc<TtsConfig>,
+    asr_config: Arc<AsrConfig>,
+    llm_config: Arc<LlmConfig>,
+    matrix_config: Arc<MatrixConfig>,
+) -> anyhow::Result<()> {
     // auth
-    Jwt::init(AuthConfig {
-        access_token_secret: config.auth_access_token_secret.clone(),
-        access_token_expires_in: config.auth_access_token_expires_in,
-        refresh_token_secret: config.auth_refresh_token_secret.clone(),
-        refresh_token_expires_in: config.auth_refresh_token_expires_in,
-        audience: config.auth_audience.clone(),
-        issuer: config.auth_issuer.clone(),
-        client_id: config.auth_client_id.clone(),
-        client_secret: config.auth_client_secret.clone(),
-    });
+    Jwt::init(auth_config.clone());
     // database init
-    let database_url = config.database_url.as_ref().expect("database url is empty");
+    let database_url = database_config.url.as_ref().expect("database url is empty");
     let conn: sea_orm::DatabaseConnection =
         framework::database::establish_connection(database_url).await?;
     conn.ping().await?;
-    let conn_for_app = conn.clone();
     tracing::info!("Database connected successfully");
     // database schema init or upgrade
     migration::Migrator::up(&conn, None).await?;
     tracing::info!("init tts factory");
-    let tts_config = TtsConfig {
-        model: config.tts_model.clone(),
-        path: config.tts_path.clone(),
-        reference_prompt_text: config.tts_reference_prompt_text.clone(),
-        reference_prompt_wav_path: config.tts_reference_prompt_wav_path.clone(),
-    };
-    let audio_config = AudioConfig {
-        input_sample_rate: config.audio_input_sample_rate,
-        input_frame_duration: config.audio_input_frame_duration,
-        input_channel: config.audio_input_channel,
-        output_sample_rate: config.audio_output_sample_rate,
-        output_channel: config.audio_output_channel,
-        output_frame_duration: config.audio_output_frame_duration,
-    };
-    TtsFactory::init(tts_config, audio_config).await?;
+    TtsFactory::init(tts_config, audio_config.clone()).await?;
     tracing::info!("init tts factory successfully");
     tracing::info!("init vad factory");
-    VadFactory::init(VadConfig {
-        path: config.vad_path.clone(),
-        num_threads: config.vad_num_threads,
-    })
-    .await;
+    VadFactory::init(vad_config.clone()).await;
     tracing::info!("init vad factory successfully");
     tracing::info!("init asr factory");
-    AsrFactory::init(AsrConfig {
-        path: config.asr_path.clone(),
-    })
-    .await;
+    AsrFactory::init(asr_config).await;
     tracing::info!("init asr factor3y successfully");
     tracing::info!("init llm factory");
-    LlmFactory::init(LlmConfig {
-        model: config.llm_model.clone(),
-        path: config.llm_path.clone(),
-    })
-    .await;
+    LlmFactory::init(llm_config).await;
     tracing::info!("init llm factory successfully");
     let ct = tokio_util::sync::CancellationToken::new();
     let ct_for_app = ct.clone();
     let mut handles = Vec::new();
+    let session_config_clone = session_config.clone();
+    let mcp_config_clone = mcp_config.clone();
+    let vad_config_clone = vad_config.clone();
+    let audio_config_clone = audio_config.clone();
+    let auth_config_clone = auth_config.clone();
+    let ws_config_clone = ws_config.clone();
     handles.push(tokio::spawn(async move {
-        if let Err(error) = start_app(config_clone_for_app, conn_for_app, ct_for_app).await {
+        if let Err(error) = start_app(
+            server_config,
+            session_config_clone,
+            mcp_config_clone,
+            vad_config_clone,
+            audio_config_clone,
+            auth_config_clone,
+            ws_config_clone,
+            conn,
+            ct_for_app,
+        )
+        .await
+        {
             tracing::error!("{:?}", error);
         }
     }));
-    if config.matrix_enable.expect("matrix enable is empty") {
+    if matrix_config.enable.expect("matrix enable is empty") {
         handles.push(tokio::spawn(async move {
-            if let Err(error) = start_matrix_client(MatrixConfig {
-                enable: config.matrix_enable,
-                client_name: config.matrix_client_name.clone(),
-                homeserver: config.matrix_homeserver.clone(),
-                client_username: config.matrix_client_username.clone(),
-                client_password: config.matrix_client_password.clone(),
-            })
+            if let Err(error) = start_matrix_client(
+                matrix_config,
+                session_config,
+                mcp_config,
+                vad_config,
+                audio_config,
+            )
             .await
             {
                 tracing::error!("{:?}", error);
@@ -157,22 +158,63 @@ pub async fn start(config: Arc<Config>) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub async fn start_matrix_client(config: MatrixConfig) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn start_matrix_client(
+    matrix_config: Arc<MatrixConfig>,
+    session_config: Arc<SessionConfig>,
+    mcp_config: Arc<McpConfig>,
+    vad_config: Arc<VadConfig>,
+    audio_config: Arc<AudioConfig>,
+) -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("matrix client start");
-    matrix::client::start(config).await?;
+    matrix::client::start(
+        matrix_config,
+        session_config,
+        mcp_config,
+        vad_config,
+        audio_config,
+    )
+    .await?;
     tracing::info!("matrix client end");
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn start_app(
-    config: Arc<Config>,
+    server_config: Arc<ServerConfig>,
+    session_config: Arc<SessionConfig>,
+    mcp_config: Arc<McpConfig>,
+    vad_config: Arc<VadConfig>,
+    audio_config: Arc<AudioConfig>,
+    auth_config: Arc<AuthConfig>,
+    ws_config: Arc<WsConfig>,
     conn: sea_orm::DatabaseConnection,
     ct: CancellationToken,
 ) -> anyhow::Result<()> {
-    let addrs = config.clone().address.addrs.clone();
-    let port: u16 = config.server_port.expect("server port is empty");
+    let addrs = server_config
+        .address
+        .as_ref()
+        .expect("server address is empty")
+        .addrs
+        .clone();
+    let port = match &server_config
+        .port
+        .as_ref()
+        .expect("server port is empty")
+        .ports
+    {
+        Either::Left(value) => value,
+        Either::Right(values) => values.first().expect("port is empty"),
+    };
     // state
-    let state = AppState { conn, config };
+    let state = AppState {
+        conn,
+        session_config,
+        mcp_config,
+        vad_config,
+        audio_config,
+        auth_config,
+        ws_config,
+    };
     // router
     let (app, ct) = create_router(state, ct);
     // app start
@@ -316,8 +358,13 @@ pub fn setup_web(router: Router) -> Router {
         )
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct AppState {
     pub conn: DatabaseConnection,
-    pub config: Arc<Config>,
+    pub session_config: Arc<SessionConfig>,
+    pub mcp_config: Arc<McpConfig>,
+    pub vad_config: Arc<VadConfig>,
+    pub audio_config: Arc<AudioConfig>,
+    pub auth_config: Arc<AuthConfig>,
+    pub ws_config: Arc<WsConfig>,
 }

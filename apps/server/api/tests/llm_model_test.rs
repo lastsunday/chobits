@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use api::{
     common::ModelError,
     config::{LlmModel, llm::LlmConfig},
@@ -183,7 +185,7 @@ async fn test_chat_mcp(text: &str) -> anyhow::Result<()> {
     }
     tracing::info!("{:?}", tools);
     let config = create_llm_config();
-    LlmFactory::init(config.clone()).await;
+    LlmFactory::init(Arc::new(config.clone())).await;
     let model = LlmFactory::create_model(&config);
 
     let mut has_next_step = true;

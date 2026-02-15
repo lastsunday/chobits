@@ -1,5 +1,5 @@
 use api::{asr::AsrFactory, config::asr::AsrConfig, util::audio::pcm_decode};
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 use tracing::debug;
 use tracing_test::traced_test;
 
@@ -24,9 +24,9 @@ async fn test_asr() {
         sample_rate
     );
 
-    AsrFactory::init(AsrConfig {
+    AsrFactory::init(Arc::new(AsrConfig {
         path: Some(String::from("data/asr/model/openai/whisper-small/")),
-    })
+    }))
     .await;
     let asr = AsrFactory::global().default();
     let asr = asr.clone();

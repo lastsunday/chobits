@@ -26,18 +26,18 @@ static INSTANCE: OnceLock<AsrFactory> = OnceLock::new();
 
 pub struct AsrFactory {
     default_instance: Arc<Mutex<Box<dyn Asr>>>,
-    pub config: AsrConfig,
+    pub config: Arc<AsrConfig>,
 }
 
 impl AsrFactory {
-    pub fn new(default_instance: Arc<Mutex<Box<dyn Asr>>>, config: AsrConfig) -> Self {
+    pub fn new(default_instance: Arc<Mutex<Box<dyn Asr>>>, config: Arc<AsrConfig>) -> Self {
         Self {
             default_instance,
             config,
         }
     }
 
-    pub async fn init(config: AsrConfig) -> &'static Self {
+    pub async fn init(config: Arc<AsrConfig>) -> &'static Self {
         INSTANCE.get_or_init(|| -> Self {
             Self::new(Arc::new(Mutex::new(Self::create_model(&config))), config)
         })

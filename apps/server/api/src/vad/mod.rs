@@ -9,7 +9,7 @@ use crate::common::ModelError;
 use crate::config::vad::VadConfig;
 use async_trait::async_trait;
 use model::silero::VadSilero;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 #[async_trait]
 pub trait Vad: Send + Sync {
@@ -31,15 +31,15 @@ static VAD_INSTANCE: OnceLock<VadFactory> = OnceLock::new();
 
 #[derive(Default)]
 pub struct VadFactory {
-    pub config: VadConfig,
+    pub config: Arc<VadConfig>,
 }
 
 impl VadFactory {
-    pub fn new(config: VadConfig) -> Self {
+    pub fn new(config: Arc<VadConfig>) -> Self {
         Self { config }
     }
 
-    pub async fn init(config: VadConfig) -> &'static Self {
+    pub async fn init(config: Arc<VadConfig>) -> &'static Self {
         VAD_INSTANCE.get_or_init(|| -> Self { Self::new(config) })
     }
 

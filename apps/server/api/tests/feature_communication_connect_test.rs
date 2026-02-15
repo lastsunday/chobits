@@ -15,6 +15,7 @@ use framework::config::auth::AuthConfig;
 use futures::FutureExt;
 use serde_json::json;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use tower::ServiceExt;
 use utoipa_axum::router::OpenApiRouter;
 mod common;
@@ -97,7 +98,7 @@ async fn main() {
                 let (container, state) = setup_database().await;
                 world.container = container;
                 world.state = Some(state.clone());
-                Jwt::init(AuthConfig {
+                Jwt::init(Arc::new(AuthConfig {
                     access_token_secret: Some(String::from("QLjJTeVblAlM47de")),
                     access_token_expires_in: Some(28800),
                     refresh_token_secret: Some(String::from("N8lI0uitNzJl6vYK")),
@@ -106,7 +107,7 @@ async fn main() {
                     issuer: Some(String::from("issuer")),
                     client_id: Some(String::from("d1aicsr57dijo7h963ig")),
                     client_secret: Some(String::from("ujTgh2lEQYy0PXhK")),
-                });
+                }));
                 let app = OpenApiRouter::new();
                 let app = setup_ota(app, state).split_for_parts().0;
                 let app = setup_default(app);

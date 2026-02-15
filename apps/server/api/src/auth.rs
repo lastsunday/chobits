@@ -111,17 +111,17 @@ pub struct AccessTokenParam {
     (status=OK,body=ApiResponse<LoginResult>)
 ))]
 async fn access_token(
-    State(AppState { config, .. }): State<AppState>,
+    State(AppState { auth_config, .. }): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     ValidQuery(param): ValidQuery<AccessTokenParam>,
 ) -> ApiResult<ApiResponse<LoginResult>> {
-    if !param.client_id.eq(config
-        .auth_client_id
+    if !param.client_id.eq(auth_config
+        .client_id
         .as_ref()
         .expect("auth client id is empty"))
-        || !param.client_secret.eq(config
-            .auth_client_secret
+        || !param.client_secret.eq(auth_config
+            .client_secret
             .as_ref()
             .expect("auth client secret is empty"))
     {

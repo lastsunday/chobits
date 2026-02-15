@@ -2,6 +2,7 @@ use super::frame::{Frame, FrameError, FrameResult};
 use super::session::listener::Listener;
 use super::session::round::{Command, Round};
 use crate::config::audio::AudioConfig;
+use crate::config::session::SessionConfig;
 use crate::llm::Model;
 use crate::llm::client::{ClientBuilder, History};
 use crate::mcp::client::device::{DeviceMcpClient, DeviceMcpPhase};
@@ -31,8 +32,8 @@ pub struct SessionBuilder {
     listener: Option<Box<dyn Listener>>,
     model: Option<Arc<Box<dyn Model>>>,
     mcp_host: Option<Arc<Mutex<UnionMcpHost>>>,
-    config: Option<SessionConfig>,
-    audio_config: Option<AudioConfig>,
+    config: Option<Arc<SessionConfig>>,
+    audio_config: Option<Arc<AudioConfig>>,
 }
 
 impl SessionBuilder {
@@ -60,12 +61,12 @@ impl SessionBuilder {
         self
     }
 
-    pub fn with_config(mut self, config: SessionConfig) -> SessionBuilder {
+    pub fn with_config(mut self, config: Arc<SessionConfig>) -> SessionBuilder {
         self.config = Some(config);
         self
     }
 
-    pub fn with_audio_config(mut self, config: AudioConfig) -> SessionBuilder {
+    pub fn with_audio_config(mut self, config: Arc<AudioConfig>) -> SessionBuilder {
         self.audio_config = Some(config);
         self
     }
@@ -76,17 +77,10 @@ impl SessionBuilder {
             self.listener.expect("listener is required"),
             self.model.expect("model is required"),
             self.mcp_host.expect("mcp host is required"),
-            self.config.expect("config is required"),
-            self.audio_config.expect("audio is required"),
+            self.config.expect("config is required").clone(),
+            self.audio_config.expect("audio is required").clone(),
         )
     }
-}
-
-pub struct SessionConfig {
-    pub close_connection_no_voice_time: Option<i64>,
-    pub silence_voice_timeout: Option<i64>,
-    pub system_prompt: Option<String>,
-    pub max_prompt_len: Option<u64>,
 }
 
 type OutputTx = Option<Sender<Result<FrameResult, FrameError>>>;
@@ -99,8 +93,8 @@ pub struct Session {
     latest_activity_time: Arc<Mutex<Option<i64>>>,
     history: Arc<Mutex<History>>,
 
-    config: SessionConfig,
-    audio_config: AudioConfig,
+    config: Arc<SessionConfig>,
+    audio_config: Arc<AudioConfig>,
 
     model: Arc<Box<dyn Model>>,
     listener: Box<dyn Listener>,
@@ -129,8 +123,8 @@ impl Session {
         listener: Box<dyn Listener>,
         model: Arc<Box<dyn Model>>,
         mcp_host: Arc<Mutex<UnionMcpHost>>,
-        config: SessionConfig,
-        audio_config: AudioConfig,
+        config: Arc<SessionConfig>,
+        audio_config: Arc<AudioConfig>,
     ) -> Self {
         let system_prompt = config
             .system_prompt
