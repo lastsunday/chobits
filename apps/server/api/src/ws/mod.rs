@@ -31,7 +31,7 @@ use serde::Serialize;
 use session::{SessionBuilder, listener::DefaultListener};
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
-use tracing::{error, info};
+use tracing::{error, info, trace};
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
@@ -71,7 +71,7 @@ async fn ws_handler(
         ..
     }): State<AppState>,
 ) -> impl IntoResponse {
-    tracing::info!("user_agent = {:?}", user_agent);
+    info!("user_agent = {:?}", user_agent);
     ws.on_upgrade(move |socket| {
         let (write, read) = socket.split();
         handle_socket(
@@ -153,7 +153,7 @@ pub async fn handle_socket<W, R>(
     let mut output = session.output_frame().await;
     tokio::spawn(async move {
         while let Some(data) = output.next().await {
-            info!("{:?}", data);
+            trace!("{:?}", data);
             match data {
                 Ok(frame_result) => match frame_result {
                     frame::FrameResult::HelloResult(message) => {

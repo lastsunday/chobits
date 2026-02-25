@@ -151,7 +151,7 @@
 
 # This item is undocumented. Please contribute documentation for it.
 #
-#session_system_prompt = 你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等。
+#session_system_prompt = "你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等。如果用户询问的内容为空，则请求用户描述清楚。",
 
 # This item is undocumented. Please contribute documentation for it.
 #

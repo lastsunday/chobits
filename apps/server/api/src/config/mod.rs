@@ -194,7 +194,7 @@ pub struct Config {
     #[serde(default = "default_session_silence_voice_timeout")]
     pub session_silence_voice_timeout: Option<i64>,
 
-    /// default: 你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等。
+    /// default: "你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等。如果用户询问的内容为空，则请求用户描述清楚。",
     #[serde(default = "default_session_system_prompt")]
     pub session_system_prompt: Option<String>,
 
@@ -348,7 +348,7 @@ fn default_session_silence_voice_timeout() -> Option<i64> {
 
 fn default_session_system_prompt() -> Option<String> {
     Some(String::from(
-        "你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等。",
+        "你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等。如果用户询问的内容为空，则请求用户描述清楚。",
     ))
 }
 

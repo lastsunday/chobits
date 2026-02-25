@@ -515,9 +515,9 @@ impl Session {
         match command {
             Ok(command) => {
                 self.new_round().await;
-                debug!("command = {:?}", command.clone());
+                info!("command = {:?}", command.clone());
                 let text = command.text.as_str();
-                let is_speech_clear = self.is_speech_clear(command.prob);
+                let is_speech_clear = self.is_speech_clear(&command.text, command.prob);
                 if let Some(round) = &mut self.current_round {
                     if is_speech_clear {
                         round.accept_command(Command::Chat { text }).await;
@@ -534,7 +534,7 @@ impl Session {
         }
     }
 
-    pub fn is_speech_clear(&self, prob: f32) -> bool {
-        prob >= 0.8
+    pub fn is_speech_clear(&self, text: &str, prob: f32) -> bool {
+        !text.is_empty() && prob >= 0.8
     }
 }
