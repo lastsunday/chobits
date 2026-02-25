@@ -113,6 +113,10 @@ jobs:
           sudo apt-get update
           sudo apt install libavformat-dev libavcodec-dev libavutil-dev libavfilter-dev libavdevice-dev ffmpeg pkg-config clang
 
+      - name: Install OpenBLAS
+        run: |
+          sudo apt install libopenblas-dev
+
       - name: Set Version Env
         if: startsWith(github.ref, 'refs/tags/')
         run: |
@@ -219,6 +223,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt install libavformat-dev libavcodec-dev libavutil-dev libavfilter-dev libavdevice-dev ffmpeg pkg-config clang
+
+      - name: Install OpenBLAS
+        run: |
+          sudo apt install libopenblas-dev
 
       - name: Setup Perl
         uses: shogo82148/actions-setup-perl@22423f01bde48fb88785c007e3166fbbbd8e892a
