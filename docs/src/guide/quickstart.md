@@ -6,8 +6,8 @@
 pnpm i
 pnpm exec nx run @chobits/server-ui:build
 ./apps/server/script/download_model.sh
-# using cuda: pnpm nx run chobits-server:run --features cuda
-pnpm nx run chobits-server:run
+# using cuda: pnpm nx run chobits-server:dev_cuda
+pnpm nx run chobits-server:dev
 ```
 
 - Access home page <http://127.0.0.1:3000>

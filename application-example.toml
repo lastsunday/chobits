@@ -1,0 +1,178 @@
+### chobits Configuration
+###
+### THIS FILE IS GENERATED. CHANGES/CONTRIBUTIONS IN THE REPO WILL BE
+### OVERWRITTEN!
+###
+### You should rename this file before configuring your server. Changes to
+### documentation and defaults can be contributed in source code at
+### src/config/mod.rs. This file is generated when building.
+###
+### Any values pre-populated are the default values for said config option.
+###
+### At the minimum, you MUST edit all the config options to your environment
+### that say "YOU NEED TO EDIT THIS".
+###
+
+[global]
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#server_name = localhost.localdomain
+
+# The default address (IPv4 or IPv6) continuwuity will listen on.
+#
+# If you are using Docker or a container NAT networking setup, this must
+# be "0.0.0.0".
+#
+#
+#address = 127.0.0.1
+
+# The port(s) continuwuity will listen on.
+#
+# For reverse proxying, see:
+# https://continuwuity.org/deploying/generic.html#setting-up-the-reverse-proxy
+#
+# If you are using Docker, don't change this, you'll need to map an
+# external port to this.
+#
+#port = 3000
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#database_url = sqlite://db.sqlite?mode=rwc
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#auth_access_token_secret = QLjJTeVblAlM47de
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#auth_access_token_expires_in = 28800
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#auth_refresh_token_secret = N8lI0uitNzJl6vYK
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#auth_refresh_token_expires_in = 15897600
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#auth_audience = audience
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#auth_issuer = issuer
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#auth_client_id = d1aicsr57dijo7h963ig
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#auth_client_secret = ujTgh2lEQYy0PXhK
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#ws_schema = ws
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#vad_path = data/vad/model/onnx-community/silero-vad/
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#vad_num_threads = 4
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#tts_model = voxcpm
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#tts_path = data/tts/model/openbmb/VoxCPM-0.5B/
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#tts_reference_prompt_text = 一定被灰太狼给吃了，我已经为他准备好了花圈了
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#tts_reference_prompt_wav_path = file://data/tts/reference/voice_05.wav
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#asr_path = data/asr/model/openai/whisper-small/
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#llm_model = qwen3
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#llm_path = data/llm/model/unsloth/Qwen3-1.7B-GGUF/
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#audio_input_sample_rate = 16000
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#audio_input_frame_duration = 60
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#audio_input_channel = 1
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#audio_output_sample_rate = 16000
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#audio_output_channel = 1
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#audio_output_frame_duration = 60
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#session_close_connection_no_voice_time = 30000
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#session_silence_voice_timeout = 1200
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#session_system_prompt = 你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等。
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#session_max_prompt_len = 3000
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#mcp_uri_list = ["http://127.0.0.1:3000/mcp"]
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#matrix_enable = false
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#matrix_client_name = chobits
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#matrix_homeserver = http://127.0.0.1:8008
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#matrix_client_username = @chobits:localhost.localdomain
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#matrix_client_password =

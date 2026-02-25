@@ -6,10 +6,10 @@ extern crate accelerate_src;
 
 pub mod model;
 use crate::common::ModelError;
-use crate::config;
+use crate::config::vad::VadConfig;
 use async_trait::async_trait;
 use model::silero::VadSilero;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 #[async_trait]
 pub trait Vad: Send + Sync {
@@ -30,24 +30,24 @@ pub struct SpeechSegment {
 static VAD_INSTANCE: OnceLock<VadFactory> = OnceLock::new();
 
 #[derive(Default)]
-pub struct VadFactory {}
+pub struct VadFactory {
+    pub config: Arc<VadConfig>,
+}
 
 impl VadFactory {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(config: Arc<VadConfig>) -> Self {
+        Self { config }
     }
 
-    pub async fn init() -> &'static Self {
-        VAD_INSTANCE.get_or_init(|| -> Self { Self::new() })
+    pub async fn init(config: Arc<VadConfig>) -> &'static Self {
+        VAD_INSTANCE.get_or_init(|| -> Self { Self::new(config) })
     }
 
     pub fn global() -> &'static VadFactory {
         VAD_INSTANCE.get().unwrap()
     }
 
-    pub fn create_model() -> Box<dyn Vad> {
-        let app_config = config::get();
-        let config = app_config.vad();
-        Box::new(VadSilero::new(String::from(config.path())).unwrap())
+    pub fn create_model(config: &VadConfig) -> Box<dyn Vad> {
+        Box::new(VadSilero::new(config.path.clone().expect("vad path is empty")).unwrap())
     }
 }

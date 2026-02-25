@@ -1,6 +1,7 @@
 use api::{
+    config::{LlmModel, llm::LlmConfig},
     llm::{
-        LlmFactory,
+        LlmFactory, Model,
         client::{self, ChatRequest, ClientBuilder, History},
     },
     mcp::{
@@ -27,12 +28,19 @@ use common::{setup_database, tear_down};
 
 use crate::common::router_client::RouterClient;
 
+fn create_model() -> Box<dyn Model> {
+    LlmFactory::create_model(&LlmConfig {
+        model: Some(LlmModel::Qwen3),
+        path: Some(String::from("data/llm/model/unsloth/Qwen3-1.7B-GGUF/")),
+    })
+}
+
 #[tokio::test]
 #[traced_test]
 #[ignore]
 /// cargo test --test llm_client_test -- test_chat_simple --ignored --nocapture
 async fn test_chat_simple() {
-    let model = LlmFactory::create_model();
+    let model = create_model();
     let system_prompt = "你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等并且数字使用中文字代替。".to_string();
     let hisotry = Arc::new(Mutex::new(History {
         preamble: Some(system_prompt),
@@ -71,7 +79,7 @@ async fn test_chat_simple() {
 #[ignore]
 /// cargo test --test llm_client_test -- test_short_question --ignored --nocapture
 async fn test_short_question() {
-    let model = LlmFactory::create_model();
+    let model = create_model();
     let system_prompt = "你是一个助手。".to_string();
     let history = Arc::new(Mutex::new(History {
         preamble: Some(system_prompt),
@@ -110,7 +118,7 @@ async fn test_short_question() {
 #[ignore]
 /// cargo test --test llm_client_test -- test_english_question --ignored --nocapture
 async fn test_english_question() {
-    let model = LlmFactory::create_model();
+    let model = create_model();
     let system_prompt =
         "你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等。"
             .to_string();
@@ -151,7 +159,7 @@ async fn test_english_question() {
 #[ignore]
 /// cargo test --test llm_client_test -- test_chat_history --ignored --nocapture
 async fn test_chat_history() {
-    let model = LlmFactory::create_model();
+    let model = create_model();
     let system_prompt = "你是一个助手，协助用户进行记录，查询和提供建议，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等并且数字使用中文字代替。".to_string();
     let history = Arc::new(Mutex::new(History {
         preamble: Some(system_prompt),
@@ -203,7 +211,7 @@ async fn test_chat_history() {
 #[ignore]
 /// cargo test --test llm_client_test -- test_chat_mcp --ignored --nocapture
 async fn test_chat_mcp() -> anyhow::Result<()> {
-    let model = LlmFactory::create_model();
+    let model = create_model();
     let mut union_mcp_host = UnionMcpHost::new(None);
     // TODO: sever client
     let (container, state) = setup_database().await;

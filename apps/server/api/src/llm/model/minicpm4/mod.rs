@@ -133,23 +133,23 @@ fn convert_response(
                     let delta = &choice.delta;
                     match delta {
                         aha_openai_dive::v1::resources::chat::DeltaChatMessage::Developer {
-                            content,
-                            name,
+                            content: _,
+                            name: _,
                         } => todo!(),
                         aha_openai_dive::v1::resources::chat::DeltaChatMessage::System {
-                            content,
-                            name,
+                            content: _,
+                            name: _name,
                         } => todo!(),
                         aha_openai_dive::v1::resources::chat::DeltaChatMessage::User {
-                            content,
-                            name,
+                            content: _,
+                            name: _,
                         } => todo!(),
                         aha_openai_dive::v1::resources::chat::DeltaChatMessage::Assistant {
                             content,
-                            reasoning_content,
-                            refusal,
-                            name,
-                            tool_calls,
+                            reasoning_content: _,
+                            refusal: _,
+                            name: _,
+                            tool_calls: _,
                         } => {
                             let mut text_collection = String::from("");
                             if let Some(content) = content {
@@ -157,7 +157,9 @@ fn convert_response(
                                     ChatMessageContent::Text(text) => {
                                         text_collection.push_str(text);
                                     }
-                                    ChatMessageContent::ContentPart(chat_message_content_parts) => {
+                                    ChatMessageContent::ContentPart(
+                                        _chat_message_content_parts,
+                                    ) => {
                                         todo!()
                                     }
                                     ChatMessageContent::None => todo!(),
@@ -173,16 +175,16 @@ fn convert_response(
                             }
                         }
                         aha_openai_dive::v1::resources::chat::DeltaChatMessage::Tool {
-                            content,
-                            tool_call_id,
+                            content: _,
+                            tool_call_id: _,
                         } => todo!(),
                         aha_openai_dive::v1::resources::chat::DeltaChatMessage::Untagged {
-                            content,
-                            reasoning_content,
-                            refusal,
-                            name,
-                            tool_calls,
-                            tool_call_id,
+                            content: _,
+                            reasoning_content: _,
+                            refusal: _,
+                            name: _,
+                            tool_calls: _,
+                            tool_call_id: _,
                         } => todo!(),
                     }
                 }
@@ -248,15 +250,15 @@ fn convert_request(request: &CompletionRequest) -> ChatCompletionParameters {
                             };
                             messages.push(message);
                         }
-                        UserContent::ToolResult(tool_result) => todo!(),
-                        UserContent::Image(image) => todo!(),
-                        UserContent::Audio(audio) => todo!(),
-                        UserContent::Video(video) => todo!(),
-                        UserContent::Document(document) => todo!(),
+                        UserContent::ToolResult(_tool_result) => todo!(),
+                        UserContent::Image(_image) => todo!(),
+                        UserContent::Audio(_audio) => todo!(),
+                        UserContent::Video(_video) => todo!(),
+                        UserContent::Document(_document) => todo!(),
                     }
                 }
             }
-            Message::Assistant { id, content } => todo!(),
+            Message::Assistant { id: _, content: _ } => todo!(),
         }
     }
     ChatCompletionParameters {

@@ -5,9 +5,20 @@ authors.workspace = true
 edition.workspace = true
 publish = false
 
-
+[lib]
+path = "src/mod.rs"
+crate-type = [
+  "rlib",
+  #	"dylib",
+]
 [dependencies]
 api = { path = "api" }
+framework = { path = "framework" }
+figment = { workspace = true }
+anyhow = { workspace = true }
+toml = { workspace = true, features = ["parse"] }
+tokio = { workspace = true }
+tracing = { workspace = true }
 # llm start
 candle-core = { workspace = true }
 candle-transformers = { workspace = true }
@@ -19,6 +30,15 @@ intel-mkl-src = { workspace = true, features = [
 accelerate-src = { workspace = true, optional = true }
 aha = { workspace = true }
 # llm end
+clap = { workspace = true, features = [
+  "derive",
+  "env",
+  "error-context",
+  "help",
+  "std",
+  "string",
+  "usage",
+] }
 
 [build-dependencies]
 # llm start

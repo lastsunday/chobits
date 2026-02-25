@@ -75,6 +75,7 @@ impl Serialize for Type {
 #[derive(Debug, Clone)]
 pub enum Transport {
     Websocket,
+    // TODO: Martix
 }
 
 impl<'de> Deserialize<'de> for Transport {

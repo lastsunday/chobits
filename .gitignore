@@ -65,3 +65,6 @@ asr_result*.wav
 
 # book
 docs/book/
+/config
+/session
+/application.toml

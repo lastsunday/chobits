@@ -8,12 +8,25 @@ edition = "2024"
 authors = ["lastsunday"]
 
 [workspace.dependencies]
+chobits-build-metadata = { package = "chobits_build_metadata", path = "apps/server/build_metadata", default-features = false }
+chobits-macros = { package = "chobits_macros", path = "apps/server/macros", default-features = false }
+clap = "4.5.58"
 axum = "0.8.8"
 axum-extra = "0.12.5"
 tokio = "1.49.0"
 tracing = "0.1.44"
 tracing-subscriber = "0.3.22"
+toml = "1.0.1+spec-1.1.0"
+syn = "2.0.115"
+quote = "1.0.44"
+proc-macro2 = "1.0.106"
+itertools = "0.14.0"
+core_affinity = "0.8.3"
+# config start
 config = "0.15.19"
+figment = "0.10.19"
+either = "1.15.0"
+# config end
 serde = "1.0.228"
 serde_yaml = "0.9.34"
 anyhow = "1.0.101"
@@ -86,6 +99,11 @@ kokoro-tts = "0.3.2"
 rmcp = "0.15.0"
 sse-stream = "0.2.1"
 # mcp end
+# matrix start
+ruma = "0.14.1"
+ruma-client = "0.17.0"
+hyper = "1.8.1"
+# matrix end
 tracing-test = "0.2.6"
 # dev start
 tower = "0.5.3"

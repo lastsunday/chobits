@@ -6,16 +6,19 @@ pub mod config;
 pub mod i18n;
 pub mod index;
 pub mod llm;
+pub mod matrix;
 pub mod mcp;
 pub mod ota;
 pub mod ota_data;
 pub mod ota_error;
+pub mod server;
 pub mod tts;
 pub mod util;
 pub mod vad;
 pub mod ws;
 
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use axum::Router;
@@ -25,13 +28,15 @@ use axum::extract::Request;
 use axum::http::StatusCode;
 use axum::routing::get;
 use bytesize::ByteSize;
+use either::Either;
+use framework::config::auth::AuthConfig;
+use framework::error::ApiError;
+use framework::error::ApiResult;
+use framework::trace::LatencyOnResponse;
+use futures::future::join_all;
 use migration::MigratorTrait;
 use sea_orm::DatabaseConnection;
 use tokio::net::TcpListener;
-
-use framework::error::*;
-use framework::trace::*;
-use framework::*;
 use tokio_util::sync::CancellationToken;
 use tower_http::compression::CompressionLayer;
 use tower_http::cors;
@@ -50,6 +55,18 @@ use utoipa_scalar::{Scalar, Servable as ScalarServable};
 use framework::auth::Jwt;
 
 use crate::asr::AsrFactory;
+use crate::config::Config;
+use crate::config::asr::AsrConfig;
+use crate::config::audio::AudioConfig;
+use crate::config::database::DatabaseConfig;
+use crate::config::llm::LlmConfig;
+use crate::config::matrix::MatrixConfig;
+use crate::config::mcp::McpConfig;
+use crate::config::server::ServerConfig;
+use crate::config::session::SessionConfig;
+use crate::config::tts::TtsConfig;
+use crate::config::vad::VadConfig;
+use crate::config::ws::WsConfig;
 use crate::llm::LlmFactory;
 use crate::tts::TtsFactory;
 use crate::vad::VadFactory;
@@ -58,16 +75,25 @@ use crate::vad::VadFactory;
 extern crate rust_i18n;
 i18n!("locales", fallback = "zh");
 
-#[tokio::main]
-async fn start() -> anyhow::Result<()> {
-    //init logger
-    logger::init();
-    // config
-    let port = config::get().server().port();
-    let database_url = config::get().database().url();
+#[allow(clippy::too_many_arguments)]
+pub async fn start(
+    server_config: Arc<ServerConfig>,
+    database_config: Arc<DatabaseConfig>,
+    session_config: Arc<SessionConfig>,
+    mcp_config: Arc<McpConfig>,
+    vad_config: Arc<VadConfig>,
+    audio_config: Arc<AudioConfig>,
+    auth_config: Arc<AuthConfig>,
+    ws_config: Arc<WsConfig>,
+    tts_config: Arc<TtsConfig>,
+    asr_config: Arc<AsrConfig>,
+    llm_config: Arc<LlmConfig>,
+    matrix_config: Arc<MatrixConfig>,
+) -> anyhow::Result<()> {
     // auth
-    Jwt::init(config::get().auth().clone());
+    Jwt::init(auth_config.clone());
     // database init
+    let database_url = database_config.url.as_ref().expect("database url is empty");
     let conn: sea_orm::DatabaseConnection =
         framework::database::establish_connection(database_url).await?;
     conn.ping().await?;
@@ -75,26 +101,130 @@ async fn start() -> anyhow::Result<()> {
     // database schema init or upgrade
     migration::Migrator::up(&conn, None).await?;
     tracing::info!("init tts factory");
-    TtsFactory::init().await?;
+    TtsFactory::init(tts_config, audio_config.clone()).await?;
     tracing::info!("init tts factory successfully");
     tracing::info!("init vad factory");
-    VadFactory::init().await;
+    VadFactory::init(vad_config.clone()).await;
     tracing::info!("init vad factory successfully");
     tracing::info!("init asr factory");
-    AsrFactory::init().await;
-    tracing::info!("init asr factory successfully");
+    AsrFactory::init(asr_config).await;
+    tracing::info!("init asr factor3y successfully");
     tracing::info!("init llm factory");
-    LlmFactory::init().await;
+    LlmFactory::init(llm_config).await;
     tracing::info!("init llm factory successfully");
     let ct = tokio_util::sync::CancellationToken::new();
+    let ct_for_app = ct.clone();
+    let mut handles = Vec::new();
+    let session_config_clone = session_config.clone();
+    let mcp_config_clone = mcp_config.clone();
+    let vad_config_clone = vad_config.clone();
+    let audio_config_clone = audio_config.clone();
+    let auth_config_clone = auth_config.clone();
+    let ws_config_clone = ws_config.clone();
+    handles.push(tokio::spawn(async move {
+        if let Err(error) = start_app(
+            server_config,
+            session_config_clone,
+            mcp_config_clone,
+            vad_config_clone,
+            audio_config_clone,
+            auth_config_clone,
+            ws_config_clone,
+            conn,
+            ct_for_app,
+        )
+        .await
+        {
+            tracing::error!("{:?}", error);
+        }
+    }));
+    if matrix_config.enable.expect("matrix enable is empty") {
+        handles.push(tokio::spawn(async move {
+            if let Err(error) = start_matrix_client(
+                matrix_config,
+                session_config,
+                mcp_config,
+                vad_config,
+                audio_config,
+            )
+            .await
+            {
+                tracing::error!("{:?}", error);
+            }
+        }));
+    }
+    let join_results = join_all(handles).await;
+    tracing::info!("all joinhandle({}) end", join_results.len());
+    Ok(())
+}
+
+pub async fn start_matrix_client(
+    matrix_config: Arc<MatrixConfig>,
+    session_config: Arc<SessionConfig>,
+    mcp_config: Arc<McpConfig>,
+    vad_config: Arc<VadConfig>,
+    audio_config: Arc<AudioConfig>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    tracing::info!("matrix client start");
+    matrix::client::start(
+        matrix_config,
+        session_config,
+        mcp_config,
+        vad_config,
+        audio_config,
+    )
+    .await?;
+    tracing::info!("matrix client end");
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn start_app(
+    server_config: Arc<ServerConfig>,
+    session_config: Arc<SessionConfig>,
+    mcp_config: Arc<McpConfig>,
+    vad_config: Arc<VadConfig>,
+    audio_config: Arc<AudioConfig>,
+    auth_config: Arc<AuthConfig>,
+    ws_config: Arc<WsConfig>,
+    conn: sea_orm::DatabaseConnection,
+    ct: CancellationToken,
+) -> anyhow::Result<()> {
+    let addrs = server_config
+        .address
+        .as_ref()
+        .expect("server address is empty")
+        .addrs
+        .clone();
+    let port = match &server_config
+        .port
+        .as_ref()
+        .expect("server port is empty")
+        .ports
+    {
+        Either::Left(value) => value,
+        Either::Right(values) => values.first().expect("port is empty"),
+    };
     // state
-    let state = AppState { conn };
+    let state = AppState {
+        conn,
+        session_config,
+        mcp_config,
+        vad_config,
+        audio_config,
+        auth_config,
+        ws_config,
+    };
     // router
     let (app, ct) = create_router(state, ct);
     // app start
     tracing::info!("app start");
-    let listener = TcpListener::bind(format!("0.0.0.0:{port}")).await?;
-    tracing::info!("listening on http://0.0.0.0:{port}");
+    let addr = match addrs {
+        Either::Left(value) => value.to_string(),
+        Either::Right(values) => values.first().expect("addrs is empty").to_string(),
+    };
+    let listener = TcpListener::bind(format!("{addr}:{port}")).await?;
+    tracing::info!("listening on {addr}:{port}");
     let app = NormalizePathLayer::trim_trailing_slash().layer(app);
     axum::serve(
         listener,
@@ -105,7 +235,7 @@ async fn start() -> anyhow::Result<()> {
         ct.cancel();
     })
     .await?;
-    tracing::info!("app successfully");
+    tracing::info!("app end");
     Ok(())
 }
 
@@ -228,15 +358,13 @@ pub fn setup_web(router: Router) -> Router {
         )
 }
 
-pub fn main() {
-    let result = start();
-
-    if let Some(err) = result.err() {
-        println!("Error: {err}");
-    }
-}
-
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct AppState {
     pub conn: DatabaseConnection,
+    pub session_config: Arc<SessionConfig>,
+    pub mcp_config: Arc<McpConfig>,
+    pub vad_config: Arc<VadConfig>,
+    pub audio_config: Arc<AudioConfig>,
+    pub auth_config: Arc<AuthConfig>,
+    pub ws_config: Arc<WsConfig>,
 }

@@ -4,8 +4,8 @@ use axum::{
     extract::{ConnectInfo, Json, State},
     http::HeaderMap,
 };
-use axum_extra::extract::Host;
-use framework::{config::get, data::valid::ValidJson, error::ApiResult, id::gen_id};
+use axum_extra::{TypedHeader, headers};
+use framework::{data::valid::ValidJson, error::ApiResult, id::gen_id};
 use std::net::SocketAddr;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
@@ -26,7 +26,7 @@ pub fn create_routes(state: AppState) -> OpenApiRouter {
 
 //from https://ccnphfhqs21z.feishu.cn/wiki/FjW6wZmisimNBBkov6OcmfvknVd
 #[debug_handler]
-#[tracing::instrument(name="ota",skip_all,fields(ip = %addr,hostname = %hostname))]
+#[tracing::instrument(name="ota",skip_all,fields(ip = %addr))]
 #[utoipa::path(post, path = "/ota",tag=TAG,security(()),
     params(
         ("Device-Id" = String,Header,description="设备的唯一标识符（使用MAC地址或由硬件ID生成的伪MAC地址）",example="11:22:33:44:55:66"),
@@ -171,15 +171,13 @@ pub fn create_routes(state: AppState) -> OpenApiRouter {
      ))
 ))]
 async fn ota(
-    //TODO: conn not use
-    State(AppState { conn: _conn }): State<AppState>,
+    State(AppState { ws_config, .. }): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    Host(hostname): Host,
     headers: HeaderMap,
+    origin: TypedHeader<headers::Origin>,
     //TODO: param not use
     ValidJson(_param): ValidJson<OtaParam>,
 ) -> ApiResult<Json<OtaResult>> {
-    tracing::info!("{:?}", hostname);
     if headers.get(KEY_DEVICE_ID).is_none() {
         return Err(ERROR_OTA_LACK_DEVICE_ID.gen_api_error(&headers));
     }
@@ -196,10 +194,18 @@ async fn ota(
     let now = Local::now();
     let tz = TimeZone::system();
     let iana_identifier = tz.iana_name().context("get iana name failure")?;
+    let address = match origin.port() {
+        Some(port) => &format!("{}:{}", origin.hostname(), port),
+        None => origin.hostname(),
+    };
     Ok(Json(OtaResult {
         mqtt: None,
         websocket: Websocket {
-            url: format!("{}://{}/chobits/v1", get().ws().schema(), hostname),
+            url: format!(
+                "{}://{}/chobits/v1",
+                ws_config.schema.as_ref().expect("ws schema is empty"),
+                address
+            ),
             token: String::from(""),
         },
         server_time: ServerTime {
@@ -226,7 +232,7 @@ async fn ota(
 }
 
 #[debug_handler]
-#[tracing::instrument(name="ota",skip_all,fields(ip = %addr,hostname = %hostname))]
+#[tracing::instrument(name="ota",skip_all,fields(ip = %addr))]
 #[utoipa::path(post, path = "/ota/activate",tag=TAG,security(()),
     params(
         ("Device-Id" = String,Header,description="设备的唯一标识符（使用MAC地址或由硬件ID生成的伪MAC地址）",example="11:22:33:44:55:66"),
@@ -236,12 +242,10 @@ async fn ota(
 )]
 async fn activate(
     //TODO: conn not use
-    State(AppState { conn: _conn }): State<AppState>,
+    State(AppState { .. }): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    Host(hostname): Host,
     headers: HeaderMap,
 ) -> ApiResult<String> {
-    tracing::info!("{:?}", hostname);
     if headers.get(KEY_DEVICE_ID).is_none() {
         return Err(ERROR_OTA_LACK_DEVICE_ID.gen_api_error(&headers));
     }

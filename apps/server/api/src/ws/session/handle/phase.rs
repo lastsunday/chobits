@@ -155,8 +155,10 @@ impl Session {
                                             error!("{:?}", e);
                                         }
                                     }
-                                    let silence_voice_timeout =
-                                        config::get().logic().silence_voice_timeout();
+                                    let silence_voice_timeout = self
+                                        .config
+                                        .silence_voice_timeout
+                                        .expect("logic silence voice timeout is empty");
                                     //reset listener to option(slinent condition limit)
                                     self.listener.reset(Some(silence_voice_timeout)).await;
                                 } else {
@@ -193,8 +195,10 @@ impl Session {
                             //round is end
                             if state == crate::ws::session::listener::ListenState::End {
                                 self.handle_listen_end().await;
-                                let silence_voice_timeout =
-                                    config::get().logic().silence_voice_timeout();
+                                let silence_voice_timeout = self
+                                    .config
+                                    .silence_voice_timeout
+                                    .expect("logic silence voice timeout is empty");
                                 self.listener.reset(Some(silence_voice_timeout)).await;
                                 self.update_latest_activity_time().await;
                             } else {
@@ -207,8 +211,10 @@ impl Session {
                     None => {
                         if state == crate::ws::session::listener::ListenState::End {
                             self.handle_listen_end().await;
-                            let silence_voice_timeout =
-                                config::get().logic().silence_voice_timeout();
+                            let silence_voice_timeout = self
+                                .config
+                                .silence_voice_timeout
+                                .expect("logic silence voice timeout is empty");
                             self.listener.reset(Some(silence_voice_timeout)).await;
                             self.update_latest_activity_time().await;
                         } else {
@@ -260,8 +266,10 @@ impl Session {
                             match mode {
                                 service::chobits::message::listen::ListenMode::Auto => {
                                     self.phase = Phase::Listen(ListenMode::Auto);
-                                    let silence_voice_timeout =
-                                        config::get().logic().silence_voice_timeout();
+                                    let silence_voice_timeout = self
+                                        .config
+                                        .silence_voice_timeout
+                                        .expect("logic silence voice timeout is empty");
                                     //reset listener to option(slinent condition limit)
                                     self.listener.reset(Some(silence_voice_timeout)).await;
                                 }
@@ -378,8 +386,10 @@ impl Session {
                                             error!("{:?}", e);
                                         }
                                     }
-                                    let silence_voice_timeout =
-                                        config::get().logic().silence_voice_timeout();
+                                    let silence_voice_timeout = self
+                                        .config
+                                        .silence_voice_timeout
+                                        .expect("logic silence voice timeout is empty");
                                     //reset listener to option(slinent condition limit)
                                     self.listener.reset(Some(silence_voice_timeout)).await;
                                 } else {
@@ -413,8 +423,10 @@ impl Session {
                         self.listener.listen(data).await;
                         if state == crate::ws::session::listener::ListenState::End {
                             self.handle_listen_end().await;
-                            let silence_voice_timeout =
-                                config::get().logic().silence_voice_timeout();
+                            let silence_voice_timeout = self
+                                .config
+                                .silence_voice_timeout
+                                .expect("logic silence voice timeout is empty");
                             self.listener.reset(Some(silence_voice_timeout)).await;
                             self.update_latest_activity_time().await;
                         }
@@ -422,8 +434,10 @@ impl Session {
                     None => {
                         if state == crate::ws::session::listener::ListenState::End {
                             self.handle_listen_end().await;
-                            let silence_voice_timeout =
-                                config::get().logic().silence_voice_timeout();
+                            let silence_voice_timeout = self
+                                .config
+                                .silence_voice_timeout
+                                .expect("logic silence voice timeout is empty");
                             self.listener.reset(Some(silence_voice_timeout)).await;
                             self.update_latest_activity_time().await;
                         } else {
@@ -468,7 +482,7 @@ impl Session {
 
     async fn handle_connect(&mut self, _hello_message: &HelloMessage) {
         let tx = self.output_tx.clone().expect("output tx not exists");
-        let audio_config = config::get().audio();
+        let audio_config = &self.audio_config;
         let data = HelloMessage {
             message: service::chobits::message::Message {
                 mtype: service::chobits::message::Type::Hello,
@@ -476,9 +490,15 @@ impl Session {
             transport: Some(Transport::Websocket),
             audio_params: Some(AudioParam {
                 format: AudioFormat::Opus,
-                sample_rate: audio_config.output_sample_rate(),
-                channels: audio_config.output_channel(),
-                frame_duration: audio_config.output_frame_duration(),
+                sample_rate: audio_config
+                    .output_sample_rate
+                    .expect("output sample rate is empty"),
+                channels: audio_config
+                    .output_channel
+                    .expect("output channel is empty"),
+                frame_duration: audio_config
+                    .output_frame_duration
+                    .expect("output frame duration is empty"),
             }),
             version: None,
             features: None,

@@ -1,14 +1,19 @@
-use api::AppState;
+use api::config::audio::AudioConfig;
+use api::config::mcp::McpConfig;
+use api::config::vad::VadConfig;
+use api::config::ws::WsConfig;
+use api::{AppState, config::session::SessionConfig};
 use axum::{
     Router,
     body::Body,
     http::{self, Request, Response},
 };
 use chrono::{DateTime, FixedOffset};
+use framework::config::auth::AuthConfig;
 use http_body_util::BodyExt;
 use migration::MigratorTrait;
 use serde_json::Value;
-use std::str::FromStr;
+use std::{str::FromStr, sync::Arc};
 use testcontainers::ContainerAsync;
 use testcontainers_modules::postgres::Postgres;
 use tower::ServiceExt;
@@ -29,7 +34,27 @@ pub async fn setup_database() -> (Option<ContainerAsync<Postgres>>, AppState) {
         .await
         .unwrap();
     migration::Migrator::up(&conn, None).await.unwrap();
-    let state = AppState { conn };
+    let state = AppState {
+        conn,
+        session_config: Arc::new(SessionConfig {
+            ..Default::default()
+        }),
+        mcp_config: Arc::new(McpConfig {
+            ..Default::default()
+        }),
+        vad_config: Arc::new(VadConfig {
+            ..Default::default()
+        }),
+        audio_config: Arc::new(AudioConfig {
+            ..Default::default()
+        }),
+        auth_config: Arc::new(AuthConfig {
+            ..Default::default()
+        }),
+        ws_config: Arc::new(WsConfig {
+            ..Default::default()
+        }),
+    };
     (container, state)
 }
 

@@ -1,5 +1,4 @@
 use super::super::frame::{FrameError, FrameResult};
-use crate::config;
 use crate::llm::client::{ChatRequest, Client};
 use crate::tts::Tts;
 use crate::util::llm::{EMOJI_MAP, analyze_emotion};
@@ -32,6 +31,7 @@ pub struct Round {
     pub tts_state: Arc<Mutex<Option<TtsState>>>,
     pub speaking: Arc<AtomicBool>,
     pub end: Arc<AtomicBool>,
+    output_frame_duration: Option<u64>,
 }
 
 #[derive(Debug)]
@@ -80,6 +80,7 @@ impl Round {
         tx: Sender<Result<FrameResult, FrameError>>,
         client: Arc<Client>,
         tts: Arc<Box<dyn Tts>>,
+        output_frame_duration: Option<u64>,
     ) -> Self {
         Self {
             parent_id,
@@ -91,6 +92,7 @@ impl Round {
             tts_state: Arc::new(Mutex::new(None)),
             speaking: Arc::new(AtomicBool::new(false)),
             end: Arc::new(AtomicBool::new(false)),
+            output_frame_duration,
         }
     }
 
@@ -131,6 +133,7 @@ impl Round {
         let end = self.end.clone();
         // let history = self.history.clone();
         let text = String::from(text);
+        let output_frame_duration = self.output_frame_duration;
         tokio::spawn(async move {
             if tx
                 .send(Ok(FrameResult::STTResult(SttMessage::new(
@@ -150,8 +153,7 @@ impl Round {
             };
             let llm_output = client.chat(request);
             let mut tts_output = tts.stream(Box::pin(llm_output)).await;
-            let audio_config = config::get().audio();
-            let delay = audio_config.output_frame_duration();
+            let delay = output_frame_duration.expect("output frame duration is empty");
             let mut latest_time = Instant::now() + Duration::from_millis(delay);
             // pre buffer count
             let pre_buffer_frame_count: u64 = 6;
