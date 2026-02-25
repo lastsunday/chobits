@@ -100,6 +100,7 @@ aha_openai_dive = { workspace = true, features = ["stream"] }
 byteorder = { workspace = true }
 rand = { workspace = true }
 rand_distr = { workspace = true }
+qwen-asr = { workspace = true }
 # asr end
 # tts start
 kokoro-tts = { workspace = true }

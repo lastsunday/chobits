@@ -11,7 +11,7 @@ use api::{
     AppState,
     asr::AsrFactory,
     config::{
-        LlmModel, TtsModel, asr::AsrConfig, audio::AudioConfig, llm::LlmConfig,
+        AsrModel, LlmModel, TtsModel, asr::AsrConfig, audio::AudioConfig, llm::LlmConfig,
         session::SessionConfig, tts::TtsConfig, vad::VadConfig,
     },
     llm::LlmFactory,
@@ -53,7 +53,7 @@ use testcontainers::ContainerAsync;
 use testcontainers_modules::postgres::Postgres;
 use tokio::{sync::Mutex, time::sleep};
 use tokio_stream::StreamExt;
-use tracing::debug;
+use tracing::{debug, info};
 use tracing_test::traced_test;
 use utoipa_axum::router::OpenApiRouter;
 
@@ -90,71 +90,21 @@ async fn test_chat_flow_hello() -> anyhow::Result<()> {
 /// listen voice by manual mode and output the asr text result
 /// cargo test --test session_test -- test_chat_flow_listen_manual --ignored --nocapture
 async fn test_chat_flow_listen_manual() -> anyhow::Result<()> {
-    use std::path::PathBuf;
-
-    let wav_file: PathBuf = [
-        env!("CARGO_MANIFEST_DIR"),
-        "resources",
-        "test",
-        "samples_jfk.wav",
-    ]
-    .iter()
-    .collect();
-    debug!("{}", wav_file.display());
-    let (pcm_data, sample_rate) = pcm_decode(wav_file).unwrap();
-    debug!(
-        "pcm_data len = {},sample_rate = {}",
-        pcm_data.len(),
-        sample_rate
-    );
-
-    // the follow code is output wav file to test
-    // use wavers::{AudioSample, ConvertSlice, ConvertTo, Samples, read, write};
-    // let fp = "./decode_pcm_data.wav";
-    // let sr: i32 = 16000;
-    // write(fp, &pcm_data, sr, 1);
-
-    const ENCODE_SAMPLE_RATE: u32 = 16000;
-    let mut encoder = opus::Encoder::new(
-        ENCODE_SAMPLE_RATE,
-        opus::Channels::Mono,
-        opus::Application::Audio,
-    )
-    .unwrap();
-
-    // 16000Hz * 1 channel * 60 ms / 1000 = 960
-    const MONO_60MS: usize = ENCODE_SAMPLE_RATE as usize * 60 / 1000;
-    let size = MONO_60MS;
-    debug!("size = {}", size);
-    let len = pcm_data.len();
-    let mut count = len / size;
-    if len % size > 0 {
-        count += 1;
-    }
-    debug!("count = {}", count);
-    let mut audio: Vec<Vec<u8>> = Vec::new();
-
-    for n in 0..count {
-        let start = n * size;
-        let end = cmp::min((n + 1) * size, len);
-        let packet = encoder
-            .encode_vec_float(&pcm_data[start..end], size)
-            .unwrap();
-        audio.push(packet);
-    }
-
+    let audio = get_audio();
     let (mut session, container, state) = create_session().await?;
-    let session_id = session.id.clone();
+    // let session_id = session.id.clone();
     session.start().await?;
     let mut output = session.output_frame().await;
     // TODO: need refactor,remove tokio::spawn
     let join_handle = tokio::spawn(async move {
         while let Some(data) = output.next().await {
-            debug!("session id = {}, data = {:?}", session_id, data);
+            // debug!("session id = {}, data = {:?}", session_id, data);
             match data {
                 Ok(frame_result) => match frame_result {
                     FrameResult::HelloResult(_hello_message) => {}
-                    FrameResult::STTResult(_stt_message) => {}
+                    FrameResult::STTResult(stt_message) => {
+                        info!("{:?}", stt_message);
+                    }
                     FrameResult::LLMResult(_llm_message) => {}
                     FrameResult::TTSResult(tts_message) => {
                         if let Some(state) = tts_message.state
@@ -212,59 +162,7 @@ async fn test_chat_flow_listen_manual() -> anyhow::Result<()> {
 /// listen voice by auto mode and output the asr text result
 /// cargo test --test session_test -- test_chat_flow_listen_auto --ignored --nocapture
 async fn test_chat_flow_listen_auto() -> anyhow::Result<()> {
-    use std::path::PathBuf;
-
-    let wav_file: PathBuf = [
-        env!("CARGO_MANIFEST_DIR"),
-        "resources",
-        "test",
-        "samples_jfk.wav",
-    ]
-    .iter()
-    .collect();
-    debug!("{}", wav_file.display());
-    let (pcm_data, sample_rate) = pcm_decode(wav_file).unwrap();
-    debug!(
-        "pcm_data len = {},sample_rate = {}",
-        pcm_data.len(),
-        sample_rate
-    );
-
-    // the follow code is output wav file to test
-    // use wavers::{AudioSample, ConvertSlice, ConvertTo, Samples, read, write};
-    // let fp = "./decode_pcm_data.wav";
-    // let sr: i32 = 16000;
-    // write(fp, &pcm_data, sr, 1);
-
-    const ENCODE_SAMPLE_RATE: u32 = 16000;
-    let mut encoder = opus::Encoder::new(
-        ENCODE_SAMPLE_RATE,
-        opus::Channels::Mono,
-        opus::Application::Audio,
-    )
-    .unwrap();
-
-    // 16000Hz * 1 channel * 60 ms / 1000 = 960
-    const MONO_60MS: usize = ENCODE_SAMPLE_RATE as usize * 60 / 1000;
-    let size = MONO_60MS;
-    debug!("size = {}", size);
-    let len = pcm_data.len();
-    let mut count = len / size;
-    if len % size > 0 {
-        count += 1;
-    }
-    debug!("count = {}", count);
-    let mut audio: Vec<Vec<u8>> = Vec::new();
-
-    for n in 0..count {
-        let start = n * size;
-        let end = cmp::min((n + 1) * size, len);
-        let packet = encoder
-            .encode_vec_float(&pcm_data[start..end], size)
-            .unwrap();
-        audio.push(packet);
-    }
-
+    let audio = get_audio();
     let (mut session, container, state) = create_session().await?;
     let session_id = session.id.clone();
     session.start().await?;
@@ -369,79 +267,33 @@ async fn test_chat_flow_listen_realtime() -> anyhow::Result<()> {
     tracing::subscriber::set_global_default(
         tracing_subscriber::fmt::Subscriber::builder()
             .compact()
-            .with_max_level(tracing::Level::TRACE)
+            .with_max_level(tracing::Level::DEBUG)
             .finish(),
     )
     .expect("Failed to set tracing subscriber");
-    use std::path::PathBuf;
 
-    let wav_file: PathBuf = [
-        env!("CARGO_MANIFEST_DIR"),
-        "resources",
-        "test",
-        "samples_jfk.wav",
-    ]
-    .iter()
-    .collect();
-    debug!("{}", wav_file.display());
-    let (pcm_data, sample_rate) = pcm_decode(wav_file).unwrap();
-    debug!(
-        "pcm_data len = {},sample_rate = {}",
-        pcm_data.len(),
-        sample_rate
-    );
-
-    // the follow code is output wav file to test
-    // use wavers::{AudioSample, ConvertSlice, ConvertTo, Samples, read, write};
-    // let fp = "./decode_pcm_data.wav";
-    // let sr: i32 = 16000;
-    // write(fp, &pcm_data, sr, 1);
-
-    const ENCODE_SAMPLE_RATE: u32 = 16000;
-    let mut encoder = opus::Encoder::new(
-        ENCODE_SAMPLE_RATE,
-        opus::Channels::Mono,
-        opus::Application::Audio,
-    )
-    .unwrap();
-
-    // 16000Hz * 1 channel * 60 ms / 1000 = 960
-    const MONO_60MS: usize = ENCODE_SAMPLE_RATE as usize * 60 / 1000;
-    let size = MONO_60MS;
-    debug!("size = {}", size);
-    let len = pcm_data.len();
-    let mut count = len / size;
-    if len % size > 0 {
-        count += 1;
-    }
-    debug!("count = {}", count);
-    let mut audio: Vec<Vec<u8>> = Vec::new();
-
-    for n in 0..count {
-        let start = n * size;
-        let end = cmp::min((n + 1) * size, len);
-        let packet = encoder
-            .encode_vec_float(&pcm_data[start..end], size)
-            .unwrap();
-        audio.push(packet);
-    }
+    let audio = get_audio();
 
     let (mut session, container, state) = create_session().await?;
     let next_step = Arc::new(AtomicBool::new(false));
     let next_step_for_sender = next_step.clone();
 
-    let session_id = session.id.clone();
+    // let session_id = session.id.clone();
     session.start().await?;
     let mut output = session.output_frame().await;
     // TODO: need refactor,remove tokio::spawn
     let join_handle = tokio::spawn(async move {
         let mut count = 0;
         while let Some(data) = output.next().await {
-            debug!("session id = {}, data = {:?}", session_id, data);
+            // debug!("session id = {}, data = {:?}", session_id, data);
             match data {
                 Ok(frame_result) => match frame_result {
-                    FrameResult::HelloResult(_hello_message) => {}
-                    FrameResult::STTResult(_stt_message) => {}
+                    FrameResult::HelloResult(hello_message) => {
+                        info!("{:?}", hello_message);
+                    }
+                    FrameResult::STTResult(stt_message) => {
+                        info!("{:?}", stt_message);
+                    }
                     FrameResult::LLMResult(_llm_message) => {}
                     FrameResult::TTSResult(tts_message) => {
                         let state = tts_message.state;
@@ -1289,7 +1141,8 @@ async fn create_session()
     debug!("init vad factory successfully");
     debug!("init asr factory");
     AsrFactory::init(Arc::new(AsrConfig {
-        path: Some(String::from("data/asr/model/openai/whisper-small/")),
+        model: Some(AsrModel::Qwen3),
+        path: Some(String::from("data/asr/model/Qwen/Qwen3-ASR-0.6B/")),
     }))
     .await;
     debug!("init asr factory successfully");
@@ -1369,6 +1222,62 @@ async fn create_session()
         .with_audio_config(audio_config.clone())
         .build();
     Ok((session, container, state))
+}
+
+fn get_audio() -> Vec<Vec<u8>> {
+    use std::path::PathBuf;
+
+    let wav_file: PathBuf = [
+        env!("CARGO_MANIFEST_DIR"),
+        "resources",
+        "test",
+        "samples_jfk.wav",
+    ]
+    .iter()
+    .collect();
+    debug!("{}", wav_file.display());
+    let (pcm_data, sample_rate) = pcm_decode(wav_file).unwrap();
+    debug!(
+        "pcm_data len = {},sample_rate = {}",
+        pcm_data.len(),
+        sample_rate
+    );
+
+    // the follow code is output wav file to test
+    // use wavers::{AudioSample, ConvertSlice, ConvertTo, Samples, read, write};
+    // let fp = "./decode_pcm_data.wav";
+    // let sr: i32 = 16000;
+    // write(fp, &pcm_data, sr, 1);
+
+    const ENCODE_SAMPLE_RATE: u32 = 16000;
+    let mut encoder = opus::Encoder::new(
+        ENCODE_SAMPLE_RATE,
+        opus::Channels::Mono,
+        opus::Application::Audio,
+    )
+    .unwrap();
+
+    // 16000Hz * 1 channel * 60 ms / 1000 = 960
+    const MONO_60MS: usize = ENCODE_SAMPLE_RATE as usize * 60 / 1000;
+    let size = MONO_60MS;
+    debug!("size = {}", size);
+    let len = pcm_data.len();
+    let mut count = len / size;
+    if len % size > 0 {
+        count += 1;
+    }
+    debug!("count = {}", count);
+    let mut audio: Vec<Vec<u8>> = Vec::new();
+
+    for n in 0..count {
+        let start = n * size;
+        let end = cmp::min((n + 1) * size, len);
+        let packet = encoder
+            .encode_vec_float(&pcm_data[start..end], size)
+            .unwrap();
+        audio.push(packet);
+    }
+    audio
 }
 
 fn to_json_rpc_response<T>(id: i64, result: T) -> JsonRpcMessage

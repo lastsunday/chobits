@@ -1,6 +1,10 @@
 pub mod model;
 
-use crate::{common::ModelError, config::asr::AsrConfig};
+use crate::{
+    asr::model::qwen3::AsrQwen3,
+    common::ModelError,
+    config::{AsrModel, asr::AsrConfig},
+};
 use async_trait::async_trait;
 use model::whisper::AsrWhisper;
 use std::sync::{Arc, OnceLock};
@@ -18,7 +22,6 @@ pub trait Asr: Send + Sync {
 #[derive(Debug, Clone)]
 pub struct RecognizerResult {
     pub text: String,
-    pub language: String,
     pub prob: f32,
 }
 
@@ -52,11 +55,11 @@ impl AsrFactory {
     }
 
     pub fn create_model(config: &AsrConfig) -> Box<dyn Asr> {
-        let config = AsrConfig {
-            path: config.path.clone(),
-        };
-        Box::new(
-            AsrWhisper::new(config.path.clone().expect("asr path is empty").to_string()).unwrap(),
-        )
+        let model = config.model.clone().expect("asr model is empty");
+        let path = config.path.clone().expect("asr path is empty").to_string();
+        match model {
+            AsrModel::Qwen3 => Box::new(AsrQwen3::new(path).unwrap()),
+            AsrModel::Whisper => Box::new(AsrWhisper::new(path).unwrap()),
+        }
     }
 }

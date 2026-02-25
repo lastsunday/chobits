@@ -62,6 +62,8 @@ pub enum ModelError {
     Decoder(String),
     #[error("tts error msg = {0}")]
     Tts(String),
+    #[error("asr error msg = {0}")]
+    Asr(String),
 }
 
 impl From<Error> for ModelError {

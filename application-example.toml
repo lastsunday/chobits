@@ -103,7 +103,11 @@
 
 # This item is undocumented. Please contribute documentation for it.
 #
-#asr_path = data/asr/model/openai/whisper-small/
+#asr_model = qwen3
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#asr_path = data/asr/model/Qwen/Qwen3-ASR-0.6B/
 
 # This item is undocumented. Please contribute documentation for it.
 #
