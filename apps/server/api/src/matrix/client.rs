@@ -345,7 +345,7 @@ impl Bot {
         }
         let session = session_map
             .get(session_key)
-            .unwrap_or_else(|| panic!("session not exists,wehre session key ={}", session_key))
+            .unwrap_or_else(|| panic!("session not exists for provided session key"))
             .clone();
         drop(session_map);
         let mut session = session.lock().await;
