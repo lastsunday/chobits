@@ -91,6 +91,7 @@ bindgen_cuda = "=0.1.5"
 byteorder = "1.5.0"
 rand = "0.10.0"
 rand_distr = "0.6.0"
+qwen-asr = "0.3.0"
 # asr end
 # tts start
 kokoro-tts = "0.3.2"

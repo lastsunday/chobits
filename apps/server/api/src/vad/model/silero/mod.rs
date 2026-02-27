@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use candle_core::{DType, Device, Tensor};
 use candle_onnx::onnx::ModelProto;
-use tracing::info;
+use tracing::{info, trace};
 
 use crate::{
     common::{ModelError, device},
@@ -60,7 +60,7 @@ impl Vad for VadSilero {
         let sample_rate: i64 = 16000;
         let frame_size: usize = 512;
         let context_size: usize = 64;
-        let threshold = 0.5;
+        let threshold = 0.2;
 
         let device = &self.device;
         let model = &self.model;
@@ -105,7 +105,7 @@ impl Vad for VadSilero {
         let res_len = res.len() as f32;
         let prediction = res.iter().sum::<f32>() / res_len;
 
-        // info!("vad prediction = {}", prediction);
+        trace!("vad prediction = {}", prediction);
         if !self.is_speech {
             if prediction > threshold {
                 self.prediction_list.push(prediction);

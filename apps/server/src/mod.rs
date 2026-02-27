@@ -96,6 +96,7 @@ async fn async_main(server: &Arc<Server>) -> Result<(), anyhow::Error> {
         reference_prompt_wav_path: config.tts_reference_prompt_wav_path.to_owned(),
     });
     let asr_config = Arc::new(AsrConfig {
+        model: config.asr_model.to_owned(),
         path: config.asr_path.to_owned(),
     });
     let llm_config = Arc::new(LlmConfig {

@@ -1,4 +1,8 @@
-use api::{asr::AsrFactory, config::asr::AsrConfig, util::audio::pcm_decode};
+use api::{
+    asr::AsrFactory,
+    config::{AsrModel, asr::AsrConfig},
+    util::audio::pcm_decode,
+};
 use std::{path::PathBuf, sync::Arc};
 use tracing::debug;
 use tracing_test::traced_test;
@@ -7,6 +11,8 @@ use tracing_test::traced_test;
 #[traced_test]
 #[ignore]
 /// cargo test --test asr_test -- test_asr --ignored --nocapture
+/// asr speed up by release mode
+/// cargo test --test asr_test --release -- test_asr --ignored --nocapture
 async fn test_asr() {
     let wav_file: PathBuf = [
         env!("CARGO_MANIFEST_DIR"),
@@ -25,7 +31,8 @@ async fn test_asr() {
     );
 
     AsrFactory::init(Arc::new(AsrConfig {
-        path: Some(String::from("data/asr/model/openai/whisper-small/")),
+        model: Some(AsrModel::Qwen3),
+        path: Some(String::from("data/asr/model/Qwen/Qwen3-ASR-0.6B/")),
     }))
     .await;
     let asr = AsrFactory::global().default();

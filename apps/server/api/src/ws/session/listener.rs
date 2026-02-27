@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use chrono::Local;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tracing::info;
+use tracing::debug;
 
 #[async_trait]
 pub trait Listener: Send + Sync {
@@ -122,7 +122,7 @@ impl Listener for DefaultListener {
         {
             let offset_time = Local::now().timestamp_millis() - latest_speaking_time;
             if offset_time >= silence_voice_timeout {
-                info!(
+                debug!(
                     "offset_time = {},silence_voice_timeout = {}",
                     offset_time, silence_voice_timeout
                 );
@@ -161,7 +161,7 @@ impl Listener for DefaultListener {
         // let sr: i32 = 16000;
         // write(fp, &voice_data, sr, 1);
         let result = asr.transcribe(sample_rate, &voice_data).await?;
-        tracing::info!("recognizer result = {:?}", result);
+        debug!("recognizer result = {:?}", result);
         Ok(ListenResult {
             text: result.text,
             prob: result.prob,

@@ -19,7 +19,7 @@ use tokio::sync::{
     mpsc::{Sender, channel},
 };
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{debug, error};
+use tracing::{debug, error, trace};
 
 #[derive(Clone)]
 pub struct Client {
@@ -268,7 +268,7 @@ pub async fn handle_response(
                         content,
                     }) => {
                         // TODO:
-                        debug!("{:?}", content);
+                        trace!("{:?}", content);
                     }
                     Ok(StreamedAssistantContent::Reasoning(Reasoning {
                         id: _id,
@@ -276,10 +276,10 @@ pub async fn handle_response(
                         ..
                     })) => {
                         // TODO:
-                        debug!("{:?}", reasoning);
+                        trace!("{:?}", reasoning);
                     }
                     Ok(StreamedAssistantContent::ReasoningDelta { id: _id, reasoning }) => {
-                        debug!("{:?}", reasoning);
+                        trace!("{:?}", reasoning);
                     }
                     Err(e) => {
                         if let Some(tx) = &tx {

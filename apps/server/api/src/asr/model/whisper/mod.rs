@@ -174,7 +174,6 @@ impl Asr for AsrWhisper {
                             .collect::<String>();
                         Ok(RecognizerResult {
                             text,
-                            language: language_token.clone().unwrap().1.clone(),
                             prob: language_token.clone().unwrap().2,
                         })
                     }

@@ -146,7 +146,11 @@ pub struct Config {
     #[serde(default = "default_tts_reference_prompt_wav_path")]
     pub tts_reference_prompt_wav_path: Option<String>,
 
-    /// default: data/asr/model/openai/whisper-small/
+    /// default: qwen3
+    #[serde(default = "default_asr_model")]
+    pub asr_model: Option<AsrModel>,
+
+    /// default: data/asr/model/Qwen/Qwen3-ASR-0.6B/
     #[serde(default = "default_asr_path")]
     pub asr_path: Option<String>,
 
@@ -190,7 +194,7 @@ pub struct Config {
     #[serde(default = "default_session_silence_voice_timeout")]
     pub session_silence_voice_timeout: Option<i64>,
 
-    /// default: 你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等。
+    /// default: "你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等。如果用户询问的内容为空，则请求用户描述清楚。",
     #[serde(default = "default_session_system_prompt")]
     pub session_system_prompt: Option<String>,
 
@@ -294,8 +298,12 @@ fn default_tts_reference_prompt_wav_path() -> Option<String> {
     Some(String::from("file://data/tts/reference/voice_05.wav"))
 }
 
+fn default_asr_model() -> Option<AsrModel> {
+    Some(AsrModel::Qwen3)
+}
+
 fn default_asr_path() -> Option<String> {
-    Some(String::from("data/asr/model/openai/whisper-small/"))
+    Some(String::from("data/asr/model/Qwen/Qwen3-ASR-0.6B/"))
 }
 
 fn default_llm_model() -> Option<LlmModel> {
@@ -340,7 +348,7 @@ fn default_session_silence_voice_timeout() -> Option<i64> {
 
 fn default_session_system_prompt() -> Option<String> {
     Some(String::from(
-        "你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等。",
+        "你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等。如果用户询问的内容为空，则请求用户描述清楚。",
     ))
 }
 
@@ -460,6 +468,14 @@ pub struct ListeningPort {
 pub struct ListeningAddr {
     #[serde(with = "either::serde_untagged")]
     pub addrs: Either<IpAddr, Vec<IpAddr>>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum AsrModel {
+    #[default]
+    Qwen3,
+    Whisper,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Default)]

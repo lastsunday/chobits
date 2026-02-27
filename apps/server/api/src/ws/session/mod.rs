@@ -21,7 +21,7 @@ use std::sync::atomic::Ordering;
 use tokio::sync::mpsc::{Sender, channel};
 use tokio::sync::{Mutex, Notify};
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{debug, error, instrument};
+use tracing::{debug, error, info, instrument, trace};
 
 pub mod listener;
 pub mod round;
@@ -206,7 +206,7 @@ impl Session {
 
     pub async fn accept_frame<'a>(&mut self, frame: &Frame<'a>) {
         let phase = self.phase.clone();
-        debug!(
+        trace!(
             "current phase = {:?}, frame = {:?}",
             phase.clone(),
             frame.clone()
