@@ -5,6 +5,7 @@ use crate::common::ModelError;
 use crate::config;
 use crate::config::audio::AudioConfig;
 use crate::config::tts::TtsConfig;
+use crate::tts::model::mute::TtsMute;
 use async_trait::async_trait;
 use futures::Stream;
 use model::kokoro::TtsKokoro;
@@ -23,7 +24,7 @@ pub trait Tts: Send + Sync {
 }
 
 pub struct TtsData {
-    pub audio: Vec<Vec<u8>>,
+    pub audio: Option<Vec<Vec<u8>>>,
     pub text: String,
 }
 
@@ -107,6 +108,7 @@ impl TtsFactory {
                 )
                 .await?,
             )),
+            config::TtsModel::Mute => Ok(Box::new(TtsMute::new().await?)),
         }
     }
 

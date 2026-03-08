@@ -210,6 +210,7 @@ impl Round {
                             .await?;
                             //audio
                             //real time send audio
+                            let audio_data = audio_data.unwrap_or_default();
                             let data = audio_data.into_iter();
                             speaking.store(true, Ordering::Relaxed);
                             debug!("set speaking = true");

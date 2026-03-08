@@ -484,6 +484,7 @@ pub enum TtsModel {
     #[default]
     Kokoro,
     Voxcpm,
+    Mute,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Default)]

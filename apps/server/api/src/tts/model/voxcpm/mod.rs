@@ -94,7 +94,7 @@ impl Tts for TtsVoxCPM {
                                                 encode_frame_duration,
                                             );
                                             let data = TtsData {
-                                                audio,
+                                                audio: Some(audio),
                                                 text: text.to_string(),
                                             };
                                             if let Err(e) = tx.send(Ok(data)).await {
