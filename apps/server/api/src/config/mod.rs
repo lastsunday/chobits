@@ -493,4 +493,5 @@ pub enum LlmModel {
     #[default]
     Qwen3,
     MiniCPM4,
+    Echo,
 }

@@ -49,7 +49,14 @@ async fn test_tts_default() -> anyhow::Result<()> {
         match data {
             Ok(data) => {
                 info!("{:?}", data.text);
-                audio.append(&mut data.audio.clone());
+                match data.audio {
+                    Some(data) => {
+                        audio.append(&mut data.clone());
+                    }
+                    None => {
+                        audio.append(&mut vec![]);
+                    }
+                }
             }
             Err(e) => {
                 panic!("{:?}", e);

@@ -2,7 +2,7 @@ use std::{collections::VecDeque, sync::Arc, thread};
 
 use crate::{
     common::ModelError,
-    llm::{DummyModel, Model, chat::Chat},
+    llm::{Model, chat::Chat, model::echo::Echo},
     mcp::mcp_host::McpHost,
 };
 use framework::id::gen_id;
@@ -348,7 +348,7 @@ impl ClientBuilder {
 impl Default for ClientBuilder {
     fn default() -> Self {
         Self {
-            model: Arc::new(Box::new(DummyModel::default())),
+            model: Arc::new(Box::new(Echo::default())),
             mcp_host: None,
         }
     }

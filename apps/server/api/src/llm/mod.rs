@@ -4,7 +4,7 @@ pub mod model;
 
 use crate::{
     config::{self, llm::LlmConfig},
-    llm::model::{minicpm4::Minicpm4, qwen3::LlmQwen},
+    llm::model::{echo::Echo, minicpm4::Minicpm4, qwen3::LlmQwen},
 };
 use async_trait::async_trait;
 use rig::{
@@ -29,34 +29,6 @@ pub trait Model: Send + Sync {
     fn calculate_tools_prompt_len(&self, tools: &[ToolDefinition]) -> u64;
 
     fn calculate_message_prompt_len(&self, message: &Message) -> u64;
-}
-
-#[derive(Default, Clone)]
-pub struct DummyModel {}
-
-#[async_trait]
-impl Model for DummyModel {
-    async fn stream(
-        &self,
-        _request: CompletionRequest,
-    ) -> Result<
-        StreamingCompletionResponse<rig::providers::openai::streaming::StreamingCompletionResponse>,
-        CompletionError,
-    > {
-        todo!()
-    }
-
-    fn calculate_system_prompt_len(&self, _system_prompt: &Option<String>) -> u64 {
-        todo!()
-    }
-
-    fn calculate_tools_prompt_len(&self, _tools: &[ToolDefinition]) -> u64 {
-        todo!()
-    }
-
-    fn calculate_message_prompt_len(&self, _message: &Message) -> u64 {
-        todo!()
-    }
 }
 
 static INSTANCE: OnceLock<LlmFactory> = OnceLock::new();
@@ -91,6 +63,7 @@ impl LlmFactory {
             config::LlmModel::MiniCPM4 => {
                 Box::new(Minicpm4::new(config.path.as_ref().expect("llm path is empty")).unwrap())
             }
+            config::LlmModel::Echo => Box::new(Echo::new().unwrap()),
         }
     }
 
