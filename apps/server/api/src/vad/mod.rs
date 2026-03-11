@@ -5,8 +5,8 @@ extern crate intel_mkl_src;
 extern crate accelerate_src;
 
 pub mod model;
-use crate::common::ModelError;
 use crate::config::vad::VadConfig;
+use crate::{common::ModelError, vad::model::void::VadVoid};
 use async_trait::async_trait;
 use model::silero::VadSilero;
 use std::sync::{Arc, OnceLock};
@@ -48,6 +48,11 @@ impl VadFactory {
     }
 
     pub fn create_model(config: &VadConfig) -> Box<dyn Vad> {
-        Box::new(VadSilero::new(config.path.clone().expect("vad path is empty")).unwrap())
+        match config.model.as_ref().expect("vad model empty") {
+            crate::config::VadModel::Silero => {
+                Box::new(VadSilero::new(config.path.clone().expect("vad path is empty")).unwrap())
+            }
+            crate::config::VadModel::Void => Box::new(VadVoid::new().unwrap()),
+        }
     }
 }

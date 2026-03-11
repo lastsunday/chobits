@@ -122,6 +122,10 @@ pub struct Config {
     #[serde(default = "default_ws_schema")]
     pub ws_schema: Option<String>,
 
+    /// default: silero
+    #[serde(default = "default_vad_model")]
+    pub vad_model: Option<VadModel>,
+
     /// default: data/vad/model/onnx-community/silero-vad/
     #[serde(default = "default_vad_path")]
     pub vad_path: Option<String>,
@@ -364,6 +368,10 @@ fn default_ws_schema() -> Option<String> {
     Some(String::from("ws"))
 }
 
+fn default_vad_model() -> Option<VadModel> {
+    Some(VadModel::Silero)
+}
+
 fn default_vad_path() -> Option<String> {
     Some(String::from("data/vad/model/onnx-community/silero-vad/"))
 }
@@ -468,6 +476,14 @@ pub struct ListeningPort {
 pub struct ListeningAddr {
     #[serde(with = "either::serde_untagged")]
     pub addrs: Either<IpAddr, Vec<IpAddr>>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum VadModel {
+    #[default]
+    Silero,
+    Void,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Default)]

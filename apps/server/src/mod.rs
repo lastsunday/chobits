@@ -65,6 +65,7 @@ async fn async_main(server: &Arc<Server>) -> Result<(), anyhow::Error> {
         uri_list: config.mcp_uri_list.to_owned(),
     });
     let vad_config = Arc::new(VadConfig {
+        model: config.vad_model.to_owned(),
         path: config.vad_path.to_owned(),
         num_threads: config.vad_num_threads,
     });

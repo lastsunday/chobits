@@ -79,6 +79,10 @@
 
 # This item is undocumented. Please contribute documentation for it.
 #
+#vad_model = silero
+
+# This item is undocumented. Please contribute documentation for it.
+#
 #vad_path = data/vad/model/onnx-community/silero-vad/
 
 # This item is undocumented. Please contribute documentation for it.

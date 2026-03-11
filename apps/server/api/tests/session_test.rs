@@ -11,7 +11,7 @@ use api::{
     AppState,
     asr::AsrFactory,
     config::{
-        AsrModel, LlmModel, TtsModel, asr::AsrConfig, audio::AudioConfig, llm::LlmConfig,
+        AsrModel, LlmModel, TtsModel, VadModel, asr::AsrConfig, audio::AudioConfig, llm::LlmConfig,
         session::SessionConfig, tts::TtsConfig, vad::VadConfig,
     },
     llm::LlmFactory,
@@ -1134,6 +1134,7 @@ async fn create_session()
 -> Result<(Session, Option<ContainerAsync<Postgres>>, AppState), anyhow::Error> {
     debug!("init vad factory");
     VadFactory::init(Arc::new(VadConfig {
+        model: Some(VadModel::Silero),
         path: Some(String::from("data/vad/model/onnx-community/silero-vad/")),
         num_threads: Some(4),
     }))
@@ -1206,6 +1207,7 @@ async fn create_session()
         max_prompt_len: Some(3000),
     });
     let vad_config = VadConfig {
+        model: Some(VadModel::Silero),
         path: Some(String::from("data/vad/model/onnx-community/silero-vad/")),
         num_threads: Some(4),
     };
