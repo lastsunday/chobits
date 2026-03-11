@@ -1,7 +1,7 @@
 pub mod model;
 
 use crate::{
-    asr::model::qwen3::AsrQwen3,
+    asr::model::{qwen3::AsrQwen3, void::AsrVoid},
     common::ModelError,
     config::{AsrModel, asr::AsrConfig},
 };
@@ -56,10 +56,16 @@ impl AsrFactory {
 
     pub fn create_model(config: &AsrConfig) -> Box<dyn Asr> {
         let model = config.model.clone().expect("asr model is empty");
-        let path = config.path.clone().expect("asr path is empty").to_string();
         match model {
-            AsrModel::Qwen3 => Box::new(AsrQwen3::new(path).unwrap()),
-            AsrModel::Whisper => Box::new(AsrWhisper::new(path).unwrap()),
+            AsrModel::Qwen3 | AsrModel::Whisper => {
+                let path = config.path.clone().expect("asr path is empty").to_string();
+                if model == AsrModel::Qwen3 {
+                    Box::new(AsrQwen3::new(path).unwrap())
+                } else {
+                    Box::new(AsrWhisper::new(path).unwrap())
+                }
+            }
+            AsrModel::Void => Box::new(AsrVoid::new().unwrap()),
         }
     }
 }

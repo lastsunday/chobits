@@ -41,3 +41,16 @@ async fn test_asr() {
     let result = asr.transcribe(sample_rate, &pcm_data).await;
     debug!("{:?}", result);
 }
+
+#[tokio::test]
+#[traced_test]
+/// cargo test --test asr_test -- test_asr_model_void  --nocapture
+async fn test_asr_model_void() {
+    let mut model = AsrFactory::create_model(&AsrConfig {
+        model: Some(AsrModel::Void),
+        ..Default::default()
+    });
+    let result = model.transcribe(16000, &[]).await.unwrap();
+    assert_eq!(String::new(), result.text);
+    assert_eq!(1.0, result.prob);
+}

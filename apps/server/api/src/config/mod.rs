@@ -492,6 +492,7 @@ pub enum AsrModel {
     #[default]
     Qwen3,
     Whisper,
+    Void,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Default)]
