@@ -47,6 +47,43 @@ fn create_llm_config() -> LlmConfig {
 
 #[tokio::test]
 #[traced_test]
+/// cargo test --test llm_model_test -- test_llm_model_echo --nocapture
+async fn test_llm_model_echo() -> anyhow::Result<()> {
+    let model = LlmFactory::create_model(&LlmConfig {
+        model: Some(LlmModel::Echo),
+        ..Default::default()
+    });
+    let chat_history = OneOrMany::<Message>::one(Message::User {
+        content: OneOrMany::<UserContent>::one(UserContent::Text(Text {
+            text: String::from("Hello"),
+        })),
+    });
+    let request = CompletionRequest {
+        preamble: None,
+        chat_history: chat_history.clone(),
+        documents: vec![],
+        tools: vec![],
+        temperature: None,
+        max_tokens: None,
+        tool_choice: None,
+        additional_params: None,
+    };
+    let mut response = model.stream(request).await?;
+    let response = response.next().await;
+    let response = response.expect("has value")?;
+    match response {
+        StreamedAssistantContent::Text(text) => {
+            assert_eq!("Hello", text.text);
+        }
+        _ => {
+            panic!("assistant content not text")
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
+#[traced_test]
 #[ignore]
 /// cargo test --test llm_model_test -- test_chat_server_mcp --ignored --nocapture
 async fn test_chat_server_mcp() -> anyhow::Result<()> {

@@ -37,6 +37,42 @@ fn create_model() -> Box<dyn Model> {
 
 #[tokio::test]
 #[traced_test]
+/// cargo test --test llm_client_test -- test_chat_echo --nocapture
+async fn test_chat_echo() {
+    let client = ClientBuilder::new()
+        .with_model(Arc::new(LlmFactory::create_model(&LlmConfig {
+            model: Some(LlmModel::Echo),
+            path: None,
+        })))
+        .build()
+        .with_history(Arc::new(Mutex::new(History {
+            preamble: None,
+            chat_history: vec![],
+        })));
+    let mut output = client.chat(ChatRequest {
+        message: Message::User {
+            content: OneOrMany::<UserContent>::one(UserContent::Text(Text {
+                text: r#"Hello"#.to_string(),
+            })),
+        },
+    });
+    let mut result = Vec::new();
+    while let Some(text) = output.next().await {
+        match text {
+            Ok(text) => {
+                result.push(text);
+            }
+            Err(e) => {
+                error!("{}", e.to_string());
+            }
+        }
+    }
+    let result: String = result.into_iter().collect();
+    assert_eq!(r#"Hello"#, result);
+}
+
+#[tokio::test]
+#[traced_test]
 #[ignore]
 /// cargo test --test llm_client_test -- test_chat_simple --ignored --nocapture
 async fn test_chat_simple() {
