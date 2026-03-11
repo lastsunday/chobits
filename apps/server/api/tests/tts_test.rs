@@ -84,6 +84,47 @@ async fn test_tts_default() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+#[traced_test]
+/// cargo test --test tts_test -- test_tts_mute --nocapture
+async fn test_tts_mute() -> anyhow::Result<()> {
+    TtsFactory::init(
+        Arc::new(TtsConfig {
+            model: Some(TtsModel::Mute),
+            ..Default::default()
+        }),
+        Arc::new(AudioConfig {
+            ..Default::default()
+        }),
+    )
+    .await?;
+    let tts = TtsFactory::global().default();
+    let text_stream = tts_stream(String::from("我不知道将去何方，但我已经在路上。"));
+    let mut tts_stream = tts.stream(Box::pin(text_stream)).await;
+    let mut audio: Vec<Vec<u8>> = Vec::new();
+    while let Some(data) = tts_stream.next().await {
+        match data {
+            Ok(data) => {
+                assert_eq!(data.text, "我不知道将去何方，但我已经在路上。");
+                match data.audio {
+                    Some(data) => {
+                        audio.append(&mut data.clone());
+                    }
+                    None => {
+                        audio.append(&mut vec![]);
+                    }
+                }
+            }
+            Err(e) => {
+                panic!("{:?}", e);
+            }
+        }
+    }
+    let audio_len = audio.len();
+    assert_eq!(0, audio_len);
+    Ok(())
+}
+
 fn tts_stream(
     text: String,
 ) -> impl Stream<Item = core::result::Result<String, ModelError>> + Unpin + Send + 'static {
