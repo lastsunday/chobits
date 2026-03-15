@@ -97,7 +97,7 @@ impl Listener for DefaultListener {
             let mut temp_voice_data = temp_voice_data.lock().await;
             temp_voice_data.append(&mut samples[..len].to_vec());
             let mut vad = vad.lock().await;
-            let window_size = 512;
+            let window_size = vad.window_size().await;
             while temp_voice_data.len() > window_size {
                 let window: Vec<f32> = temp_voice_data.drain(..window_size).collect();
                 if let Err(e) = vad.accept_waveform(window.to_vec()).await {
@@ -161,7 +161,7 @@ impl Listener for DefaultListener {
         // let sr: i32 = 16000;
         // write(fp, &voice_data, sr, 1);
         let result = asr.transcribe(sample_rate, &voice_data).await?;
-        debug!("recognizer result = {:?}", result);
+        // debug!("recognizer result = {:?}", result);
         Ok(ListenResult {
             text: result.text,
             prob: result.prob,

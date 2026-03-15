@@ -68,3 +68,4 @@ docs/book/
 /config
 /session
 /application.toml
+/logs

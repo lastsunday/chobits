@@ -174,7 +174,7 @@ async fn ota(
     State(AppState { ws_config, .. }): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
-    origin: TypedHeader<headers::Origin>,
+    host: TypedHeader<headers::Host>,
     //TODO: param not use
     ValidJson(_param): ValidJson<OtaParam>,
 ) -> ApiResult<Json<OtaResult>> {
@@ -194,9 +194,9 @@ async fn ota(
     let now = Local::now();
     let tz = TimeZone::system();
     let iana_identifier = tz.iana_name().context("get iana name failure")?;
-    let address = match origin.port() {
-        Some(port) => &format!("{}:{}", origin.hostname(), port),
-        None => origin.hostname(),
+    let address = match host.port() {
+        Some(port) => &format!("{}:{}", host.hostname(), port),
+        None => host.hostname(),
     };
     Ok(Json(OtaResult {
         mqtt: None,

@@ -6,7 +6,6 @@ use service::chobits::message::{
     mcp::McpMessage,
 };
 use std::ops::ControlFlow;
-use tracing::debug;
 
 pub async fn convert_to_frame<'a>(
     msg: &'a Message,
@@ -16,11 +15,9 @@ pub async fn convert_to_frame<'a>(
             let data = data.as_bytes();
             match serde_json::from_slice::<Value>(data) {
                 Ok(json) => {
-                    debug!("is object = {},data = {}", json.is_object(), json);
                     if json.is_object() {
                         match json.get("type") {
                             Some(mtype) => {
-                                tracing::info!("mtype = {:?}", mtype);
                                 if mtype == r#"hello"# {
                                     match serde_json::from_slice::<HelloMessage>(data) {
                                         Ok(message) => {

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, error::Error, ops::Deref, sync::Arc, time::Duration};
+use std::{collections::HashMap, error::Error, sync::Arc, time::Duration};
 
 use framework::id::gen_id;
 use futures_util::future::{join, join_all};

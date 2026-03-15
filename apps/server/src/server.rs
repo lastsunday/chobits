@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use api::config::Config;
-use framework::logger;
 use tokio::runtime;
 use tracing::info;
 
@@ -25,8 +24,11 @@ impl Server {
         let config = Config::load(&config_paths)
             .and_then(|raw| update(raw, args))
             .and_then(|raw| Config::new(&raw))?;
-        //init logger
-        logger::init();
+
+        // TODO: need read from config
+        tracing_subscriber::fmt::init();
+
+        // logger::init();
         // let (tracing_reload_handle, tracing_flame_guard, capture) = crate::logging::init(&config)?;
 
         config.check()?;

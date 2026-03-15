@@ -14,6 +14,12 @@ crate-type = [
 [dependencies]
 api = { path = "api" }
 framework = { path = "framework" }
+# log start
+tracing-subscriber = { workspace = true, features = ["env-filter", "chrono"] }
+color-eyre = { workspace = true }
+tracing-appender = { workspace = true }
+tracing-error = { workspace = true }
+# log end
 figment = { workspace = true }
 anyhow = { workspace = true }
 toml = { workspace = true, features = ["parse"] }

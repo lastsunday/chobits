@@ -7,7 +7,7 @@ use crate::llm::Model;
 use crate::llm::client::{ClientBuilder, History};
 use crate::mcp::client::device::{DeviceMcpClient, DeviceMcpPhase};
 use crate::mcp::mcp_host::{McpHost, UnionMcpHost};
-use crate::tts::TtsFactory;
+use crate::tts::Tts;
 use chrono::Local;
 use core::result::Result;
 use futures::Stream;
@@ -21,7 +21,7 @@ use std::sync::atomic::Ordering;
 use tokio::sync::mpsc::{Sender, channel};
 use tokio::sync::{Mutex, Notify};
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{debug, error, info, instrument, trace};
+use tracing::{error, info};
 
 pub mod listener;
 pub mod round;
@@ -31,6 +31,7 @@ pub struct SessionBuilder {
     id: Option<String>,
     listener: Option<Box<dyn Listener>>,
     model: Option<Arc<Box<dyn Model>>>,
+    tts: Option<Arc<Box<dyn Tts>>>,
     mcp_host: Option<Arc<Mutex<UnionMcpHost>>>,
     config: Option<Arc<SessionConfig>>,
     audio_config: Option<Arc<AudioConfig>>,
@@ -56,6 +57,11 @@ impl SessionBuilder {
         self
     }
 
+    pub fn with_tts(mut self, tts: Arc<Box<dyn Tts>>) -> SessionBuilder {
+        self.tts = Some(tts);
+        self
+    }
+
     pub fn with_mcp_host(mut self, mcp_host: Arc<Mutex<UnionMcpHost>>) -> SessionBuilder {
         self.mcp_host = Some(mcp_host);
         self
@@ -76,6 +82,7 @@ impl SessionBuilder {
             self.id.expect("id is required"),
             self.listener.expect("listener is required"),
             self.model.expect("model is required"),
+            self.tts.expect("tts is required"),
             self.mcp_host.expect("mcp host is required"),
             self.config.expect("config is required").clone(),
             self.audio_config.expect("audio is required").clone(),
@@ -97,6 +104,7 @@ pub struct Session {
     audio_config: Arc<AudioConfig>,
 
     model: Arc<Box<dyn Model>>,
+    tts: Arc<Box<dyn Tts>>,
     listener: Box<dyn Listener>,
     mcp_host: Arc<Mutex<UnionMcpHost>>,
     device_mcp_phase: DeviceMcpPhase,
@@ -122,6 +130,7 @@ impl Session {
         id: String,
         listener: Box<dyn Listener>,
         model: Arc<Box<dyn Model>>,
+        tts: Arc<Box<dyn Tts>>,
         mcp_host: Arc<Mutex<UnionMcpHost>>,
         config: Arc<SessionConfig>,
         audio_config: Arc<AudioConfig>,
@@ -146,49 +155,47 @@ impl Session {
 
             listener,
             model,
+            tts,
             mcp_host,
             device_mcp_phase: DeviceMcpPhase::Initialize,
             device_mcp_call_tool_result_tx: None,
         }
     }
 
-    #[instrument(skip(self), name="Session start",fields(session_id = %self.id))]
     pub async fn start(&mut self) -> anyhow::Result<()> {
-        debug!("start");
+        info!(target:"session","start" );
         Ok(())
     }
 
-    #[instrument(skip(self), name="Session stop" fields(session_id = %self.id))]
     pub async fn stop(&mut self) {
+        info!(target:"session", "stop");
         self.stop_round().await;
         let tx = self.output_tx.clone().expect("output tx not exists");
         let result = tx.send(Ok(FrameResult::CloseResult)).await;
         if result.is_err() {
-            debug!("tx send frame result close result failure");
+            info!("tx send frame result close result failure");
         }
-        debug!("end");
     }
 
-    #[instrument(skip(self), name="Session new round",fields(session_id = %self.id))]
     pub async fn new_round(&mut self) {
-        debug!("new round");
+        info!(target:"session", "new round");
         self.stop_round().await;
         let tx = self
             .output_tx
             .clone()
             .expect("tx not create,maybe new round method before output frame method");
         let client = ClientBuilder::new()
+            .with_session_id(Some(self.id.clone()))
             .with_model(self.model.clone())
             .with_mcp_host(self.mcp_host.clone())
             .build()
             .with_history(self.history.clone())
             .with_max_prompt_len(self.config.max_prompt_len);
-        let tts = TtsFactory::global().default().clone();
         self.current_round = Some(Box::new(Round::new(
             self.id.clone(),
             tx.clone(),
             Arc::new(client),
-            tts,
+            self.tts.clone(),
             self.audio_config.output_frame_duration,
         )));
         if let Some(round) = &mut self.current_round {
@@ -199,6 +206,7 @@ impl Session {
     }
 
     pub async fn stop_round(&mut self) {
+        info!(target:"session", "stop round");
         if let Some(round) = &mut self.current_round {
             round.stop().await;
         }
@@ -206,11 +214,6 @@ impl Session {
 
     pub async fn accept_frame<'a>(&mut self, frame: &Frame<'a>) {
         let phase = self.phase.clone();
-        trace!(
-            "current phase = {:?}, frame = {:?}",
-            phase.clone(),
-            frame.clone()
-        );
         if let Frame::Mcp(message) = frame {
             match self.device_mcp_phase {
                 DeviceMcpPhase::ToolCall => {
@@ -278,7 +281,7 @@ impl Session {
                         *time = Some(Local::now().timestamp_millis());
                         let result = outer_tx.send(frame_result).await;
                         if result.is_err() {
-                            debug!("outer tx send frame result failure");
+                            info!("outer tx send frame result failure");
                             break;
                         }
                     }

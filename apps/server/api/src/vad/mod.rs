@@ -1,11 +1,7 @@
-#[cfg(feature = "mkl")]
-extern crate intel_mkl_src;
-
-#[cfg(feature = "accelerate")]
-extern crate accelerate_src;
-
 pub mod model;
+use crate::config::VadModel;
 use crate::config::vad::VadConfig;
+use crate::vad::model::earshot::VadEarshot;
 use crate::{common::ModelError, vad::model::void::VadVoid};
 use async_trait::async_trait;
 use model::silero::VadSilero;
@@ -19,6 +15,7 @@ pub trait Vad: Send + Sync {
     async fn is_speech(&mut self) -> bool;
     async fn pop(&mut self);
     async fn clear(&mut self);
+    async fn window_size(&self) -> usize;
 }
 
 #[derive(Debug)]
@@ -47,12 +44,17 @@ impl VadFactory {
         VAD_INSTANCE.get().unwrap()
     }
 
+    pub fn config() -> Arc<VadConfig> {
+        VAD_INSTANCE.get().unwrap().config.clone()
+    }
+
     pub fn create_model(config: &VadConfig) -> Box<dyn Vad> {
         match config.model.as_ref().expect("vad model empty") {
-            crate::config::VadModel::Silero => {
+            VadModel::Silero => {
                 Box::new(VadSilero::new(config.path.clone().expect("vad path is empty")).unwrap())
             }
-            crate::config::VadModel::Void => Box::new(VadVoid::new().unwrap()),
+            VadModel::Void => Box::new(VadVoid::new().unwrap()),
+            VadModel::Earshot => Box::new(VadEarshot::new().unwrap()),
         }
     }
 }

@@ -108,7 +108,7 @@ pub async fn start(
     tracing::info!("init vad factory successfully");
     tracing::info!("init asr factory");
     AsrFactory::init(asr_config).await;
-    tracing::info!("init asr factor3y successfully");
+    tracing::info!("init asr factory successfully");
     tracing::info!("init llm factory");
     LlmFactory::init(llm_config).await;
     tracing::info!("init llm factory successfully");
@@ -286,7 +286,9 @@ pub fn setup_default(router: Router) -> Router {
         .make_span_with(|request: &Request| {
             let method = request.method();
             let path = request.uri().path();
+            let headers = request.headers();
             let id = xid::new();
+            tracing::debug!("headers = {:?}", headers);
             tracing::info_span!("Api Request",id = %id,method = %method,path = %path)
         })
         .on_request(())

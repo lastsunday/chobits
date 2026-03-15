@@ -1,12 +1,3 @@
-use std::{
-    cmp,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, AtomicI64, Ordering},
-    },
-    time::Duration,
-};
-
 use api::{
     AppState,
     asr::AsrFactory,
@@ -23,11 +14,8 @@ use api::{
     tts::TtsFactory,
     util::audio::pcm_decode,
     vad::VadFactory,
-    ws::session::SessionBuilder,
-};
-
-use api::{
     ws::frame::{Frame, FrameResult},
+    ws::session::SessionBuilder,
     ws::session::{Session, listener::DefaultListener},
 };
 use framework::id::gen_id;
@@ -49,6 +37,14 @@ use service::chobits::message::{
     mcp::McpMessage,
     tts::{TtsMessage, TtsState},
 };
+use std::{
+    cmp,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicI64, Ordering},
+    },
+    time::Duration,
+};
 use testcontainers::ContainerAsync;
 use testcontainers_modules::postgres::Postgres;
 use tokio::{sync::Mutex, time::sleep};
@@ -66,7 +62,7 @@ use common::{router_client::RouterClient, setup_database, tear_down};
 /// hello paramter input and output the hello result
 /// cargo test --test session_test -- test_chat_flow_hello --ignored --nocapture
 async fn test_chat_flow_hello() -> anyhow::Result<()> {
-    let (mut session, container, state) = create_session().await?;
+    let mut session = create_mini_session().await;
     session.start().await?;
     let mut output = session.output_frame().await;
     session
@@ -79,8 +75,6 @@ async fn test_chat_flow_hello() -> anyhow::Result<()> {
         FrameResult::HelloResult(..)
     ));
     session.stop().await;
-    let _ = &state.conn.close().await?;
-    tear_down(&container).await;
     Ok(())
 }
 
@@ -91,44 +85,18 @@ async fn test_chat_flow_hello() -> anyhow::Result<()> {
 /// cargo test --test session_test -- test_chat_flow_listen_manual --ignored --nocapture
 async fn test_chat_flow_listen_manual() -> anyhow::Result<()> {
     let audio = get_audio();
-    let (mut session, container, state) = create_session().await?;
-    // let session_id = session.id.clone();
+    let mut session = create_mini_session().await;
     session.start().await?;
     let mut output = session.output_frame().await;
-    // TODO: need refactor,remove tokio::spawn
-    let join_handle = tokio::spawn(async move {
-        while let Some(data) = output.next().await {
-            // debug!("session id = {}, data = {:?}", session_id, data);
-            match data {
-                Ok(frame_result) => match frame_result {
-                    FrameResult::HelloResult(_hello_message) => {}
-                    FrameResult::STTResult(stt_message) => {
-                        info!("{:?}", stt_message);
-                    }
-                    FrameResult::LLMResult(_llm_message) => {}
-                    FrameResult::TTSResult(tts_message) => {
-                        if let Some(state) = tts_message.state
-                            && TtsState::Stop == state
-                        {
-                            return;
-                        }
-                    }
-                    FrameResult::AudioResult(_audio_message) => {}
-                    _ => {
-                        panic!("unexpected frame result");
-                    }
-                },
-                Err(e) => {
-                    panic!("{:?}", e);
-                }
-            }
-        }
-        panic!("receive hello message error");
-    });
-    let hello_frame = Frame::Hello(HelloMessage {
-        ..Default::default()
-    });
-    session.accept_frame(&hello_frame).await;
+    session
+        .accept_frame(&Frame::Hello(HelloMessage {
+            ..Default::default()
+        }))
+        .await;
+    assert!(matches!(
+        output.next().await.unwrap().unwrap(),
+        FrameResult::HelloResult(..)
+    ));
     session
         .accept_frame(&Frame::Listen(ListenMessage {
             state: ListenState::Start,
@@ -149,13 +117,26 @@ async fn test_chat_flow_listen_manual() -> anyhow::Result<()> {
             ..Default::default()
         }))
         .await;
-    join_handle.await?;
+    loop {
+        let data = output.next().await.unwrap().unwrap();
+        if let FrameResult::TTSResult(tts_message) = data {
+            match tts_message.state {
+                Some(data) => {
+                    if data == TtsState::Stop {
+                        break;
+                    }
+                }
+                None => {
+                    //skip
+                }
+            }
+        }
+    }
     session.stop().await;
-    let _ = &state.conn.close().await?;
-    tear_down(&container).await;
     Ok(())
 }
 
+// TODO:
 #[tokio::test]
 #[traced_test]
 #[ignore]
@@ -259,6 +240,7 @@ async fn test_chat_flow_listen_auto() -> anyhow::Result<()> {
     Ok(())
 }
 
+// TODO:
 #[tokio::test]
 #[ignore]
 /// listen voice by realtime mode and output the asr text result
@@ -271,60 +253,23 @@ async fn test_chat_flow_listen_realtime() -> anyhow::Result<()> {
             .finish(),
     )
     .expect("Failed to set tracing subscriber");
-
     let audio = get_audio();
 
     let (mut session, container, state) = create_session().await?;
-    let next_step = Arc::new(AtomicBool::new(false));
-    let next_step_for_sender = next_step.clone();
-
     // let session_id = session.id.clone();
     session.start().await?;
     let mut output = session.output_frame().await;
-    // TODO: need refactor,remove tokio::spawn
-    let join_handle = tokio::spawn(async move {
-        let mut count = 0;
-        while let Some(data) = output.next().await {
-            // debug!("session id = {}, data = {:?}", session_id, data);
-            match data {
-                Ok(frame_result) => match frame_result {
-                    FrameResult::HelloResult(hello_message) => {
-                        info!("{:?}", hello_message);
-                    }
-                    FrameResult::STTResult(stt_message) => {
-                        info!("{:?}", stt_message);
-                    }
-                    FrameResult::LLMResult(_llm_message) => {}
-                    FrameResult::TTSResult(tts_message) => {
-                        let state = tts_message.state;
-                        if let Some(state) = state
-                            && TtsState::Stop == state
-                        {
-                            count += 1;
-                            next_step.store(true, Ordering::Relaxed);
-                            //when next round tts stop after wake tts round
-                            if count >= 2 {
-                                return;
-                            }
-                        }
-                    }
-                    FrameResult::AudioResult(_audio_message) => {}
-                    _ => {
-                        panic!("unexpected frame result");
-                    }
-                },
-                Err(_) => {
-                    break;
-                }
-            }
-        }
-        panic!("receive hello message error");
-    });
+    info!("send hello");
     session
         .accept_frame(&Frame::Hello(HelloMessage {
             ..Default::default()
         }))
         .await;
+    assert!(matches!(
+        output.next().await.unwrap().unwrap(),
+        FrameResult::HelloResult(..)
+    ));
+    info!("send before hello voice");
     for n in 0..audio.len() {
         session
             .accept_frame(&Frame::Voice {
@@ -340,11 +285,6 @@ async fn test_chat_flow_listen_realtime() -> anyhow::Result<()> {
             ..Default::default()
         }))
         .await;
-    let mut to_next_step = false;
-    while !to_next_step {
-        to_next_step = next_step_for_sender.load(Ordering::Relaxed);
-        sleep(Duration::from_millis(500)).await;
-    }
     session
         .accept_frame(&Frame::Listen(ListenMessage {
             state: ListenState::Start,
@@ -352,6 +292,15 @@ async fn test_chat_flow_listen_realtime() -> anyhow::Result<()> {
             ..Default::default()
         }))
         .await;
+    assert!(matches!(
+        output.next().await.unwrap().unwrap(),
+        FrameResult::STTResult(..)
+    ));
+    assert!(matches!(
+        output.next().await.unwrap().unwrap(),
+        FrameResult::TTSResult(..)
+    ));
+    info!("send voice");
     for n in 0..audio.len() {
         session
             .accept_frame(&Frame::Voice {
@@ -359,22 +308,194 @@ async fn test_chat_flow_listen_realtime() -> anyhow::Result<()> {
             })
             .await;
     }
+    // let frame_result = output.next().await.unwrap().unwrap();
+    // debug!("{:?}", &frame_result);
+    // assert!(matches!(frame_result, FrameResult::STTResult(..)));
+
+    // let frame_result = output.next().await.unwrap().unwrap();
+    // debug!("{:?}", &frame_result);
+    // assert!(matches!(frame_result, FrameResult::LLMResult(..)));
+
+    info!("send silent voice");
+    // 16000Hz * 1 channel * 60 ms / 1000 = 960 samples -> frameSize
+    // 60ms * 30 = 1800ms
     // silent time = 1800ms > config setting
     for _ in 0..30 {
         session
             .accept_frame(&Frame::Voice {
-                data: vec![].as_ref(),
+                data: vec![0u8; 960].as_ref(),
             })
             .await;
-        sleep(Duration::from_millis(60)).await;
     }
-    join_handle.await?;
-    session.stop().await;
+    assert!(matches!(
+        output.next().await.unwrap().unwrap(),
+        FrameResult::LLMResult(..)
+    ));
+    assert!(matches!(
+        output.next().await.unwrap().unwrap(),
+        FrameResult::TTSResult(..)
+    ));
+    assert!(matches!(
+        output.next().await.unwrap().unwrap(),
+        FrameResult::AudioResult(..)
+    ));
+
+    let mut frame_result = output.next().await.unwrap().unwrap();
+    while let Some(data) = output.next().await {
+        let data = data.unwrap();
+        match data {
+            FrameResult::AudioResult(_audio_message) => {
+                continue;
+            }
+            _ => {
+                frame_result = data;
+                break;
+            }
+        }
+    }
+    debug!("{:?}", &frame_result);
+    assert!(matches!(frame_result, FrameResult::TTSResult(..)));
+
+    assert!(matches!(
+        output.next().await.unwrap().unwrap(),
+        FrameResult::LLMResult(..)
+    ));
+    assert!(matches!(
+        output.next().await.unwrap().unwrap(),
+        FrameResult::TTSResult(..)
+    ));
+    assert!(matches!(
+        output.next().await.unwrap().unwrap(),
+        FrameResult::AudioResult(..)
+    ));
+
+    let mut frame_result = output.next().await.unwrap().unwrap();
+    while let Some(data) = output.next().await {
+        let data = data.unwrap();
+        match data {
+            FrameResult::AudioResult(_audio_message) => {
+                continue;
+            }
+            _ => {
+                frame_result = data;
+                break;
+            }
+        }
+    }
+    debug!("{:?}", &frame_result);
+    assert!(matches!(frame_result, FrameResult::TTSResult(..)));
+    assert!(matches!(frame_result, FrameResult::TTSResult(..)));
+
+    let frame_result = output.next().await.unwrap().unwrap();
+    debug!("{:?}", &frame_result);
+    info!("send silent voice");
+    // 16000Hz * 1 channel * 60 ms / 1000 = 960 samples -> frameSize
+    // 60ms * 30 = 1800ms
+    // silent time = 1800ms > config setting
+    for _ in 0..30 {
+        session
+            .accept_frame(&Frame::Voice {
+                data: vec![0u8; 960].as_ref(),
+            })
+            .await;
+    }
+
+    info!("close result checking");
+    assert!(matches!(
+        output.next().await.unwrap().unwrap(),
+        FrameResult::CloseResult
+    ));
+
+    // session.stop().await;
     let _ = &state.conn.close().await?;
     tear_down(&container).await;
     Ok(())
 }
 
+#[tokio::test]
+#[ignore]
+/// listen voice by realtime mode and output the asr text result
+/// cargo test --test session_test -- test_chat_flow_listen_realtime_silent_voice_connection_timeout --ignored --nocapture
+async fn test_chat_flow_listen_realtime_silent_voice_connection_timeout() -> anyhow::Result<()> {
+    tracing::subscriber::set_global_default(
+        tracing_subscriber::fmt::Subscriber::builder()
+            .compact()
+            .with_max_level(tracing::Level::DEBUG)
+            .finish(),
+    )
+    .expect("Failed to set tracing subscriber");
+    let mut session = create_mini_session().await;
+    session.start().await?;
+    let mut output = session.output_frame().await;
+    session
+        .accept_frame(&Frame::Hello(HelloMessage {
+            ..Default::default()
+        }))
+        .await;
+    assert!(matches!(
+        output.next().await.unwrap().unwrap(),
+        FrameResult::HelloResult(..)
+    ));
+    session
+        .accept_frame(&Frame::Listen(ListenMessage {
+            state: ListenState::Detect,
+            mmod: None,
+            text: Some("Hello"),
+            ..Default::default()
+        }))
+        .await;
+    session
+        .accept_frame(&Frame::Listen(ListenMessage {
+            state: ListenState::Start,
+            mmod: Some(ListenMode::RealTime),
+            ..Default::default()
+        }))
+        .await;
+    // 16000Hz * 1 channel * 60 ms / 1000 = 960 samples -> frameSize
+    // 60ms * 30 = 1800ms
+    // silent time = 1800ms > config setting
+    for _ in 0..30 {
+        session
+            .accept_frame(&Frame::Voice {
+                data: vec![0u8; 960].as_ref(),
+            })
+            .await;
+    }
+    loop {
+        let data = output.next().await.unwrap().unwrap();
+        if let FrameResult::TTSResult(tts_message) = data {
+            match tts_message.state {
+                Some(data) => {
+                    if data == TtsState::Stop {
+                        break;
+                    }
+                }
+                None => {
+                    //skip
+                }
+            }
+        }
+    }
+    // silent 3600ms
+    for _ in 0..60 {
+        session
+            .accept_frame(&Frame::Voice {
+                data: vec![0u8; 960].as_ref(),
+            })
+            .await;
+        sleep(Duration::from_millis(60)).await;
+    }
+    loop {
+        let data = output.next().await.unwrap().unwrap();
+        if let FrameResult::CloseResult = data {
+            break;
+        }
+    }
+    session.stop().await;
+    Ok(())
+}
+
+// TODO:
 #[tokio::test]
 #[ignore]
 /// get text message and output the asr text result
@@ -471,6 +592,7 @@ async fn test_chat_flow_handle_text_message_multiple_time() -> anyhow::Result<()
     Ok(())
 }
 
+// TODO:
 #[tokio::test]
 #[traced_test]
 #[ignore]
@@ -530,6 +652,7 @@ async fn test_chat_flow_handle_text_message() -> anyhow::Result<()> {
     Ok(())
 }
 
+// TODO:
 #[tokio::test]
 #[traced_test]
 #[ignore]
@@ -602,6 +725,7 @@ async fn test_chat_flow_break() -> anyhow::Result<()> {
     Ok(())
 }
 
+// TODO:
 #[tokio::test]
 #[traced_test]
 #[ignore]
@@ -857,6 +981,7 @@ async fn test_mcp_flow_server_client() -> anyhow::Result<()> {
     Ok(())
 }
 
+// TODO:
 #[tokio::test]
 #[traced_test]
 #[ignore]
@@ -1132,53 +1257,7 @@ async fn test_mcp_flow_device_client() -> anyhow::Result<()> {
 
 async fn create_session()
 -> Result<(Session, Option<ContainerAsync<Postgres>>, AppState), anyhow::Error> {
-    debug!("init vad factory");
-    VadFactory::init(Arc::new(VadConfig {
-        model: Some(VadModel::Silero),
-        path: Some(String::from("data/vad/model/onnx-community/silero-vad/")),
-        num_threads: Some(4),
-    }))
-    .await;
-    debug!("init vad factory successfully");
-    debug!("init asr factory");
-    AsrFactory::init(Arc::new(AsrConfig {
-        model: Some(AsrModel::Qwen3),
-        path: Some(String::from("data/asr/model/Qwen/Qwen3-ASR-0.6B/")),
-    }))
-    .await;
-    debug!("init asr factory successfully");
-    tracing::debug!("init llm factory");
-    LlmFactory::init(Arc::new(LlmConfig {
-        model: Some(LlmModel::Qwen3),
-        path: Some(String::from("data/llm/model/unsloth/Qwen3-1.7B-GGUF/")),
-    }))
-    .await;
-    tracing::debug!("init llm factory successfully");
-    tracing::debug!("init tts factory");
-    let audio_config = Arc::new(AudioConfig {
-        input_sample_rate: Some(16000),
-        input_frame_duration: Some(60_u64),
-        input_channel: Some(1),
-        output_sample_rate: Some(16000),
-        output_channel: Some(1),
-        output_frame_duration: Some(60_u64),
-    });
-    TtsFactory::init(
-        Arc::new(TtsConfig {
-            model: Some(TtsModel::Voxcpm),
-            path: Some(String::from("data/tts/model/openbmb/VoxCPM-0.5B/")),
-            reference_prompt_text: Some(String::from(
-                "一定被灰太狼给吃了，我已经为他准备好了花圈了",
-            )),
-            reference_prompt_wav_path: Some(String::from("file://data/tts/reference/voice_05.wav")),
-        }),
-        audio_config.clone(),
-    )
-    .await?;
-    tracing::debug!("init tts factory successfully");
-
     let (container, state) = setup_database().await;
-
     // server client
     let router = OpenApiRouter::new();
     let ct = tokio_util::sync::CancellationToken::new();
@@ -1193,37 +1272,103 @@ async fn create_session()
     let transport = StreamableHttpClientTransport::with_client(client, mcp_config);
     let mut server_client = ServerMcpClient::new(transport).await?;
     server_client.init().await?;
-
-    let id = gen_id();
-    let mut mcp_host = UnionMcpHost::new(Some(id.clone()));
-    // server client add
+    let session_id = gen_id();
+    let mut mcp_host = UnionMcpHost::new(Some(session_id.clone()));
     mcp_host.add_client(Box::new(server_client)).await;
-    let session_config = Arc::new(SessionConfig {
-        close_connection_no_voice_time: Some(30000),
-        silence_voice_timeout: Some(1200),
-        system_prompt: Some(String::from(
-            "你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等。",
-        )),
-        max_prompt_len: Some(3000),
+
+    let audio_config = Arc::new(AudioConfig {
+        input_sample_rate: Some(16000),
+        input_frame_duration: Some(60_u64),
+        input_channel: Some(1),
+        output_sample_rate: Some(16000),
+        output_channel: Some(1),
+        output_frame_duration: Some(60_u64),
     });
-    let vad_config = VadConfig {
-        model: Some(VadModel::Silero),
-        path: Some(String::from("data/vad/model/onnx-community/silero-vad/")),
-        num_threads: Some(4),
-    };
     let session = SessionBuilder::new()
         .with_listener(Box::new(DefaultListener::new(
-            Arc::new(Mutex::new(VadFactory::create_model(&Arc::new(vad_config)))),
-            AsrFactory::global().default(),
+            Arc::new(Mutex::new(VadFactory::create_model(&Arc::new(VadConfig {
+                model: Some(VadModel::Earshot),
+                ..Default::default()
+            })))),
+            Arc::new(Mutex::new(AsrFactory::create_model(&AsrConfig {
+                model: Some(AsrModel::Qwen3),
+                path: Some(String::from("data/asr/model/Qwen/Qwen3-ASR-0.6B/")),
+            }))),
             audio_config.clone(),
         )))
-        .with_id(id.clone())
-        .with_model(LlmFactory::global().default())
+        .with_id(session_id.clone())
+        .with_model(
+           Arc::new( LlmFactory::create_model(&LlmConfig {
+                model: Some(LlmModel::Qwen3),
+                path: Some(String::from("data/llm/model/unsloth/Qwen3-1.7B-GGUF/")),
+            }))
+        )
+            .with_tts(Arc::new(TtsFactory::create_model(&TtsConfig {
+            model: Some(TtsModel::Voxcpm),
+            path: Some(String::from("data/tts/model/openbmb/VoxCPM-0.5B/")),
+            reference_prompt_text: Some(String::from(
+                "一定被灰太狼给吃了，我已经为他准备好了花圈了",
+            )),
+            reference_prompt_wav_path: Some(String::from("file://data/tts/reference/voice_05.wav")),
+        }, &audio_config).await.unwrap()))
         .with_mcp_host(Arc::new(Mutex::new(mcp_host)))
-        .with_config(session_config.clone())
+        .with_config(Arc::new(SessionConfig {
+            close_connection_no_voice_time: Some(3000),
+            silence_voice_timeout: Some(1200),
+            system_prompt: Some(String::from(
+                "你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等。",
+            )),
+            max_prompt_len: Some(3000),
+        }))
         .with_audio_config(audio_config.clone())
         .build();
     Ok((session, container, state))
+}
+
+async fn create_mini_session() -> Session {
+    let audio_config = Arc::new(AudioConfig {
+        input_sample_rate: Some(16000),
+        input_frame_duration: Some(60_u64),
+        input_channel: Some(1),
+        output_sample_rate: Some(16000),
+        output_channel: Some(1),
+        output_frame_duration: Some(60_u64),
+    });
+    let session_id = gen_id();
+    SessionBuilder::new()
+        .with_listener(Box::new(DefaultListener::new(
+            Arc::new(Mutex::new(VadFactory::create_model(&Arc::new(VadConfig {
+                model: Some(VadModel::Earshot),
+                ..Default::default()
+            })))),
+            Arc::new(Mutex::new(AsrFactory::create_model(&AsrConfig {
+                model:Some(AsrModel::Void),
+                ..Default::default()
+            }))),
+            audio_config.clone(),
+        )))
+        .with_id(session_id.clone())
+        .with_model(
+           Arc::new( LlmFactory::create_model(&LlmConfig {
+            model: Some(LlmModel::Echo),
+            ..Default::default()
+            }))
+        )
+            .with_tts(Arc::new(TtsFactory::create_model(&TtsConfig {
+            model: Some(TtsModel::Mute),
+            ..Default::default()
+        }, &audio_config).await.unwrap()))
+        .with_mcp_host(Arc::new(Mutex::new(UnionMcpHost::new(Some(session_id.clone())))))
+        .with_config(Arc::new(SessionConfig {
+            close_connection_no_voice_time: Some(3000),
+            silence_voice_timeout: Some(1200),
+            system_prompt: Some(String::from(
+                "你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等。",
+            )),
+            max_prompt_len: Some(3000),
+        }))
+        .with_audio_config(audio_config.clone())
+        .build()
 }
 
 fn get_audio() -> Vec<Vec<u8>> {

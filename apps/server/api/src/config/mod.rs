@@ -369,7 +369,7 @@ fn default_ws_schema() -> Option<String> {
 }
 
 fn default_vad_model() -> Option<VadModel> {
-    Some(VadModel::Silero)
+    Some(VadModel::Earshot)
 }
 
 fn default_vad_path() -> Option<String> {
@@ -481,9 +481,10 @@ pub struct ListeningAddr {
 #[derive(Clone, Debug, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum VadModel {
-    #[default]
     Silero,
     Void,
+    #[default]
+    Earshot,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Default)]

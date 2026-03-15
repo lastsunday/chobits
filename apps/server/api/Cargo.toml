@@ -20,8 +20,10 @@ chobits-macros = { workspace = true }
 axum = { workspace = true, features = ["macros", "ws"] }
 axum-extra = { workspace = true, features = ["typed-header"] }
 tokio = { workspace = true, features = ["full"] }
+# log start
 tracing = { workspace = true, features = ["async-await"] }
 tracing-subscriber = { workspace = true, features = ["env-filter", "chrono"] }
+# log end
 # config start
 config = { workspace = true, features = ["yaml"] }
 figment = { workspace = true, features = ["env", "toml"] }
@@ -102,6 +104,9 @@ rand = { workspace = true }
 rand_distr = { workspace = true }
 qwen-asr = { workspace = true }
 # asr end
+# vad start
+earshot = { workspace = true }
+# vad end
 # tts start
 kokoro-tts = { workspace = true }
 # tts end

@@ -35,9 +35,9 @@ wget https://huggingface.co/openbmb/VoxCPM-0.5B/resolve/f67d35a3848e0bec0fdb8c33
 mkdir -p tts/reference/
 wget https://github.com/jhqxxx/aha/raw/3ba4de8a7dd578b809fa4676f865a438abba91ab/assets/audio/voice_05.wav -O tts/reference/voice_05.wav
 
-mkdir -p vad
-mkdir -p vad/model/onnx-community/silero-vad
-wget https://huggingface.co/onnx-community/silero-vad/resolve/ddc9a7e80d6758f6fc795a1e8a04b798eb929d3a/onnx/model.onnx -O vad/model/onnx-community/silero-vad/model.onnx
+# mkdir -p vad
+# mkdir -p vad/model/onnx-community/silero-vad
+# wget https://huggingface.co/onnx-community/silero-vad/resolve/ddc9a7e80d6758f6fc795a1e8a04b798eb929d3a/onnx/model.onnx -O vad/model/onnx-community/silero-vad/model.onnx
 
 mkdir -p llm
 # 0.6B

@@ -19,10 +19,11 @@ use tokio::sync::{
     mpsc::{Sender, channel},
 };
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{debug, error, trace};
+use tracing::{Instrument, Level, debug, error, span, trace};
 
 #[derive(Clone)]
 pub struct Client {
+    session_id: Option<String>,
     model: Arc<Box<dyn Model>>,
     temperature: Option<f64>,
     max_tokens: Option<u64>,
@@ -70,6 +71,7 @@ impl Client {
         request: ChatRequest,
     ) -> impl Stream<Item = core::result::Result<String, ModelError>> + Unpin + Send + 'static {
         let (tx, rx) = channel::<core::result::Result<String, ModelError>>(10);
+        let session_id = self.session_id.clone();
         let model = self.model.clone();
         let mcp_host = self.mcp_host.clone();
         let tx_main = tx.clone();
@@ -77,126 +79,136 @@ impl Client {
         let temperature = self.temperature;
         let max_tokens = self.max_tokens;
         let max_prompt_len = self.max_prompt_len;
+        let span = span!(parent:None,Level::DEBUG, "socket", id=%session_id.unwrap_or_default());
         thread::spawn(move || {
-            let output = block_on(async move {
-                let tools = {
-                    if let Some(mcp_host) = &mcp_host {
-                        let mcp_host = mcp_host.lock().await;
-                        mcp_host.get_tool().await?
-                    } else {
-                        vec![]
-                    }
-                };
-                let mut has_next_step = true;
-                while has_next_step {
-                    let history = clone_history.clone();
-                    let mut history = history.lock().await;
-                    if let Some(max_prompt_len) = max_prompt_len {
-                        // cut prompt
-                        let mut current_len: u64 = 0;
-                        if let Some(item) = &history.preamble {
-                            current_len += item.len() as u64;
-                        }
-                        current_len += model.calculate_tools_prompt_len(&tools);
-                        let mut target_message_list = VecDeque::new();
-                        // TODO: remove clone?
-                        let chat_history: Vec<_> =
-                            history.chat_history.clone().into_iter().rev().collect();
-                        for message in chat_history {
-                            let len = model.calculate_message_prompt_len(&message);
-                            current_len += len;
-                            if current_len <= max_prompt_len {
-                                target_message_list.push_front(message);
-                            } else {
-                                break;
-                            }
-                        }
-                        history.chat_history = target_message_list.into();
-                    }
-                    let chat_history = {
-                        if !history.chat_history.is_empty() {
-                            let mut result = OneOrMany::many(history.chat_history.clone()).unwrap();
-                            result.push(request.message.clone());
-                            result
+            let output = block_on(
+                async move {
+                    let tools = {
+                        if let Some(mcp_host) = &mcp_host {
+                            let mcp_host = mcp_host.lock().await;
+                            mcp_host.get_tool().await?
                         } else {
-                            OneOrMany::one(request.message.clone())
+                            vec![]
                         }
                     };
-                    history.chat_history.push(request.message.clone());
-                    let preamble = history.preamble.clone();
-                    drop(history);
-                    let request = CompletionRequest {
-                        preamble: preamble.clone(),
-                        chat_history: chat_history.clone(),
-                        documents: vec![],
-                        tools: tools.clone(),
-                        temperature,
-                        max_tokens,
-                        tool_choice: None,
-                        additional_params: None,
-                    };
-                    let response = model.stream(request).await;
-                    let messages = handle_response(response, Some(tx.clone())).await;
-                    match messages {
-                        Ok(messages) => {
-                            has_next_step = false;
-                            for message in &messages {
-                                let history = clone_history.clone();
-                                let mut history = history.lock().await;
-                                history.chat_history.push(message.clone());
-                                drop(history);
-                                match message {
-                                    Message::User { content: _content } => {
-                                        //skip
-                                    }
-                                    Message::Assistant { id: _id, content } => {
-                                        for item in content.iter() {
-                                            match item {
-                                                AssistantContent::ToolCall(ToolCall {
-                                                    id,
-                                                    call_id,
-                                                    function,
-                                                    signature,
-                                                    additional_params,
-                                                }) => {
-                                                    if let Some(mcp_host) = mcp_host.clone() {
-                                                        let mcp_host = mcp_host.lock().await;
-                                                        let result = mcp_host
-                                                            .call_tool(ToolCall {
-                                                                id: id.clone(),
-                                                                call_id: call_id.clone(),
-                                                                function: function.clone(),
-                                                                signature: signature.clone(),
-                                                                additional_params:
-                                                                    additional_params.clone(),
-                                                            })
-                                                            .await?;
-                                                        let history = clone_history.clone();
-                                                        let mut history = history.lock().await;
-                                                        history.chat_history.push(Message::User {
-                                                            content: OneOrMany::<UserContent>::one(
-                                                                UserContent::ToolResult(result),
-                                                            ),
-                                                        });
-                                                        drop(history);
-                                                        has_next_step = true;
+                    let mut has_next_step = true;
+                    while has_next_step {
+                        let history = clone_history.clone();
+                        let mut history = history.lock().await;
+                        if let Some(max_prompt_len) = max_prompt_len {
+                            // cut prompt
+                            let mut current_len: u64 = 0;
+                            if let Some(item) = &history.preamble {
+                                current_len += item.len() as u64;
+                            }
+                            current_len += model.calculate_tools_prompt_len(&tools);
+                            let mut target_message_list = VecDeque::new();
+                            // TODO: remove clone?
+                            let chat_history: Vec<_> =
+                                history.chat_history.clone().into_iter().rev().collect();
+                            for message in chat_history {
+                                let len = model.calculate_message_prompt_len(&message);
+                                current_len += len;
+                                if current_len <= max_prompt_len {
+                                    target_message_list.push_front(message);
+                                } else {
+                                    break;
+                                }
+                            }
+                            history.chat_history = target_message_list.into();
+                        }
+                        let chat_history = {
+                            if !history.chat_history.is_empty() {
+                                let mut result =
+                                    OneOrMany::many(history.chat_history.clone()).unwrap();
+                                result.push(request.message.clone());
+                                result
+                            } else {
+                                OneOrMany::one(request.message.clone())
+                            }
+                        };
+                        history.chat_history.push(request.message.clone());
+                        let preamble = history.preamble.clone();
+                        drop(history);
+                        let request = CompletionRequest {
+                            preamble: preamble.clone(),
+                            chat_history: chat_history.clone(),
+                            documents: vec![],
+                            tools: tools.clone(),
+                            temperature,
+                            max_tokens,
+                            tool_choice: None,
+                            additional_params: None,
+                        };
+                        let response = model.stream(request).await;
+                        let messages = handle_response(response, Some(tx.clone())).await;
+                        match messages {
+                            Ok(messages) => {
+                                has_next_step = false;
+                                for message in &messages {
+                                    let history = clone_history.clone();
+                                    let mut history = history.lock().await;
+                                    history.chat_history.push(message.clone());
+                                    drop(history);
+                                    match message {
+                                        Message::User { content: _content } => {
+                                            //skip
+                                        }
+                                        Message::Assistant { id: _id, content } => {
+                                            for item in content.iter() {
+                                                match item {
+                                                    AssistantContent::ToolCall(ToolCall {
+                                                        id,
+                                                        call_id,
+                                                        function,
+                                                        signature,
+                                                        additional_params,
+                                                    }) => {
+                                                        if let Some(mcp_host) = mcp_host.clone() {
+                                                            let mcp_host = mcp_host.lock().await;
+                                                            let result = mcp_host
+                                                                .call_tool(ToolCall {
+                                                                    id: id.clone(),
+                                                                    call_id: call_id.clone(),
+                                                                    function: function.clone(),
+                                                                    signature: signature.clone(),
+                                                                    additional_params:
+                                                                        additional_params.clone(),
+                                                                })
+                                                                .await?;
+                                                            let history = clone_history.clone();
+                                                            let mut history = history.lock().await;
+                                                            history
+                                                                .chat_history
+                                                                .push(Message::User {
+                                                                content:
+                                                                    OneOrMany::<UserContent>::one(
+                                                                        UserContent::ToolResult(
+                                                                            result,
+                                                                        ),
+                                                                    ),
+                                                            });
+                                                            drop(history);
+                                                            has_next_step = true;
+                                                        }
                                                     }
-                                                }
-                                                _ => {
-                                                    //skip
+                                                    _ => {
+                                                        //skip
+                                                    }
                                                 }
                                             }
                                         }
                                     }
                                 }
                             }
+                            Err(_) => todo!(),
                         }
-                        Err(_) => todo!(),
                     }
+                    drop(tx);
+                    anyhow::Ok(())
                 }
-                drop(tx);
-                anyhow::Ok(())
-            });
+                .instrument(span),
+            );
             match output {
                 Ok(_) => {
                     drop(tx_main);
@@ -311,6 +323,7 @@ pub async fn handle_response(
 }
 
 pub struct ClientBuilder {
+    session_id: Option<String>,
     model: Arc<Box<dyn Model>>,
     mcp_host: Option<Arc<Mutex<dyn McpHost>>>,
 }
@@ -318,6 +331,11 @@ pub struct ClientBuilder {
 impl ClientBuilder {
     pub fn new() -> Self {
         Default::default()
+    }
+
+    pub fn with_session_id(mut self, session_id: Option<String>) -> ClientBuilder {
+        self.session_id = session_id;
+        self
     }
 
     pub fn with_model(mut self, model: Arc<Box<dyn Model>>) -> ClientBuilder {
@@ -332,6 +350,7 @@ impl ClientBuilder {
 
     pub fn build(self) -> Client {
         Client {
+            session_id: self.session_id,
             model: self.model,
             temperature: None,
             max_tokens: None,
@@ -348,6 +367,7 @@ impl ClientBuilder {
 impl Default for ClientBuilder {
     fn default() -> Self {
         Self {
+            session_id: None,
             model: Arc::new(Box::new(Echo::default())),
             mcp_host: None,
         }

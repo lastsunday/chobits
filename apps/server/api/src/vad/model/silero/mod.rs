@@ -167,4 +167,8 @@ impl Vad for VadSilero {
         self.total_accept_waveform_samples_len = 0;
         self.prediction_list.clear();
     }
+
+    async fn window_size(&self) -> usize {
+        512
+    }
 }

@@ -14,8 +14,13 @@ clap = "4.5.58"
 axum = "0.8.8"
 axum-extra = "0.12.5"
 tokio = "1.49.0"
+# log start
 tracing = "0.1.44"
 tracing-subscriber = "0.3.22"
+color-eyre = "0.6.5"
+tracing-appender = "0.2.4"
+tracing-error = "0.2.1"
+# log end
 toml = "1.0.1+spec-1.1.0"
 syn = "2.0.115"
 quote = "1.0.44"
@@ -87,6 +92,9 @@ aha = "0.1.8"
 aha_openai_dive = "1.4.0"
 bindgen_cuda = "=0.1.5"
 # llm end
+# vad start
+earshot = "1.0.0"
+# vad end
 # asr start
 byteorder = "1.5.0"
 rand = "0.10.0"
@@ -112,7 +120,6 @@ cucumber = "0.22.1"
 # dev end
 
 [profile.dev]
-opt-level = 1
 
 [profile.test]
 # speed up test case (special for llm) 

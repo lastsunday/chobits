@@ -11,7 +11,12 @@ use crate::{
         client::server::ServerMcpClient,
         mcp_host::{McpHost, UnionMcpHost},
     },
+    tts::TtsFactory,
     vad::VadFactory,
+    ws::{
+        frame::{FrameError, FrameResult},
+        session::Session,
+    },
 };
 
 use axum::{
@@ -31,7 +36,7 @@ use serde::Serialize;
 use session::{SessionBuilder, listener::DefaultListener};
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
-use tracing::{error, info, trace};
+use tracing::{Instrument, Level, debug, error, info, span, trace};
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
@@ -73,8 +78,10 @@ async fn ws_handler(
 ) -> impl IntoResponse {
     info!("user_agent = {:?}", user_agent);
     ws.on_upgrade(move |socket| {
+        let session_id = gen_id();
         let (write, read) = socket.split();
         handle_socket(
+            session_id,
             session_config,
             mcp_config,
             vad_config,
@@ -85,64 +92,36 @@ async fn ws_handler(
     })
 }
 
-pub async fn send_text<W, T>(write: &mut W, value: &T) -> bool
-where
-    W: Sink<Message> + Unpin + Send + 'static,
-    T: ?Sized + Serialize,
-{
-    let result: String = serde_json::to_string(value).expect("value to json failure");
-    write.send(Message::Text(result.into())).await.is_err()
-}
-
-async fn create_server_mcp_client(uri: String) -> anyhow::Result<ServerMcpClient> {
-    let config = StreamableHttpClientTransportConfig::with_uri(uri);
-    let transport = StreamableHttpClientTransport::from_config(config);
-    let mut server_mcp_client = ServerMcpClient::new(transport).await?;
-    server_mcp_client.init().await?;
-    Ok(server_mcp_client)
-}
-
 pub async fn handle_socket<W, R>(
+    session_id: String,
     session_config: Arc<SessionConfig>,
     mcp_config: Arc<McpConfig>,
     vad_config: Arc<VadConfig>,
     audio_config: Arc<AudioConfig>,
     mut write: W,
-    mut read: R,
+    read: R,
 ) where
     W: Sink<Message> + Unpin + Send + 'static,
     R: Stream<Item = Result<Message, axum::Error>> + Unpin + Send + 'static,
 {
-    let id = gen_id();
-    let mut mcp_host = UnionMcpHost::new(Some(id.clone()));
-    let uri_list = &mcp_config.uri_list;
-    if let Some(uri_list) = uri_list {
-        for uri in uri_list {
-            let server_mcp_client = create_server_mcp_client(uri.to_string()).await;
-            match server_mcp_client {
-                Ok(server_mcp_client) => {
-                    mcp_host.add_client(Box::new(server_mcp_client)).await;
-                }
-                Err(e) => {
-                    error!("{:?}", e);
-                }
-            }
-        }
-    }
+    let span = span!(Level::DEBUG, "socket", id=%session_id);
+    let _guard = span.enter();
     let mut session = SessionBuilder::new()
-        .with_id(id.clone())
+        .with_id(session_id.clone())
         .with_listener(Box::new(DefaultListener::new(
             Arc::new(Mutex::new(VadFactory::create_model(&vad_config))),
             AsrFactory::global().default().clone(),
             audio_config.clone(),
         )))
         .with_model(LlmFactory::global().default())
-        .with_mcp_host(Arc::new(Mutex::new(mcp_host)))
+        .with_tts(TtsFactory::global().default())
+        .with_mcp_host(Arc::new(Mutex::new(
+            create_mcp_host(session_id.clone(), mcp_config.clone()).await,
+        )))
         .with_config(session_config.clone())
         .with_audio_config(audio_config.clone())
         .build();
-    let session_id = session.id.clone();
-    if let Err(e) = session.start().await {
+    if let Err(e) = session.start().instrument(span.clone()).await {
         error!("{}", e);
         let result = write.close().await;
         if result.is_err() {
@@ -150,12 +129,111 @@ pub async fn handle_socket<W, R>(
         }
         return;
     }
-    let mut output = session.output_frame().await;
+    let session_id_clone = session_id.clone();
+    let output = session.output_frame().await;
     tokio::spawn(async move {
-        while let Some(data) = output.next().await {
-            trace!("{:?}", data);
-            match data {
-                Ok(frame_result) => match frame_result {
+        let span = span!(parent:None,Level::DEBUG, "socket", id=%session_id_clone);
+        on_send(output, write).instrument(span).await
+    });
+    tokio::spawn(async move {
+        let span = span!(parent:None,Level::DEBUG, "socket", id=%session_id);
+        on_recv(session, read).instrument(span).await
+    });
+}
+
+async fn on_recv<R>(mut session: Session, mut read: R)
+where
+    R: Stream<Item = Result<Message, axum::Error>> + Unpin + Send + 'static,
+{
+    while let Some(Ok(msg)) = read.next().await {
+        let result = convert_to_frame(&msg).await;
+        if result.is_break() {
+            if let Some(item) = result.break_value() {
+                match item {
+                    Some(frame) => {
+                        match frame {
+                            frame::Frame::Voice { data: _data } => {
+                                trace!(target:"frame","[RECV] Voice");
+                            }
+                            _ => {
+                                debug!(target:"frame","[RECV] {:?}", frame);
+                            }
+                        }
+                        match frame {
+                            frame::Frame::Close(close_message) => {
+                                info!("break value close message = {:?}", close_message);
+                                session.stop().await;
+                                return;
+                            }
+                            _ => {
+                                session.accept_frame(&frame).await;
+                            }
+                        }
+                    }
+                    None => {
+                        info!("break value none");
+                        session.stop().await;
+                        return;
+                    }
+                }
+            }
+            return;
+        }
+        if result.is_continue()
+            && let Some(item) = result.continue_value()
+        {
+            match item {
+                Some(frame) => {
+                    match frame {
+                        frame::Frame::Voice { data: _data } => {
+                            trace!(target:"frame","[RECV] Voice");
+                        }
+                        _ => {
+                            debug!(target:"frame","[RECV] {:?}", frame);
+                        }
+                    }
+                    match frame {
+                        frame::Frame::Abort(abort_message) => {
+                            debug!(",abort message = {:?}", abort_message);
+                            session.new_round().await;
+                        }
+                        frame::Frame::Ping { data } => {
+                            debug!("ping,len = {}", data.len());
+                        }
+                        frame::Frame::Pong { data } => {
+                            debug!("pong,len = {}", data.len());
+                        }
+                        _ => {
+                            session.accept_frame(&frame).await;
+                        }
+                    }
+                }
+                None => {
+                    info!("unkonw continue message");
+                }
+            }
+        }
+    }
+}
+
+async fn on_send<W>(
+    mut output: impl Stream<Item = Result<FrameResult, FrameError>> + Unpin + Send + 'static,
+    mut write: W,
+) where
+    W: Sink<Message> + Unpin + Send + 'static,
+{
+    while let Some(data) = output.next().await {
+        match data {
+            Ok(frame) => {
+                match &frame {
+                    frame::FrameResult::AudioResult(_audio_message) => {
+                        trace!(target:"frame","[SEND] Audio");
+                    }
+                    _ => {
+                        debug!(target:"frame","[SEND] {:?}", frame);
+                    }
+                }
+                match frame {
                     frame::FrameResult::HelloResult(message) => {
                         if send_text(&mut write, &message).await {
                             info!("send hello data failure");
@@ -200,72 +278,54 @@ pub async fn handle_socket<W, R>(
                             break;
                         }
                     }
-                },
-                Err(e) => {
-                    error!("{:?}", e);
-                    return;
                 }
             }
-        }
-        let result = write.close().await;
-        if result.is_err() {
-            info!("write close failure");
-        }
-    });
-    tokio::spawn(async move {
-        while let Some(Ok(msg)) = read.next().await {
-            let result = convert_to_frame(&msg).await;
-            if result.is_break() {
-                if let Some(item) = result.break_value() {
-                    match item {
-                        Some(frame) => match frame {
-                            frame::Frame::Close(close_message) => {
-                                info!("break value close message = {:?}", close_message);
-                                session.stop().await;
-                                return;
-                            }
-                            _ => {
-                                session.accept_frame(&frame).await;
-                            }
-                        },
-                        None => {
-                            info!("break value none");
-                            session.stop().await;
-                            return;
-                        }
-                    }
-                }
+            Err(e) => {
+                error!("{:?}", e);
                 return;
             }
-            if result.is_continue()
-                && let Some(item) = result.continue_value()
-            {
-                match item {
-                    Some(frame) => match frame {
-                        frame::Frame::Abort(abort_message) => {
-                            info!(
-                                "session_id = {},abort message = {:?}",
-                                session_id, abort_message
-                            );
-                            session.new_round().await;
-                        }
-                        frame::Frame::Ping { data } => {
-                            info!("session_id = {},ping,len = {}", session_id, data.len());
-                        }
-                        frame::Frame::Pong { data } => {
-                            info!("session_id = {},pong,len = {}", session_id, data.len());
-                        }
-                        _ => {
-                            session.accept_frame(&frame).await;
-                        }
-                    },
-                    None => {
-                        info!("unkonw continue message");
-                    }
+        }
+    }
+    let result = write.close().await;
+    if result.is_err() {
+        info!("write close failure");
+    }
+}
+
+pub async fn send_text<W, T>(write: &mut W, value: &T) -> bool
+where
+    W: Sink<Message> + Unpin + Send + 'static,
+    T: ?Sized + Serialize,
+{
+    let result: String = serde_json::to_string(value).expect("value to json failure");
+    write.send(Message::Text(result.into())).await.is_err()
+}
+
+async fn create_server_mcp_client(uri: String) -> anyhow::Result<ServerMcpClient> {
+    let config = StreamableHttpClientTransportConfig::with_uri(uri);
+    let transport = StreamableHttpClientTransport::from_config(config);
+    let mut server_mcp_client = ServerMcpClient::new(transport).await?;
+    server_mcp_client.init().await?;
+    Ok(server_mcp_client)
+}
+
+async fn create_mcp_host(session_id: String, mcp_config: Arc<McpConfig>) -> UnionMcpHost {
+    let mut mcp_host = UnionMcpHost::new(Some(session_id));
+    let uri_list = &mcp_config.uri_list;
+    if let Some(uri_list) = uri_list {
+        for uri in uri_list {
+            let server_mcp_client = create_server_mcp_client(uri.to_string()).await;
+            match server_mcp_client {
+                Ok(server_mcp_client) => {
+                    mcp_host.add_client(Box::new(server_mcp_client)).await;
+                }
+                Err(e) => {
+                    error!("{:?}", e);
                 }
             }
         }
-    });
+    }
+    mcp_host
 }
 
 #[derive(Debug, PartialEq, Eq, ToSchema)]

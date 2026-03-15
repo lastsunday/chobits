@@ -38,4 +38,8 @@ impl Vad for VadVoid {
     async fn pop(&mut self) {}
 
     async fn clear(&mut self) {}
+
+    async fn window_size(&self) -> usize {
+        512
+    }
 }

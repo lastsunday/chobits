@@ -115,6 +115,20 @@ sequenceDiagram
     end
 ```
 
+### Listen mode
+
+#### Auto
+
+TODO
+
+#### Manual
+
+TODO
+
+#### Realtime
+
+TODO
+
 ### MCP handle
 
 ```mermaid

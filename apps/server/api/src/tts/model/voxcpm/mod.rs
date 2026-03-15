@@ -10,7 +10,7 @@ use std::{pin::Pin, sync::Arc};
 use tokio::sync::{Mutex, mpsc::channel};
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{debug, error};
+use tracing::error;
 
 pub struct TtsVoxCPM {
     instance: Arc<Mutex<VoxCPMGenerate>>,
@@ -74,7 +74,7 @@ impl Tts for TtsVoxCPM {
                     let tx = tx.clone();
                     match &text {
                         Ok(text) => {
-                            debug!("[TTS] receive, text = {}", text);
+                            // debug!("[TTS] receive, text = {}", text);
                             let mut instance = instance.lock().await;
                             match instance.generate_with_prompt_simple(
                                 text.to_string(),
@@ -101,7 +101,7 @@ impl Tts for TtsVoxCPM {
                                                 error!("output packet error = {}", e);
                                                 break;
                                             } else {
-                                                debug!("[TTS] encode and send audio success");
+                                                // debug!("[TTS] encode and send audio success");
                                             }
                                         }
                                         Err(e) => {
