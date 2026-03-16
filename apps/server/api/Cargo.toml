@@ -82,6 +82,7 @@ async-trait = { workspace = true }
 # audio start
 symphonia = { workspace = true }
 wavers = { workspace = true }
+resampler = { workspace = true }
 # audio end
 # llm start
 candle-core = { workspace = true }

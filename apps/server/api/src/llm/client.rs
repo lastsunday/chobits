@@ -92,43 +92,44 @@ impl Client {
                         }
                     };
                     let mut has_next_step = true;
+                    let history = clone_history.clone();
+                    let mut history = history.lock().await;
+                    if let Some(max_prompt_len) = max_prompt_len {
+                        // cut prompt
+                        let mut current_len: u64 = 0;
+                        if let Some(item) = &history.preamble {
+                            current_len += item.len() as u64;
+                        }
+                        current_len += model.calculate_tools_prompt_len(&tools);
+                        let mut target_message_list = VecDeque::new();
+                        // TODO: remove clone?
+                        let chat_history: Vec<_> =
+                            history.chat_history.clone().into_iter().rev().collect();
+                        for message in chat_history {
+                            let len = model.calculate_message_prompt_len(&message);
+                            current_len += len;
+                            if current_len <= max_prompt_len {
+                                target_message_list.push_front(message);
+                            } else {
+                                break;
+                            }
+                        }
+                        trace!(
+                            "truncation history ({}/{}): {:?} -> {:?}",
+                            current_len, max_prompt_len, history.chat_history, target_message_list
+                        );
+                        history.chat_history.clear();
+                        history
+                            .chat_history
+                            .append(&mut Vec::from(target_message_list));
+                    }
+                    history.chat_history.push(request.message.clone());
+                    drop(history);
                     while has_next_step {
                         let history = clone_history.clone();
-                        let mut history = history.lock().await;
-                        if let Some(max_prompt_len) = max_prompt_len {
-                            // cut prompt
-                            let mut current_len: u64 = 0;
-                            if let Some(item) = &history.preamble {
-                                current_len += item.len() as u64;
-                            }
-                            current_len += model.calculate_tools_prompt_len(&tools);
-                            let mut target_message_list = VecDeque::new();
-                            // TODO: remove clone?
-                            let chat_history: Vec<_> =
-                                history.chat_history.clone().into_iter().rev().collect();
-                            for message in chat_history {
-                                let len = model.calculate_message_prompt_len(&message);
-                                current_len += len;
-                                if current_len <= max_prompt_len {
-                                    target_message_list.push_front(message);
-                                } else {
-                                    break;
-                                }
-                            }
-                            history.chat_history = target_message_list.into();
-                        }
-                        let chat_history = {
-                            if !history.chat_history.is_empty() {
-                                let mut result =
-                                    OneOrMany::many(history.chat_history.clone()).unwrap();
-                                result.push(request.message.clone());
-                                result
-                            } else {
-                                OneOrMany::one(request.message.clone())
-                            }
-                        };
-                        history.chat_history.push(request.message.clone());
+                        let history = history.lock().await;
                         let preamble = history.preamble.clone();
+                        let chat_history = OneOrMany::many(history.chat_history.clone()).unwrap();
                         drop(history);
                         let request = CompletionRequest {
                             preamble: preamble.clone(),
@@ -140,8 +141,10 @@ impl Client {
                             tool_choice: None,
                             additional_params: None,
                         };
+                        trace!("[REQUEST] {:?}", &request);
                         let response = model.stream(request).await;
                         let messages = handle_response(response, Some(tx.clone())).await;
+                        trace!("[RESPONSE] {:?}", messages);
                         match messages {
                             Ok(messages) => {
                                 has_next_step = false;
@@ -354,7 +357,7 @@ impl ClientBuilder {
             model: self.model,
             temperature: None,
             max_tokens: None,
-            max_prompt_len: Some(3000),
+            max_prompt_len: Some(6000),
             history: Arc::new(Mutex::new(History {
                 preamble: None,
                 chat_history: vec![],

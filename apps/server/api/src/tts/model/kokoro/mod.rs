@@ -4,12 +4,14 @@ use async_trait::async_trait;
 use futures::Stream;
 use futures::executor::block_on;
 use kokoro_tts::KokoroTts;
+use resampler::{ResamplerFft, SampleRate};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::thread;
 use tokio::sync::{Mutex, mpsc::channel};
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
+use tracing::error;
 
 #[derive(Clone)]
 pub struct TtsKokoro {
@@ -72,9 +74,51 @@ impl Tts for TtsKokoro {
                                 .await
                             {
                                 Ok((sample, _took)) => {
+                                    let sample_rate = match SampleRate::try_from(encode_sample_rate)
+                                    {
+                                        Ok(sample_rate) => sample_rate,
+                                        Err(_) => {
+                                            let msg = format!(
+                                                "encode sample rate convert failure,{}",
+                                                encode_sample_rate
+                                            );
+                                            error!(msg);
+                                            if let Err(e) =
+                                                tx.send(Err(TtsError::Encode(msg))).await
+                                            {
+                                                error!("send error failure = {}", e);
+                                            }
+                                            return;
+                                        }
+                                    };
+
+                                    // resample
+                                    let mut resampler = ResamplerFft::new(
+                                        encode_channel as usize,
+                                        SampleRate::Hz22050,
+                                        sample_rate,
+                                    );
+                                    let input_size = resampler.chunk_size_input();
+                                    let output_size = resampler.chunk_size_output();
+                                    let mut resample = vec![];
+                                    let iter = sample.chunks(input_size);
+                                    for chunk in iter {
+                                        let mut output = vec![0.0f32; output_size];
+                                        let chunk: &[f32] = {
+                                            if chunk.len() != input_size {
+                                                let mut chunk = chunk.to_vec();
+                                                chunk.resize(input_size, 0.0f32);
+                                                &chunk.to_owned()[..]
+                                            } else {
+                                                chunk
+                                            }
+                                        };
+                                        resampler.resample(chunk, &mut output).unwrap();
+                                        resample.append(&mut output);
+                                    }
                                     let mut encoder = encoder.lock().await;
                                     let audio = encode_sample_to_tts_packet(
-                                        sample,
+                                        resample,
                                         &mut encoder,
                                         encode_sample_rate,
                                         encode_channel,

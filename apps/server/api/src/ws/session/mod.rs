@@ -21,7 +21,7 @@ use std::sync::atomic::Ordering;
 use tokio::sync::mpsc::{Sender, channel};
 use tokio::sync::{Mutex, Notify};
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{error, info};
+use tracing::{error, info, trace};
 
 pub mod listener;
 pub mod round;
@@ -120,8 +120,11 @@ pub enum Phase {
 
 #[derive(Debug, Clone)]
 pub enum ListenMode {
+    // voice call
     Auto,
+    // on button send voice
     Manual,
+    // esp32
     RealTime,
 }
 
@@ -279,6 +282,7 @@ impl Session {
                     Some(frame_result) => {
                         let mut time = latest_activity_time.lock().await;
                         *time = Some(Local::now().timestamp_millis());
+                        drop(time);
                         let result = outer_tx.send(frame_result).await;
                         if result.is_err() {
                             info!("outer tx send frame result failure");

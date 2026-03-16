@@ -77,6 +77,7 @@ ssh-key = "0.6.7"
 # audio start
 symphonia = "0.5.5"
 wavers = "1.5.1"
+resampler = "0.4.1"
 # audio end
 # llm start
 candle-core = "0.9.1"

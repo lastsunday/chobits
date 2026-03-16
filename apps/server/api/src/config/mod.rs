@@ -287,11 +287,11 @@ fn default_auth_client_secret() -> Option<String> {
 }
 
 fn default_tts_model() -> Option<TtsModel> {
-    Some(TtsModel::Voxcpm)
+    Some(TtsModel::Kokoro)
 }
 
 fn default_tts_path() -> Option<String> {
-    Some(String::from("data/tts/model/openbmb/VoxCPM-0.5B/"))
+    Some(String::from("data/tts/model/mzdk100/kokoro/"))
 }
 
 fn default_tts_reference_prompt_text() -> Option<String> {
@@ -357,7 +357,7 @@ fn default_session_system_prompt() -> Option<String> {
 }
 
 fn default_session_max_prompt_len() -> Option<u64> {
-    Some(3000)
+    Some(6000)
 }
 
 fn default_mcp_uri_list() -> Option<Vec<String>> {

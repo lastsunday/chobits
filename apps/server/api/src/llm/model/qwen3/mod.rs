@@ -25,7 +25,7 @@ use rig::{
 };
 use std::thread;
 use tokenizers::Tokenizer;
-use tracing::error;
+use tracing::{error, trace};
 
 #[derive(Clone)]
 pub struct LlmQwen {
@@ -213,7 +213,7 @@ async fn handle(
 ) -> Result<(), CompletionError> {
     let mut tos = TokenOutputStream::new(tokenizer);
     let prompt_str = convert_request_to_prompt(request);
-    // trace!("formatted prompt: {}", &prompt_str);
+    trace!("formatted prompt: {}", &prompt_str);
     // debug!("prompt str len: {}", prompt_str.len());
 
     let tokens = tos

@@ -41,7 +41,7 @@ use std::{
     cmp,
     sync::{
         Arc,
-        atomic::{AtomicBool, AtomicI64, Ordering},
+        atomic::{AtomicI64, Ordering},
     },
     time::Duration,
 };
@@ -81,8 +81,26 @@ async fn test_chat_flow_hello() -> anyhow::Result<()> {
 #[tokio::test]
 #[traced_test]
 #[ignore]
+/*
+2026-03-16T09:26:06.988023Z DEBUG frame: [RECV] Hello(HelloMessage { message: Message { mtype: Hello }, version: None, transport: None, audio_params: None, features: Some(Feature { mcp: Some(true), aec: None }), session_id: None })
+2026-03-16T09:26:06.988091Z DEBUG frame: [SEND] HelloResult(HelloMessage { message: Message { mtype: Hello }, version: None, transport: Some(Websocket), audio_params: Some(AudioParam { format: Opus, sample_rate: 16000, channels: 1, frame_duration: 60 }), features: None, session_id: Some("d6rspbklm6jn11rmp49g") })
+2026-03-16T09:26:06.988133Z DEBUG frame: [SEND] McpResult(McpRequest { message: Message { mtype: Mcp }, session_id: Some("d6rspbklm6jn11rmp49g"), payload: JsonRpcRequest { jsonrpc: JsonRpcVersion2_0, id: Number(0), request: Request { method: "initialize", params: {"capabilities": Object {}, "clientInfo": Object {"name": String("rmcp"), "version": String("0.15.0")}, "protocolVersion": String("2025-06-18")}, extensions: Extensions } } })
+2026-03-16T09:26:07.037845Z DEBUG frame: [RECV] Mcp(McpMessage { message: Message { mtype: Mcp }, payload: Response(JsonRpcResponse { jsonrpc: JsonRpcVersion2_0, id: Number(0), result: {"capabilities": Object {"tools": Object {}}, "protocolVersion": String("2025-06-18"), "serverInfo": Object {"name": String("Web测试设备"), "version": String("1.0.0")}} }) })
+2026-03-16T09:26:07.037933Z DEBUG frame: [SEND] McpResult(McpRequest { message: Message { mtype: Mcp }, session_id: Some("d6rspbklm6jn11rmp49g"), payload: JsonRpcRequest { jsonrpc: JsonRpcVersion2_0, id: Number(1), request: Request { method: "tools/list", params: {}, extensions: Extensions } } })
+2026-03-16T09:26:07.045113Z DEBUG frame: [RECV] Mcp(McpMessage { message: Message { mtype: Mcp }, payload: Response(JsonRpcResponse { jsonrpc: JsonRpcVersion2_0, id: Number(1), result: {"tools": Array [Object {"description": String("Provides the real-time information of the device, including the current status of the audio speaker, screen, battery, network, etc.\nUse this tool for: \n1. Answering questions about current condition (e.g. what is the current volume of the audio speaker?)\n2. As the first step to control the device (e.g. turn up / down the volume of the audio speaker, etc.)"), "inputSchema": Object {"properties": Object {}, "type": String("object")}, "name": String("self.get_device_status")}, Object {"description": String("Set the volume of the audio speaker. If the current volume is unknown, you must call `self.get_device_status` tool first and then call this tool."), "inputSchema": Object {"properties": Object {"volume": Object {"maximum": Number(100), "minimum": Number(0), "type": String("integer")}}, "required": Array [String("volume")], "type": String("object")}, "name": String("self.audio_speaker.set_volume")}, Object {"description": String("Set the brightness of the screen."), "inputSchema": Object {"properties": Object {"brightness": Object {"maximum": Number(100), "minimum": Number(0), "type": String("integer")}}, "required": Array [String("brightness")], "type": String("object")}, "name": String("self.screen.set_brightness")}]} }) })
+2026-03-16T09:26:09.324390Z DEBUG frame: [RECV] Listen(ListenMessage { message: Message { mtype: Listen }, session_id: None, state: Start, mmod: Some(Manual), text: None })
+2026-03-16T09:26:09.813342Z TRACE frame: [RECV] Voice
+2026-03-16T09:26:11.850049Z DEBUG frame: [RECV] Listen(ListenMessage { message: Message { mtype: Listen }, session_id: None, state: Stop, mmod: Some(Manual), text: None })
+2026-03-16T09:26:13.505227Z DEBUG frame: [SEND] STTResult(SttMessage { message: Message { mtype: Stt }, session_id: Some("d6rspbklm6jn11rmp49g"), text: Some("现在几点？") })
+2026-03-16T09:26:13.505307Z DEBUG frame: [SEND] TTSResult(TtsMessage { message: Message { mtype: Tts }, session_id: Some("d6rspbklm6jn11rmp49g"), state: Some(Start), text: None })
+2026-03-16T09:26:22.902319Z DEBUG frame: [SEND] LLMResult(LlmMessage { message: Message { mtype: Llm }, session_id: Some("d6rspbklm6jn11rmp49g"), emotion: Some("happy"), text: Some("🙂") })
+2026-03-16T09:26:22.902383Z DEBUG frame: [SEND] TTSResult(TtsMessage { message: Message { mtype: Tts }, session_id: Some("d6rspbklm6jn11rmp49g"), state: Some(SentenceStart), text: Some("2026年3月16日17点26分16秒（北京时间）") })
+2026-03-16T09:26:22.902418Z TRACE frame: [SEND] Audio
+2026-03-16T09:26:28.526632Z DEBUG frame: [SEND] TTSResult(TtsMessage { message: Message { mtype: Tts }, session_id: Some("d6rspbklm6jn11rmp49g"), state: Some(SentenceEnd), text: None })
+2026-03-16T09:26:28.526648Z DEBUG frame: [SEND] TTSResult(TtsMessage { message: Message { mtype: Tts }, session_id: Some("d6rspbklm6jn11rmp49g"), state: Some(Stop), text: None })
+*/
 /// listen voice by manual mode and output the asr text result
-/// cargo test --test session_test -- test_chat_flow_listen_manual --ignored --nocapture
+/// cargo test -F cuda --test session_test -- test_chat_flow_listen_manual --exact --ignored --nocapture
 async fn test_chat_flow_listen_manual() -> anyhow::Result<()> {
     let audio = get_audio();
     let mut session = create_mini_session().await;
@@ -114,6 +132,8 @@ async fn test_chat_flow_listen_manual() -> anyhow::Result<()> {
     session
         .accept_frame(&Frame::Listen(ListenMessage {
             state: ListenState::Stop,
+            mmod: Some(service::chobits::message::listen::ListenMode::Manual),
+
             ..Default::default()
         }))
         .await;
@@ -136,80 +156,40 @@ async fn test_chat_flow_listen_manual() -> anyhow::Result<()> {
     Ok(())
 }
 
-// TODO:
 #[tokio::test]
 #[traced_test]
 #[ignore]
+/*
+[RECV] Hello(HelloMessage { message: Message { mtype: Hello }, version: Some(1), transport: Some(Websocket), audio_params: Some(AudioParam { format: Opus, sample_rate: 16000, channels: 1, frame_duration: 60 }), features: None, session_id: None })
+[SEND] HelloResult(HelloMessage { message: Message { mtype: Hello }, version: None, transport: Some(Websocket), audio_params: Some(AudioParam { format: Opus, sample_rate: 16000, channels: 1, frame_duration: 60 }), features: None, session_id: Some("d6rt1rklm6jnl6b7cck0") })
+[RECV] Listen(ListenMessage { message: Message { mtype: Listen }, session_id: Some("d6rt1rklm6jnl6b7cck0"), state: Start, mmod: Some(Auto), text: None })
+[RECV] Voice
+[SEND] STTResult(SttMessage { message: Message { mtype: Stt }, session_id: Some("d6ruu3clm6jrmr2f5itg"), text: Some("Hello") })
+[SEND] TTSResult(TtsMessage { message: Message { mtype: Tts }, session_id: Some("d6ruu3clm6jrmr2f5itg"), state: Some(Start), text: None })
+[SEND] LLMResult(LlmMessage { message: Message { mtype: Llm }, session_id: Some("d6ruu3clm6jrmr2f5itg"), emotion: Some("happy"), text: Some("🙂") })
+[SEND] TTSResult(TtsMessage { message: Message { mtype: Tts }, session_id: Some("d6ruu3clm6jrmr2f5itg"), state: Some(SentenceStart), text: Some("Hello!") })
+[RECV] Voice
+[SEND] TTSResult(TtsMessage { message: Message { mtype: Tts }, session_id: Some("d6ruu3clm6jrmr2f5itg"), state: Some(SentenceEnd), text: None })
+[SEND] TTSResult(TtsMessage { message: Message { mtype: Tts }, session_id: Some("d6ruu3clm6jrmr2f5itg"), state: Some(Stop), text: None })
+...
+[SEND] CloseResult
+*/
 /// listen voice by auto mode and output the asr text result
-/// cargo test --test session_test -- test_chat_flow_listen_auto --ignored --nocapture
+/// cargo test -F cuda --test session_test -- test_chat_flow_listen_auto --exact --ignored --nocapture
 async fn test_chat_flow_listen_auto() -> anyhow::Result<()> {
     let audio = get_audio();
     let (mut session, container, state) = create_session().await?;
-    let session_id = session.id.clone();
     session.start().await?;
     let mut output = session.output_frame().await;
-    let next_step = Arc::new(AtomicBool::new(false));
-    let next_step_for_sender = next_step.clone();
-    // TODO: need refactor,remove tokio::spawn
-    let join_handle = tokio::spawn(async move {
-        let mut count = 0;
-        while let Some(data) = output.next().await {
-            debug!("session id = {}, data = {:?}", session_id, data);
-            match data {
-                Ok(frame_result) => match frame_result {
-                    FrameResult::HelloResult(_hello_message) => {}
-                    FrameResult::STTResult(_stt_message) => {}
-                    FrameResult::LLMResult(_llm_message) => {}
-                    FrameResult::TTSResult(tts_message) => {
-                        let state = tts_message.state;
-                        if let Some(state) = state
-                            && TtsState::Stop == state
-                        {
-                            count += 1;
-                            next_step.store(true, Ordering::Relaxed);
-                            //when next round tts stop after wake tts round
-                            if count >= 2 {
-                                return;
-                            }
-                        }
-                    }
-                    FrameResult::AudioResult(_audio_message) => {}
-                    _ => {
-                        panic!("unexpected frame result");
-                    }
-                },
-                Err(_) => {
-                    break;
-                }
-            }
-        }
-        panic!("receive hello message error");
-    });
     session
         .accept_frame(&Frame::Hello(HelloMessage {
             ..Default::default()
         }))
         .await;
-    for n in 0..audio.len() {
-        session
-            .accept_frame(&Frame::Voice {
-                data: audio.get(n).unwrap(),
-            })
-            .await;
-    }
-    session
-        .accept_frame(&Frame::Listen(ListenMessage {
-            state: ListenState::Detect,
-            mmod: None,
-            text: Some("Hello"),
-            ..Default::default()
-        }))
-        .await;
-    let mut to_next_step = false;
-    while !to_next_step {
-        to_next_step = next_step_for_sender.load(Ordering::Relaxed);
-        sleep(Duration::from_millis(500)).await;
-    }
+    assert!(matches!(
+        output.next().await.unwrap().unwrap(),
+        FrameResult::HelloResult(..)
+    ));
     session
         .accept_frame(&Frame::Listen(ListenMessage {
             state: ListenState::Start,
@@ -217,6 +197,74 @@ async fn test_chat_flow_listen_auto() -> anyhow::Result<()> {
             ..Default::default()
         }))
         .await;
+    assert!(matches!(
+        output.next().await.unwrap().unwrap(),
+        FrameResult::STTResult(..)
+    ));
+    assert!(matches!(
+        output.next().await.unwrap().unwrap(),
+        FrameResult::TTSResult(TtsMessage {
+            state: Some(TtsState::Start),
+            ..
+        })
+    ));
+    assert!(matches!(
+        output.next().await.unwrap().unwrap(),
+        FrameResult::LLMResult(..)
+    ));
+    assert!(matches!(
+        output.next().await.unwrap().unwrap(),
+        FrameResult::TTSResult(TtsMessage {
+            state: Some(TtsState::SentenceStart),
+            ..
+        })
+    ));
+    assert!(matches!(
+        output.next().await.unwrap().unwrap(),
+        FrameResult::AudioResult(..)
+    ));
+
+    let mut frame_result = output.next().await.unwrap().unwrap();
+    while let Some(data) = output.next().await {
+        let data = data.unwrap();
+        match data {
+            FrameResult::AudioResult(_audio_message) => {
+                continue;
+            }
+            _ => {
+                frame_result = data;
+                break;
+            }
+        }
+    }
+    debug!("{:?}", &frame_result);
+    assert!(matches!(
+        frame_result,
+        FrameResult::TTSResult(TtsMessage {
+            state: Some(TtsState::SentenceEnd),
+            ..
+        })
+    ));
+    while let Some(data) = output.next().await {
+        let data = data.unwrap();
+        debug!("{:?}", data);
+        match data {
+            FrameResult::TTSResult(tts_message) => match tts_message.state {
+                Some(state) => {
+                    if state == TtsState::Stop {
+                        break;
+                    }
+                }
+                None => {
+                    continue;
+                }
+            },
+            _ => {
+                continue;
+            }
+        }
+    }
+
     for n in 0..audio.len() {
         session
             .accept_frame(&Frame::Voice {
@@ -224,32 +272,96 @@ async fn test_chat_flow_listen_auto() -> anyhow::Result<()> {
             })
             .await;
     }
-    // silent time = 1800ms > config setting
-    for _ in 0..30 {
+
+    info!("send voice");
+    info!("audio len = {}", audio.len());
+    for n in 0..audio.len() {
         session
             .accept_frame(&Frame::Voice {
-                data: vec![].as_ref(),
+                data: audio.get(n).unwrap(),
             })
             .await;
         sleep(Duration::from_millis(60)).await;
     }
-    join_handle.await?;
+    info!("send silent voice");
+    // 16000Hz * 1 channel * 60 ms / 1000 = 960 samples -> frameSize
+    // 60ms * 30 = 1800ms
+    // silent time = 1800ms > config setting
+    for _ in 0..180 {
+        session
+            .accept_frame(&Frame::Voice {
+                data: vec![0u8; 960].as_ref(),
+            })
+            .await;
+        sleep(Duration::from_millis(60)).await;
+    }
+    while let Some(data) = output.next().await {
+        let data = data.unwrap();
+        match data {
+            FrameResult::CloseResult => {
+                break;
+            }
+            _ => {
+                continue;
+            }
+        }
+    }
+
     session.stop().await;
     let _ = &state.conn.close().await?;
     tear_down(&container).await;
     Ok(())
 }
 
-// TODO:
 #[tokio::test]
 #[ignore]
+/*
+2026-03-16T07:51:51.451299Z DEBUG frame: [RECV] Hello(HelloMessage { message: Message { mtype: Hello }, version: Some(1), transport: Some(Websocket), audio_params: Some(AudioParam { format: Opus, sample_rate: 16000, channels: 1, frame_duration: 60 }), features: Some(Feature { mcp: Some(true), aec: None }), session_id: None })
+2026-03-16T07:51:51.453883Z DEBUG frame: [SEND] HelloResult(HelloMessage { message: Message { mtype: Hello }, version: None, transport: Some(Websocket), audio_params: Some(AudioParam { format: Opus, sample_rate: 16000, channels: 1, frame_duration: 60 }), features: None, session_id: Some("d6rrd5slm6ji1occegj0") })
+2026-03-16T07:51:51.453939Z DEBUG frame: [SEND] McpResult(McpRequest { message: Message { mtype: Mcp }, session_id: Some("d6rrd5slm6ji1occegj0"), payload: JsonRpcRequest { jsonrpc: JsonRpcVersion2_0, id: Number(0), request: Request { method: "initialize", params: {"capabilities": Object {}, "clientInfo": Object {"name": String("rmcp"), "version": String("0.15.0")}, "protocolVersion": String("2025-06-18")}, extensions: Extensions } } })
+2026-03-16T07:51:51.480161Z TRACE frame: [RECV] Voice
+2026-03-16T07:51:51.562556Z DEBUG frame: [RECV] Listen(ListenMessage { message: Message { mtype: Listen }, session_id: Some("d6rrd5slm6ji1occegj0"), state: Detect, mmod: None, text: Some("你好小智") })
+2026-03-16T07:51:53.755786Z DEBUG frame: [RECV] Listen(ListenMessage { message: Message { mtype: Listen }, session_id: Some("d6rrd5slm6ji1occegj0"), state: Start, mmod: Some(RealTime), text: None })
+2026-03-16T07:51:53.755847Z DEBUG frame: [RECV] Mcp(McpMessage { message: Message { mtype: Mcp }, payload: Response(JsonRpcResponse { jsonrpc: JsonRpcVersion2_0, id: Number(0), result: {"capabilities": Object {"tools": Object {}}, "protocolVersion": String("2024-11-05"), "serverInfo": Object {"name": String("lichuang-dev"), "version": String("2.2.4")}} }) })
+2026-03-16T07:51:53.755903Z DEBUG frame: [SEND] McpResult(McpRequest { message: Message { mtype: Mcp }, session_id: Some("d6rrd5slm6ji1occegj0"), payload: JsonRpcRequest { jsonrpc: JsonRpcVersion2_0, id: Number(1), request: Request { method: "tools/list", params: {}, extensions: Extensions } } })
+2026-03-16T07:51:53.759800Z TRACE frame: [RECV] Voice
+2026-03-16T07:51:53.759932Z DEBUG frame: [SEND] STTResult(SttMessage { message: Message { mtype: Stt }, session_id: Some("d6rrd5slm6ji1occegj0"), text: Some("你好小智") })
+2026-03-16T07:51:53.759949Z DEBUG frame: [SEND] TTSResult(TtsMessage { message: Message { mtype: Tts }, session_id: Some("d6rrd5slm6ji1occegj0"), state: Some(Start), text: None })
+2026-03-16T07:51:53.760358Z TRACE frame: [RECV] Voice
+2026-03-16T07:51:53.799160Z DEBUG frame: [RECV] Mcp(McpMessage { message: Message { mtype: Mcp }, payload: Response(JsonRpcResponse { jsonrpc: JsonRpcVersion2_0, id: Number(1), result: {"tools": Array [Object {"description": String("Provides the real-time information of the device, including the current status of the audio speaker, screen, battery, network, etc.\nUse this tool for: \n1. Answering questions about current condition (e.g. what is the current volume of the audio speaker?)\n2. As the first step to control the device (e.g. turn up / down the volume of the audio speaker, etc.)"), "inputSchema": Object {"properties": Object {}, "type": String("object")}, "name": String("self.get_device_status")}, Object {"description": String("Set the volume of the audio speaker. If the current volume is unknown, you must call `self.get_device_status` tool first and then call this tool."), "inputSchema": Object {"properties": Object {"volume": Object {"maximum": Number(100), "minimum": Number(0), "type": String("integer")}}, "required": Array [String("volume")], "type": String("object")}, "name": String("self.audio_speaker.set_volume")}, Object {"description": String("Set the brightness of the screen."), "inputSchema": Object {"properties": Object {"brightness": Object {"maximum": Number(100), "minimum": Number(0), "type": String("integer")}}, "required": Array [String("brightness")], "type": String("object")}, "name": String("self.screen.set_brightness")}, Object {"description": String("Set the theme of the screen. The theme can be `light` or `dark`."), "inputSchema": Object {"properties": Object {"theme": Object {"type": String("string")}}, "required": Array [String("theme")], "type": String("object")}, "name": String("self.screen.set_theme")}, Object {"description": String("Always remember you have a camera. If the user asks you to see something, use this tool to take a photo and then explain it.\nArgs:\n  `question`: The question that you want to ask about the photo.\nReturn:\n  A JSON object that provides the photo information."), "inputSchema": Object {"properties": Object {"question": Object {"type": String("string")}}, "required": Array [String("question")], "type": String("object")}, "name": String("self.camera.take_photo")}, Object {"description": String("End this conversation and enter WiFi configuration mode.\n**CAUTION** You must ask the user to confirm this action."), "inputSchema": Object {"properties": Object {}, "type": String("object")}, "name": String("self.system.reconfigure_wifi")}]} }) })
+2026-03-16T07:51:53.799222Z TRACE frame: [RECV] Voice
+2026-03-16T07:51:58.042580Z DEBUG frame: [SEND] LLMResult(LlmMessage { message: Message { mtype: Llm }, session_id: Some("d6rrd5slm6ji1occegj0"), emotion: Some("happy"), text: Some("🙂") })
+2026-03-16T07:51:58.042633Z DEBUG frame: [SEND] TTSResult(TtsMessage { message: Message { mtype: Tts }, session_id: Some("d6rrd5slm6ji1occegj0"), state: Some(SentenceStart), text: Some("你好！") })
+2026-03-16T07:51:58.042646Z TRACE frame: [SEND] Audio
+2026-03-16T07:51:58.052116Z TRACE frame: [RECV] Voice
+2026-03-16T07:51:59.079549Z DEBUG frame: [SEND] TTSResult(TtsMessage { message: Message { mtype: Tts }, session_id: Some("d6rrd5slm6ji1occegj0"), state: Some(SentenceEnd), text: None })
+2026-03-16T07:51:59.143718Z TRACE frame: [RECV] Voice
+2026-03-16T07:52:00.149167Z DEBUG frame: [SEND] LLMResult(LlmMessage { message: Message { mtype: Llm }, session_id: Some("d6rrd5slm6ji1occegj0"), emotion: Some("happy"), text: Some("🙂") })
+2026-03-16T07:52:00.149215Z DEBUG frame: [SEND] TTSResult(TtsMessage { message: Message { mtype: Tts }, session_id: Some("d6rrd5slm6ji1occegj0"), state: Some(SentenceStart), text: Some("有什么可以帮助你的吗？") })
+2026-03-16T07:52:00.149239Z TRACE frame: [SEND] Audio
+2026-03-16T07:52:00.171715Z TRACE frame: [RECV] Voice
+2026-03-16T07:52:03.632112Z DEBUG frame: [SEND] TTSResult(TtsMessage { message: Message { mtype: Tts }, session_id: Some("d6rrd5slm6ji1occegj0"), state: Some(SentenceEnd), text: None })
+2026-03-16T07:52:03.632139Z DEBUG frame: [SEND] TTSResult(TtsMessage { message: Message { mtype: Tts }, session_id: Some("d6rrd5slm6ji1occegj0"), state: Some(Stop), text: None })
+2026-03-16T07:52:03.659201Z TRACE frame: [RECV] Voice
+2026-03-16T07:52:34.559563Z DEBUG frame: [SEND] STTResult(SttMessage { message: Message { mtype: Stt }, session_id: Some("d6rrd5slm6ji1occegj0"), text: Some("現在幾點？") })
+2026-03-16T07:52:34.559627Z TRACE frame: [RECV] Voice
+2026-03-16T07:52:34.559627Z DEBUG frame: [SEND] TTSResult(TtsMessage { message: Message { mtype: Tts }, session_id: Some("d6rrd5slm6ji1occegj0"), state: Some(Start), text: None })
+2026-03-16T07:52:34.559757Z TRACE frame: [RECV] Voice
+2026-03-16T07:52:55.979754Z DEBUG frame: [SEND] LLMResult(LlmMessage { message: Message { mtype: Llm }, session_id: Some("d6rrd5slm6ji1occegj0"), emotion: Some("happy"), text: Some("🙂") })
+2026-03-16T07:52:55.979802Z DEBUG frame: [SEND] TTSResult(TtsMessage { message: Message { mtype: Tts }, session_id: Some("d6rrd5slm6ji1occegj0"), state: Some(SentenceStart), text: Some("现在是2026年3月16日，当前时间为上午15:52。") })
+2026-03-16T07:52:55.979840Z TRACE frame: [SEND] Audio
+2026-03-16T07:52:56.013138Z TRACE frame: [RECV] Voice
+2026-03-16T07:53:01.845134Z DEBUG frame: [SEND] TTSResult(TtsMessage { message: Message { mtype: Tts }, session_id: Some("d6rrd5slm6ji1occegj0"), state: Some(SentenceEnd), text: None })
+2026-03-16T07:53:01.845194Z DEBUG frame: [SEND] TTSResult(TtsMessage { message: Message { mtype: Tts }, session_id: Some("d6rrd5slm6ji1occegj0"), state: Some(Stop), text: None })
+2026-03-16T07:53:01.892041Z TRACE frame: [RECV] Voice
+* */
 /// listen voice by realtime mode and output the asr text result
-/// cargo test --test session_test -- test_chat_flow_listen_realtime --ignored --nocapture
+/// cargo test -F cuda --test session_test -- test_chat_flow_listen_realtime --exact --ignored --nocapture
 async fn test_chat_flow_listen_realtime() -> anyhow::Result<()> {
     tracing::subscriber::set_global_default(
         tracing_subscriber::fmt::Subscriber::builder()
             .compact()
-            .with_max_level(tracing::Level::DEBUG)
+            .with_max_level(tracing::Level::TRACE)
             .finish(),
     )
     .expect("Failed to set tracing subscriber");
@@ -300,22 +412,45 @@ async fn test_chat_flow_listen_realtime() -> anyhow::Result<()> {
         output.next().await.unwrap().unwrap(),
         FrameResult::TTSResult(..)
     ));
+    assert!(matches!(
+        output.next().await.unwrap().unwrap(),
+        FrameResult::LLMResult(..)
+    ));
+    assert!(matches!(
+        output.next().await.unwrap().unwrap(),
+        FrameResult::TTSResult(..)
+    ));
+    assert!(matches!(
+        output.next().await.unwrap().unwrap(),
+        FrameResult::AudioResult(..)
+    ));
+
+    let mut frame_result = output.next().await.unwrap().unwrap();
+    while let Some(data) = output.next().await {
+        let data = data.unwrap();
+        match data {
+            FrameResult::AudioResult(_audio_message) => {
+                continue;
+            }
+            _ => {
+                frame_result = data;
+                break;
+            }
+        }
+    }
+    debug!("{:?}", &frame_result);
+    assert!(matches!(frame_result, FrameResult::TTSResult(..)));
+
     info!("send voice");
+    info!("audio len = {}", audio.len());
     for n in 0..audio.len() {
         session
             .accept_frame(&Frame::Voice {
                 data: audio.get(n).unwrap(),
             })
             .await;
+        sleep(Duration::from_millis(60)).await;
     }
-    // let frame_result = output.next().await.unwrap().unwrap();
-    // debug!("{:?}", &frame_result);
-    // assert!(matches!(frame_result, FrameResult::STTResult(..)));
-
-    // let frame_result = output.next().await.unwrap().unwrap();
-    // debug!("{:?}", &frame_result);
-    // assert!(matches!(frame_result, FrameResult::LLMResult(..)));
-
     info!("send silent voice");
     // 16000Hz * 1 channel * 60 ms / 1000 = 960 samples -> frameSize
     // 60ms * 30 = 1800ms
@@ -326,6 +461,7 @@ async fn test_chat_flow_listen_realtime() -> anyhow::Result<()> {
                 data: vec![0u8; 960].as_ref(),
             })
             .await;
+        sleep(Duration::from_millis(60)).await;
     }
     assert!(matches!(
         output.next().await.unwrap().unwrap(),
@@ -353,51 +489,51 @@ async fn test_chat_flow_listen_realtime() -> anyhow::Result<()> {
             }
         }
     }
-    debug!("{:?}", &frame_result);
-    assert!(matches!(frame_result, FrameResult::TTSResult(..)));
-
     assert!(matches!(
-        output.next().await.unwrap().unwrap(),
-        FrameResult::LLMResult(..)
+        frame_result,
+        FrameResult::TTSResult(TtsMessage {
+            state: Some(TtsState::SentenceEnd),
+            ..
+        })
     ));
     assert!(matches!(
         output.next().await.unwrap().unwrap(),
-        FrameResult::TTSResult(..)
+        FrameResult::TTSResult(TtsMessage {
+            state: Some(TtsState::Stop),
+            ..
+        })
     ));
-    assert!(matches!(
-        output.next().await.unwrap().unwrap(),
-        FrameResult::AudioResult(..)
-    ));
-
-    let mut frame_result = output.next().await.unwrap().unwrap();
-    while let Some(data) = output.next().await {
-        let data = data.unwrap();
-        match data {
-            FrameResult::AudioResult(_audio_message) => {
-                continue;
-            }
-            _ => {
-                frame_result = data;
-                break;
-            }
-        }
-    }
-    debug!("{:?}", &frame_result);
-    assert!(matches!(frame_result, FrameResult::TTSResult(..)));
-    assert!(matches!(frame_result, FrameResult::TTSResult(..)));
-
-    let frame_result = output.next().await.unwrap().unwrap();
-    debug!("{:?}", &frame_result);
-    info!("send silent voice");
-    // 16000Hz * 1 channel * 60 ms / 1000 = 960 samples -> frameSize
-    // 60ms * 30 = 1800ms
-    // silent time = 1800ms > config setting
-    for _ in 0..30 {
+    for _ in 0..90 {
         session
             .accept_frame(&Frame::Voice {
                 data: vec![0u8; 960].as_ref(),
             })
             .await;
+        sleep(Duration::from_millis(60)).await;
+    }
+
+    while let Some(data) = output.next().await {
+        let data = data.unwrap();
+        if let FrameResult::TTSResult(tts_message) = data {
+            match tts_message.state {
+                Some(t) => {
+                    if t == TtsState::Stop {
+                        break;
+                    }
+                }
+                _ => (
+                //skip
+            ),
+            }
+        }
+    }
+    for _ in 0..90 {
+        session
+            .accept_frame(&Frame::Voice {
+                data: vec![0u8; 960].as_ref(),
+            })
+            .await;
+        sleep(Duration::from_millis(60)).await;
     }
 
     info!("close result checking");
@@ -406,7 +542,7 @@ async fn test_chat_flow_listen_realtime() -> anyhow::Result<()> {
         FrameResult::CloseResult
     ));
 
-    // session.stop().await;
+    session.stop().await;
     let _ = &state.conn.close().await?;
     tear_down(&container).await;
     Ok(())
@@ -415,7 +551,7 @@ async fn test_chat_flow_listen_realtime() -> anyhow::Result<()> {
 #[tokio::test]
 #[ignore]
 /// listen voice by realtime mode and output the asr text result
-/// cargo test --test session_test -- test_chat_flow_listen_realtime_silent_voice_connection_timeout --ignored --nocapture
+/// cargo test --test session_test -- test_chat_flow_listen_realtime_silent_voice_connection_timeout --exact --ignored --nocapture
 async fn test_chat_flow_listen_realtime_silent_voice_connection_timeout() -> anyhow::Result<()> {
     tracing::subscriber::set_global_default(
         tracing_subscriber::fmt::Subscriber::builder()
@@ -495,11 +631,10 @@ async fn test_chat_flow_listen_realtime_silent_voice_connection_timeout() -> any
     Ok(())
 }
 
-// TODO:
 #[tokio::test]
 #[ignore]
 /// get text message and output the asr text result
-/// cargo test --test session_test -- test_chat_flow_handle_text_message_multiple_time --ignored --nocapture
+/// cargo test --test session_test -- test_chat_flow_handle_text_message_multiple_time --exact --ignored --nocapture
 async fn test_chat_flow_handle_text_message_multiple_time() -> anyhow::Result<()> {
     tracing::subscriber::set_global_default(
         tracing_subscriber::fmt::Subscriber::builder()
@@ -592,12 +727,11 @@ async fn test_chat_flow_handle_text_message_multiple_time() -> anyhow::Result<()
     Ok(())
 }
 
-// TODO:
 #[tokio::test]
 #[traced_test]
 #[ignore]
 /// get text message and output the asr text result
-/// cargo test --test session_test -- test_chat_flow_handle_text_message --ignored --nocapture
+/// cargo test --test session_test -- test_chat_flow_handle_text_message --exact --ignored --nocapture
 async fn test_chat_flow_handle_text_message() -> anyhow::Result<()> {
     let (mut session, container, state) = create_session().await?;
     let session_id = session.id.clone();
@@ -652,12 +786,11 @@ async fn test_chat_flow_handle_text_message() -> anyhow::Result<()> {
     Ok(())
 }
 
-// TODO:
 #[tokio::test]
 #[traced_test]
 #[ignore]
 /// when a round running and has a break event,the output stream will stop the original output
-/// cargo test --test session_test -- test_chat_flow_break --ignored --nocapture
+/// cargo test --test session_test -- test_chat_flow_break --exact --ignored --nocapture
 async fn test_chat_flow_break() -> anyhow::Result<()> {
     let (mut session, container, state) = create_session().await?;
     let session_id = session.id.clone();
@@ -725,13 +858,11 @@ async fn test_chat_flow_break() -> anyhow::Result<()> {
     Ok(())
 }
 
-// TODO:
 #[tokio::test]
-#[traced_test]
 #[ignore]
 /// Shell command:
 /// ``` shell
-/// cargo test --test session_test -- test_mcp_flow_server_client --ignored --nocapture
+/// cargo test --test session_test -- test_mcp_flow_server_client --exact --ignored --nocapture
 /// ```
 /// 1. [Device -> Server] hello request
 /// 2. [Server -> Device] hello response
@@ -757,6 +888,13 @@ async fn test_chat_flow_break() -> anyhow::Result<()> {
 /// 5.1.1. [Server -> Device] llm text response
 /// 5.1.2. [Server -> Device] tts response
 async fn test_mcp_flow_server_client() -> anyhow::Result<()> {
+    tracing::subscriber::set_global_default(
+        tracing_subscriber::fmt::Subscriber::builder()
+            .compact()
+            .with_max_level(tracing::Level::TRACE)
+            .finish(),
+    )
+    .expect("Failed to set tracing subscriber");
     let device_mcp_tools_list_response: &'static str = r#"
 [
   {
@@ -981,13 +1119,12 @@ async fn test_mcp_flow_server_client() -> anyhow::Result<()> {
     Ok(())
 }
 
-// TODO:
 #[tokio::test]
 #[traced_test]
 #[ignore]
 /// Shell command:
 /// ``` shell
-/// cargo test --test session_test -- test_mcp_flow_device_client --ignored --nocapture
+/// cargo test -F cuda --test session_test -- test_mcp_flow_device_client --exact --ignored --nocapture
 /// ```
 async fn test_mcp_flow_device_client() -> anyhow::Result<()> {
     let device_mcp_tools_list_response: &'static str = r#"
@@ -1061,35 +1198,7 @@ async fn test_mcp_flow_device_client() -> anyhow::Result<()> {
     let request_id = AtomicI64::new(0);
     let (mut session, container, state) = create_session().await?;
     session.start().await?;
-    // let session_id = session.id.clone();
     let mut output = session.output_frame().await;
-    // let join_handle = tokio::spawn(async move {
-    //     while let Some(data) = output.next().await {
-    //         debug!("session id = {}, data = {:?}", session_id, data);
-    //         match data {
-    //             Ok(frame_result) => match frame_result {
-    //                 FrameResult::HelloResult(_hello_message) => {}
-    //                 FrameResult::STTResult(_stt_message) => {}
-    //                 FrameResult::LLMResult(_llm_message) => {}
-    //                 FrameResult::TTSResult(tts_message) => {
-    //                     let state = tts_message.state;
-    //                     if let Some(state) = state
-    //                         && TtsState::Stop == state
-    //                     {
-    //                         return;
-    //                     }
-    //                 }
-    //                 FrameResult::AudioResult(_audio_message) => {}
-    //                 FrameResult::McpResult(..) => {}
-    //                 FrameResult::CloseResult => {}
-    //             },
-    //             Err(e) => {
-    //                 error!("{:?}", e);
-    //                 break;
-    //             }
-    //         }
-    //     }
-    // });
     session
         .accept_frame(&Frame::Hello(HelloMessage {
             features: Some(Feature {
@@ -1304,13 +1413,11 @@ async fn create_session()
             }))
         )
             .with_tts(Arc::new(TtsFactory::create_model(&TtsConfig {
-            model: Some(TtsModel::Voxcpm),
-            path: Some(String::from("data/tts/model/openbmb/VoxCPM-0.5B/")),
-            reference_prompt_text: Some(String::from(
-                "一定被灰太狼给吃了，我已经为他准备好了花圈了",
-            )),
-            reference_prompt_wav_path: Some(String::from("file://data/tts/reference/voice_05.wav")),
-        }, &audio_config).await.unwrap()))
+                model: Some(TtsModel::Kokoro),
+                path: Some(String::from("data/tts/model/mzdk100/kokoro/")),
+                ..Default::default()
+                }
+            , &audio_config).await.unwrap()))
         .with_mcp_host(Arc::new(Mutex::new(mcp_host)))
         .with_config(Arc::new(SessionConfig {
             close_connection_no_voice_time: Some(3000),
@@ -1318,7 +1425,7 @@ async fn create_session()
             system_prompt: Some(String::from(
                 "你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等。",
             )),
-            max_prompt_len: Some(3000),
+            max_prompt_len: Some(6000),
         }))
         .with_audio_config(audio_config.clone())
         .build();

@@ -279,6 +279,7 @@ dependencies = [
  "rand 0.10.0",
  "rand_distr 0.6.0",
  "regex",
+ "resampler",
  "rig-core",
  "rmcp",
  "ruma",
@@ -6903,6 +6904,12 @@ dependencies = [
  "reqwest 0.12.28",
  "thiserror 1.0.69",
 ]
+
+[[package]]
+name = "resampler"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "80f5ab61459422b1a350caae1aadef48ebae234b12e80248e9ba9557018ef060"
 
 [[package]]
 name = "rfc6979"
