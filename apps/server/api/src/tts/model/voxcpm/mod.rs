@@ -1,10 +1,12 @@
 use crate::common::ModelError;
 use crate::tts::{Tts, TtsData, TtsError, encode_sample_to_tts_packet};
+use aha::models::voxcpm::config::VoxCPMConfig;
 use aha::models::voxcpm::generate::VoxCPMGenerate;
 use async_trait::async_trait;
 use candle_core::Tensor;
 use futures::Stream;
 use futures::executor::block_on;
+use resampler::{ResamplerFft, SampleRate};
 use std::thread;
 use std::{pin::Pin, sync::Arc};
 use tokio::sync::{Mutex, mpsc::channel};
@@ -14,6 +16,7 @@ use tracing::error;
 
 pub struct TtsVoxCPM {
     instance: Arc<Mutex<VoxCPMGenerate>>,
+    gen_sample_rate: u32,
     encoder: Arc<Mutex<opus::Encoder>>,
     encode_sample_rate: u32,
     encode_channel: u32,
@@ -34,6 +37,14 @@ impl TtsVoxCPM {
         reference_prompt_wav_path: Option<String>,
     ) -> Result<Self, anyhow::Error> {
         let instance = VoxCPMGenerate::init(path, None, None)?;
+        let config_path = path.to_string() + "/config.json";
+        let config: VoxCPMConfig = serde_json::from_slice(&std::fs::read(config_path)?)?;
+        let gen_sample_rate = {
+            match config.audio_vae_config {
+                Some(config) => config.sample_rate,
+                None => 16000,
+            }
+        };
         let encoder = opus::Encoder::new(
             encode_sample_rate,
             opus::Channels::Mono,
@@ -42,6 +53,7 @@ impl TtsVoxCPM {
         Ok(Self {
             instance: Arc::new(Mutex::new(instance)),
             encoder: Arc::new(Mutex::new(encoder)),
+            gen_sample_rate: gen_sample_rate as u32,
             encode_sample_rate,
             encode_channel,
             encode_frame_duration,
@@ -67,6 +79,7 @@ impl Tts for TtsVoxCPM {
         let encode_frame_duration = self.encode_frame_duration;
         let reference_prompt_text = self.reference_prompt_text.clone();
         let reference_prompt_wav_path = self.reference_prompt_wav_path.clone();
+        let gen_sample_rate = self.gen_sample_rate;
         thread::spawn(move || {
             block_on(async move {
                 while let Some(text) = text_stream.next().await {
@@ -85,14 +98,76 @@ impl Tts for TtsVoxCPM {
                                     let sample = tensor_to_sample(&tensor);
                                     match sample {
                                         Ok(sample) => {
+                                            let gen_sample_rate =
+                                                match SampleRate::try_from(gen_sample_rate) {
+                                                    Ok(sample_rate) => sample_rate,
+                                                    Err(_) => {
+                                                        let msg = format!(
+                                                            "encode sample rate convert failure,{}",
+                                                            encode_sample_rate
+                                                        );
+                                                        error!(msg);
+                                                        if let Err(e) = tx
+                                                            .send(Err(TtsError::Encode(msg)))
+                                                            .await
+                                                        {
+                                                            error!("send error failure = {}", e);
+                                                        }
+                                                        return;
+                                                    }
+                                                };
+
+                                            let sample_rate =
+                                                match SampleRate::try_from(encode_sample_rate) {
+                                                    Ok(sample_rate) => sample_rate,
+                                                    Err(_) => {
+                                                        let msg = format!(
+                                                            "encode sample rate convert failure,{}",
+                                                            encode_sample_rate
+                                                        );
+                                                        error!(msg);
+                                                        if let Err(e) = tx
+                                                            .send(Err(TtsError::Encode(msg)))
+                                                            .await
+                                                        {
+                                                            error!("send error failure = {}", e);
+                                                        }
+                                                        return;
+                                                    }
+                                                };
+                                            // resample
+                                            let mut resampler = ResamplerFft::new(
+                                                encode_channel as usize,
+                                                gen_sample_rate,
+                                                sample_rate,
+                                            );
+                                            let input_size = resampler.chunk_size_input();
+                                            let output_size = resampler.chunk_size_output();
+                                            let mut resample = vec![];
+                                            let iter = sample.chunks(input_size);
+                                            for chunk in iter {
+                                                let mut output = vec![0.0f32; output_size];
+                                                let chunk: &[f32] = {
+                                                    if chunk.len() != input_size {
+                                                        let mut chunk = chunk.to_vec();
+                                                        chunk.resize(input_size, 0.0f32);
+                                                        &chunk.to_owned()[..]
+                                                    } else {
+                                                        chunk
+                                                    }
+                                                };
+                                                resampler.resample(chunk, &mut output).unwrap();
+                                                resample.append(&mut output);
+                                            }
                                             let mut encoder = encoder.lock().await;
                                             let audio = encode_sample_to_tts_packet(
-                                                sample,
+                                                resample,
                                                 &mut encoder,
                                                 encode_sample_rate,
                                                 encode_channel,
                                                 encode_frame_duration,
                                             );
+
                                             let data = TtsData {
                                                 audio: Some(audio),
                                                 text: text.to_string(),
