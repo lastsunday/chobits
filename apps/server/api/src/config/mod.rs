@@ -134,11 +134,11 @@ pub struct Config {
     #[serde(default = "default_vad_num_threads")]
     pub vad_num_threads: Option<i32>,
 
-    /// default: voxcpm
+    /// default: kokoro
     #[serde(default = "default_tts_model")]
     pub tts_model: Option<TtsModel>,
 
-    /// default: data/tts/model/openbmb/VoxCPM-0.5B/
+    /// default: data/tts/model/mzdk100/kokoro/
     #[serde(default = "default_tts_path")]
     pub tts_path: Option<String>,
 

@@ -91,11 +91,11 @@
 
 # This item is undocumented. Please contribute documentation for it.
 #
-#tts_model = voxcpm
+#tts_model = kokoro
 
 # This item is undocumented. Please contribute documentation for it.
 #
-#tts_path = data/tts/model/openbmb/VoxCPM-0.5B/
+#tts_path = data/tts/model/mzdk100/kokoro/
 
 # This item is undocumented. Please contribute documentation for it.
 #
