@@ -17,7 +17,6 @@ use service::chobits::message::listen::ListenState;
 use service::chobits::message::{AudioFormat, Transport};
 use std::collections::VecDeque;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 use tokio::sync::mpsc::{Sender, channel};
 use tokio::sync::{Mutex, Notify};
 use tokio_stream::wrappers::ReceiverStream;

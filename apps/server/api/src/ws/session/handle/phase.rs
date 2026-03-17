@@ -63,8 +63,19 @@ impl Session {
                     ListenState::Detect => {
                         let mode = &listen_message.mmod;
                         match mode {
-                            Some(_mode) => {
-                                //skip
+                            Some(mode) => {
+                                match mode {
+                                    service::chobits::message::listen::ListenMode::Auto => {
+                                        self.phase = Phase::Listen(ListenMode::Auto);
+                                    }
+                                    service::chobits::message::listen::ListenMode::Manual => {
+                                        self.phase = Phase::Listen(ListenMode::Manual);
+                                    }
+                                    service::chobits::message::listen::ListenMode::RealTime => {
+                                        self.phase = Phase::Listen(ListenMode::RealTime);
+                                    }
+                                }
+                                Box::pin(self.accept_frame(frame)).await;
                             }
                             None => {
                                 // eps32-c3 default listen mode is none
