@@ -29,7 +29,7 @@ importers:
         version: 9.39.2
       '@monodon/rust':
         specifier: ^2.3.0
-        version: 2.3.0(@napi-rs/cli@3.0.0-alpha.77(@emnapi/runtime@1.9.0)(@types/node@20.19.33))(nx@22.3.3(@swc-node/register@1.11.1(@swc/core@1.15.11(@swc/helpers@0.5.18))(@swc/types@0.1.25)(typescript@5.9.3))(@swc/core@1.15.11(@swc/helpers@0.5.18)))
+        version: 2.3.0(@napi-rs/cli@3.0.0-alpha.77(@emnapi/core@1.8.1)(@emnapi/runtime@1.9.0)(@types/node@20.19.33))(nx@22.3.3(@swc-node/register@1.11.1(@swc/core@1.15.11(@swc/helpers@0.5.18))(@swc/types@0.1.25)(typescript@5.9.3))(@swc/core@1.15.11(@swc/helpers@0.5.18)))
       '@nx/devkit':
         specifier: 22.3.3
         version: 22.3.3(nx@22.3.3(@swc-node/register@1.11.1(@swc/core@1.15.11(@swc/helpers@0.5.18))(@swc/types@0.1.25)(typescript@5.9.3))(@swc/core@1.15.11(@swc/helpers@0.5.18)))
@@ -2583,6 +2583,12 @@ packages:
 
   '@napi-rs/wasm-runtime@1.1.1':
     resolution: {integrity: sha512-p64ah1M1ld8xjWv3qbvFwHiFVWrq1yFvV4f7w+mzaqiR4IlSgkqhcRdHwsGgomwzBH51sRY4NEowLxnaBjcW/A==}
+
+  '@napi-rs/wasm-runtime@1.1.2':
+    resolution: {integrity: sha512-sNXv5oLJ7ob93xkZ1XnxisYhGYXfaG9f65/ZgYuAu3qt7b3NadcOEhLvx28hv31PgX8SZJRYrAIPQilQmFpLVw==}
+    peerDependencies:
+      '@emnapi/core': ^1.7.1
+      '@emnapi/runtime': ^1.7.1
 
   '@napi-rs/wasm-tools-android-arm-eabi@0.0.3':
     resolution: {integrity: sha512-T2tme8w5jZ/ZCjJurqNtKCxYtGoDjW9v2rn1bfI60ewCfkYXNpxrTURdkOib85sz+BcwmOfXn0enbg5W9KohoQ==}
@@ -8158,8 +8164,8 @@ packages:
     resolution: {integrity: sha512-gvVijfZvn7R+2qyPX8mAuKcFGDf6Nc61GdvGafQsHL0sBIxfKzA+usWn4GFC/bk+QdwPUD4kWFJLhElipq+0VA==}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
 
-  lodash-es@4.17.23:
-    resolution: {integrity: sha512-kVI48u3PZr38HdYz98UmfPnXl2DXrpdctLrFLCd3kOx1xUkOmpFPx7gCWWM5MPkL/fD8zb+Ph0QzjGFs4+hHWg==}
+  lodash-es@4.18.1:
+    resolution: {integrity: sha512-J8xewKD/Gk22OZbhpOVSwcs60zhd95ESDwezOFuA3/099925PdHJ7OFHNTGtajL3AlZkykD32HykiMo+BIBI8A==}
 
   lodash.camelcase@4.3.0:
     resolution: {integrity: sha512-TwuEnCnxbc3rAvhf/LbG7tJUDzhqXyFnv3dtzLOPgCG/hODL7WFnsbwktkD7yUV0RrreP/l1PALq/YSg6VvjlA==}
@@ -13874,10 +13880,10 @@ snapshots:
       '@module-federation/runtime': 2.0.0
       '@module-federation/sdk': 2.0.0
 
-  '@monodon/rust@2.3.0(@napi-rs/cli@3.0.0-alpha.77(@emnapi/runtime@1.9.0)(@types/node@20.19.33))(nx@22.3.3(@swc-node/register@1.11.1(@swc/core@1.15.11(@swc/helpers@0.5.18))(@swc/types@0.1.25)(typescript@5.9.3))(@swc/core@1.15.11(@swc/helpers@0.5.18)))':
+  '@monodon/rust@2.3.0(@napi-rs/cli@3.0.0-alpha.77(@emnapi/core@1.8.1)(@emnapi/runtime@1.9.0)(@types/node@20.19.33))(nx@22.3.3(@swc-node/register@1.11.1(@swc/core@1.15.11(@swc/helpers@0.5.18))(@swc/types@0.1.25)(typescript@5.9.3))(@swc/core@1.15.11(@swc/helpers@0.5.18)))':
     dependencies:
       '@ltd/j-toml': 1.38.0
-      '@napi-rs/cli': 3.0.0-alpha.77(@emnapi/runtime@1.9.0)(@types/node@20.19.33)
+      '@napi-rs/cli': 3.0.0-alpha.77(@emnapi/core@1.8.1)(@emnapi/runtime@1.9.0)(@types/node@20.19.33)
       '@nx/devkit': 20.8.4(nx@22.3.3(@swc-node/register@1.11.1(@swc/core@1.15.11(@swc/helpers@0.5.18))(@swc/types@0.1.25)(typescript@5.9.3))(@swc/core@1.15.11(@swc/helpers@0.5.18)))
       chalk: 4.1.2
       npm-run-path: 4.0.1
@@ -13886,17 +13892,17 @@ snapshots:
     transitivePeerDependencies:
       - nx
 
-  '@napi-rs/cli@3.0.0-alpha.77(@emnapi/runtime@1.9.0)(@types/node@20.19.33)':
+  '@napi-rs/cli@3.0.0-alpha.77(@emnapi/core@1.8.1)(@emnapi/runtime@1.9.0)(@types/node@20.19.33)':
     dependencies:
       '@inquirer/prompts': 7.10.1(@types/node@20.19.33)
-      '@napi-rs/cross-toolchain': 0.0.19
+      '@napi-rs/cross-toolchain': 0.0.19(@emnapi/core@1.8.1)(@emnapi/runtime@1.9.0)
       '@napi-rs/wasm-tools': 0.0.3
       '@octokit/rest': 21.1.1
       clipanion: 4.0.0-rc.4(typanion@3.14.0)
       colorette: 2.0.20
       debug: 4.4.3
       js-yaml: 4.1.1
-      lodash-es: 4.17.23
+      lodash-es: 4.18.1
       semver: 7.7.4
       toml: 3.0.0
       typanion: 3.14.0
@@ -13904,6 +13910,7 @@ snapshots:
     optionalDependencies:
       '@emnapi/runtime': 1.9.0
     transitivePeerDependencies:
+      - '@emnapi/core'
       - '@napi-rs/cross-toolchain-arm64-target-aarch64'
       - '@napi-rs/cross-toolchain-arm64-target-armv7'
       - '@napi-rs/cross-toolchain-arm64-target-x86_64'
@@ -13913,12 +13920,14 @@ snapshots:
       - '@types/node'
       - supports-color
 
-  '@napi-rs/cross-toolchain@0.0.19':
+  '@napi-rs/cross-toolchain@0.0.19(@emnapi/core@1.8.1)(@emnapi/runtime@1.9.0)':
     dependencies:
-      '@napi-rs/lzma': 1.4.5
+      '@napi-rs/lzma': 1.4.5(@emnapi/core@1.8.1)(@emnapi/runtime@1.9.0)
       '@napi-rs/tar': 0.1.5
       debug: 4.4.3
     transitivePeerDependencies:
+      - '@emnapi/core'
+      - '@emnapi/runtime'
       - supports-color
 
   '@napi-rs/lzma-android-arm-eabi@1.4.5':
@@ -13960,9 +13969,12 @@ snapshots:
   '@napi-rs/lzma-linux-x64-musl@1.4.5':
     optional: true
 
-  '@napi-rs/lzma-wasm32-wasi@1.4.5':
+  '@napi-rs/lzma-wasm32-wasi@1.4.5(@emnapi/core@1.8.1)(@emnapi/runtime@1.9.0)':
     dependencies:
-      '@napi-rs/wasm-runtime': 1.1.1
+      '@napi-rs/wasm-runtime': 1.1.2(@emnapi/core@1.8.1)(@emnapi/runtime@1.9.0)
+    transitivePeerDependencies:
+      - '@emnapi/core'
+      - '@emnapi/runtime'
     optional: true
 
   '@napi-rs/lzma-win32-arm64-msvc@1.4.5':
@@ -13974,7 +13986,7 @@ snapshots:
   '@napi-rs/lzma-win32-x64-msvc@1.4.5':
     optional: true
 
-  '@napi-rs/lzma@1.4.5':
+  '@napi-rs/lzma@1.4.5(@emnapi/core@1.8.1)(@emnapi/runtime@1.9.0)':
     optionalDependencies:
       '@napi-rs/lzma-android-arm-eabi': 1.4.5
       '@napi-rs/lzma-android-arm64': 1.4.5
@@ -13989,10 +14001,13 @@ snapshots:
       '@napi-rs/lzma-linux-s390x-gnu': 1.4.5
       '@napi-rs/lzma-linux-x64-gnu': 1.4.5
       '@napi-rs/lzma-linux-x64-musl': 1.4.5
-      '@napi-rs/lzma-wasm32-wasi': 1.4.5
+      '@napi-rs/lzma-wasm32-wasi': 1.4.5(@emnapi/core@1.8.1)(@emnapi/runtime@1.9.0)
       '@napi-rs/lzma-win32-arm64-msvc': 1.4.5
       '@napi-rs/lzma-win32-ia32-msvc': 1.4.5
       '@napi-rs/lzma-win32-x64-msvc': 1.4.5
+    transitivePeerDependencies:
+      - '@emnapi/core'
+      - '@emnapi/runtime'
 
   '@napi-rs/nice-android-arm-eabi@1.1.1':
     optional: true
@@ -14159,6 +14174,13 @@ snapshots:
     dependencies:
       '@emnapi/core': 1.8.1
       '@emnapi/runtime': 1.8.1
+      '@tybys/wasm-util': 0.10.1
+    optional: true
+
+  '@napi-rs/wasm-runtime@1.1.2(@emnapi/core@1.8.1)(@emnapi/runtime@1.9.0)':
+    dependencies:
+      '@emnapi/core': 1.8.1
+      '@emnapi/runtime': 1.9.0
       '@tybys/wasm-util': 0.10.1
     optional: true
 
@@ -21391,7 +21413,7 @@ snapshots:
     dependencies:
       p-locate: 6.0.0
 
-  lodash-es@4.17.23: {}
+  lodash-es@4.18.1: {}
 
   lodash.camelcase@4.3.0: {}
 
