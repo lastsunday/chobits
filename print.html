@@ -1,0 +1,1145 @@
+<!DOCTYPE HTML>
+<html lang="zh" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Chobits</title>
+        <meta name="robots" content="noindex">
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="favicon-8114d1fc.png">
+        <link rel="stylesheet" href="css/variables-8adf115d.css">
+        <link rel="stylesheet" href="css/general-2459343d.css">
+        <link rel="stylesheet" href="css/chrome-ae938929.css">
+        <link rel="stylesheet" href="css/print-9e4910d8.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="fonts/fonts-9644e21d.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="ayu-highlight-3fdfc3ac.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "searchindex-c5c42b1f.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc-d4d8851c.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        </ul>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Chobits</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content">
+                    <main>
+                        <h1 id="chobits"><a class="header" href="#chobits">Chobits</a></h1>
+<blockquote class="blockquote-tag blockquote-tag-warning">
+<p class="blockquote-tag-title"><svg viewbox="0 0 16 16" width="18" height="18"><path d="M6.457 1.047c.659-1.234 2.427-1.234 3.086 0l6.082 11.378A1.75 1.75 0 0 1 14.082 15H1.918a1.75 1.75 0 0 1-1.543-2.575Zm1.763.707a.25.25 0 0 0-.44 0L1.698 13.132a.25.25 0 0 0 .22.368h12.164a.25.25 0 0 0 .22-.368Zm.53 3.996v2.5a.75.75 0 0 1-1.5 0v-2.5a.75.75 0 0 1 1.5 0ZM9 11a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"></path></svg>Warning</p>
+<p>This project is being developed,all the things is not stable.</p>
+</blockquote>
+<p><a href="https://github.com/lastsunday/chobits/actions/workflows/build-server.yml"><img src="https://github.com/lastsunday/chobits/actions/workflows/build-server.yml/badge.svg" alt="build-server"></a><a href="https://github.com/lastsunday/chobits/releases"><img src="https://img.shields.io/github/v/release/lastsunday/chobits?logo=docker" alt="docker"></a></p>
+<h2 id="purpose"><a class="header" href="#purpose">Purpose</a></h2>
+<ul>
+<li>
+<p>To learn the rust programming language,voice interaction and large language model.</p>
+</li>
+<li>
+<p>To make an self contained chatbot(self host all component,eg: llm,tts etc..), like <a href="https://github.com/78/xiaozhi-esp32">xiaozhi-esp32</a> with self host server.</p>
+</li>
+</ul>
+<h2 id="further-information"><a class="header" href="#further-information">Further information</a></h2>
+<details>
+<summary>Looking for an overview of the interface? Check it out!</summary>
+<h3 id="loginregister-page"><a class="header" href="#loginregister-page">Login/Register Page</a></h3>
+<p><strong><em>TODO</em></strong></p>
+<h3 id="user-dashboard"><a class="header" href="#user-dashboard">User Dashboard</a></h3>
+<p><strong><em>TODO</em></strong></p>
+</details>
+<h2 id="feature"><a class="header" href="#feature">Feature</a></h2>
+<ul>
+<li><input disabled="" type="checkbox" checked=""> Connection: websocket</li>
+<li><input disabled="" type="checkbox" checked=""> Voice interaction: VAD,ASR,TTS</li>
+<li><input disabled="" type="checkbox" checked=""> Chat: LLM</li>
+<li><input disabled="" type="checkbox" checked=""> MCP: self host/remote server mcp,device mcp</li>
+<li><input disabled="" type="checkbox"> Backend
+<ol>
+<li>home page(WIP)</li>
+<li>admin console(WIP)</li>
+<li>simulation deivce in web(WIP)</li>
+</ol>
+</li>
+<li><input disabled="" type="checkbox"> Deploy: bin(WIP),docker(WIP)</li>
+<li><input disabled="" type="checkbox"> Compatible devices
+<ol>
+<li><a href="https://github.com/78/xiaozhi-esp32">xiaozhi-esp32</a>(WIP)</li>
+<li>chobits(cross platform app,create by flutter)(WIP)</li>
+</ol>
+</li>
+</ul>
+<h2 id="system-requirements"><a class="header" href="#system-requirements">System Requirements</a></h2>
+<p><em>TODO</em></p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="guide"><a class="header" href="#guide">Guide</a></h1>
+<p><em>TODO</em></p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="quickstart"><a href="#quickstart" class="header">QuickStart</a></h1>
+<h3 id="development"><a class="header" href="#development">Development</a></h3>
+<h4 id="appsserver"><a class="header" href="#appsserver">apps/server</a></h4>
+<pre><code class="language-shell">pnpm i
+pnpm exec nx run @chobits/server-ui:build
+./apps/server/script/download_model.sh
+# using cuda: pnpm nx run chobits-server:dev_cuda
+pnpm nx run chobits-server:dev
+</code></pre>
+<ul>
+<li>Access home page <a href="http://127.0.0.1:3000">http://127.0.0.1:3000</a></li>
+<li>Access admin console <a href="http://127.0.0.1:3000/login">http://127.0.0.1:3000/login</a>
+<ul>
+<li>default account: root/Change_Me</li>
+</ul>
+</li>
+<li>Access api documentation <a href="http://127.0.0.1:3000/docs">http://127.0.0.1:3000/docs</a></li>
+<li>Access device test page <a href="http://127.0.0.1:3000/test/device/test_page.html">http://127.0.0.1:3000/test/device/test_page.html</a></li>
+<li>Client setting
+<ul>
+<li>ota url
+<a href="http://127.0.0.1:3000/api/ota/">http://127.0.0.1:3000/api/ota/</a></li>
+<li>ws url
+<a href="ws://127.0.0.1:3000/chobits/v1/">ws://127.0.0.1:3000/chobits/v1/</a></li>
+</ul>
+</li>
+</ul>
+<h4 id="appsserver-ui"><a class="header" href="#appsserver-ui">apps/server-ui</a></h4>
+<pre><code class="language-shell">pnpm i
+pnpm exec nx run @chobits/server-ui:dev
+</code></pre>
+<h4 id="appsapp"><a class="header" href="#appsapp">apps/app</a></h4>
+<p><strong><em>TODO</em></strong></p>
+<h3 id="building"><a class="header" href="#building">Building</a></h3>
+<p><strong><em>TODO</em></strong></p>
+<h3 id="using"><a class="header" href="#using">Using</a></h3>
+<p><strong><em>TODO</em></strong></p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="development-1"><a class="header" href="#development-1">Development</a></h1>
+<h2 id="file-structure"><a class="header" href="#file-structure">File structure</a></h2>
+<p><em>TODO</em></p>
+<h2 id="chat-flow"><a class="header" href="#chat-flow">Chat Flow</a></h2>
+<pre class="mermaid">flowchart TB
+  subgraph Device
+    direction TB
+    DeviceSession[Device Session] --&gt; DeviceMCPServer[Device MCP Server]
+    DeviceMCPServer .-&gt; DeviceSession
+  end
+  WebSocket
+    subgraph Server
+    direction LR
+    ServerSession[Server Session]
+    ServerMCPHost[Server MCP Host]
+    ServerMCPClient[Server MCP Client]
+    ServerMCPServer[Server MCP Server]
+    RemoteServerMCPServer[Remote Server MCP Server]
+    VAD
+    ASR
+    LLM
+    TTS
+
+    ServerSession --&gt; ServerMCPHost
+    ServerMCPHost --&gt; ServerMCPClient
+    ServerMCPClient --&gt; ServerMCPServer
+    ServerMCPServer .-&gt; ServerMCPClient
+    ServerMCPClient --&gt; RemoteServerMCPServer
+    RemoteServerMCPServer .-&gt; ServerMCPClient
+    ServerMCPClient .-&gt; ServerMCPHost
+    ServerMCPHost .-&gt; ServerSession
+
+    ServerSession --&gt; VAD
+    VAD --&gt; ASR
+    ASR --&gt; LLM
+    LLM --&gt; ServerMCPHost
+    ServerMCPHost .-&gt; LLM
+    LLM --&gt; TTS
+    TTS .-&gt; ServerSession
+  end
+  subgraph Transport
+    WebSocket
+  end
+
+  DeviceSession &lt;--&gt; WebSocket
+  WebSocket &lt;--&gt; ServerSession
+</pre>
+
+<h3 id="握手阶段"><a class="header" href="#握手阶段">握手阶段</a></h3>
+<pre class="mermaid">sequenceDiagram
+    autonumber
+    Device Session -&gt;&gt; Server Session: 1. websocket connect request
+    Server Session --&gt;&gt; Device Session: 2. websocket connect response
+    Device Session -&gt;&gt; Server Session: 3. hello message request
+    Server Session --&gt;&gt; Device Session: 4. hello message response
+    alt Hello message response has mcp = true
+        Server Session -&gt;&gt; Device Session: 5. mcp initialize message request
+        Device Session --&gt;&gt; Server Session: 6. mcp initialize message response
+        Server Session -&gt;&gt; Device Session: 7. mcp tools list message request
+        Device Session --&gt;&gt; Server Session: 8. mcp tools list message response
+        loop Tools list message response has next cursor
+            Server Session -&gt;&gt; Device Session: 7. mcp tools list message request
+            Device Session --&gt;&gt; Server Session: 8. mcp tools list message response
+        end
+    end
+</pre>
+
+<h3 id="通讯阶段"><a class="header" href="#通讯阶段">通讯阶段</a></h3>
+<pre class="mermaid">sequenceDiagram
+    autonumber
+    participant DeviceSession as Device Session
+    participant ServerSession as Server Session
+    DeviceSession -&gt;&gt; ServerSession: audio data
+    DeviceSession -&gt;&gt; ServerSession: listen(detect) message
+    ServerSession --&gt;&gt; DeviceSession: stt message
+    DeviceSession -&gt;&gt; ServerSession: listen(start) message
+    loop
+      DeviceSession -&gt;&gt; ServerSession: audio data
+      break when no voice timeout
+        ServerSession -&gt;&gt; DeviceSession: disconnect
+      end
+      par
+        ServerSession -&gt;&gt; ServerSession: vad handle
+        opt if voice silence timeout
+          ServerSession -&gt;&gt; ServerSession: send main handle stop single
+        end
+      and
+        opt if voice silence timeout
+          note right of ServerSession: when recv main handle stop single to exit following logic
+          ServerSession -&gt;&gt; ServerSession: asr handle
+          ServerSession -&gt;&gt; ServerSession: llm handle
+          loop if last llm messages is tools call response
+            ServerSession -&gt;&gt; ServerSession: mcp handle
+            ServerSession -&gt;&gt; ServerSession: llm handle
+          end
+          loop
+            ServerSession --&gt;&gt; DeviceSession: llm message
+            ServerSession --&gt;&gt; DeviceSession: tts(start) message
+            ServerSession --&gt;&gt; DeviceSession: tts(sentence start) message
+            ServerSession --&gt;&gt; DeviceSession: audio data
+            ServerSession --&gt;&gt; DeviceSession: tts(sentence end) message
+            ServerSession --&gt;&gt; DeviceSession: tts(stop) message
+          end
+        end
+      end
+    end
+</pre>
+
+<h3 id="listen-mode"><a class="header" href="#listen-mode">Listen mode</a></h3>
+<h4 id="auto"><a class="header" href="#auto">Auto</a></h4>
+<p>TODO</p>
+<h4 id="manual"><a class="header" href="#manual">Manual</a></h4>
+<p>TODO</p>
+<h4 id="realtime"><a class="header" href="#realtime">Realtime</a></h4>
+<p>TODO</p>
+<h3 id="mcp-handle"><a class="header" href="#mcp-handle">MCP handle</a></h3>
+<pre class="mermaid">sequenceDiagram
+    autonumber
+    participant DeviceSession as Device Session
+    participant ServerSession as Server Session
+    participant ServerMCPServer as Server MCP Server
+    alt if call device tool
+      ServerSession -&gt;&gt; DeviceSession: mcp tools call message request
+      DeviceSession --&gt;&gt; ServerSession: mcp tools call message response
+    else if call server tool
+      ServerSession -&gt;&gt; ServerMCPServer: mcp tools call http request
+      ServerMCPServer --&gt;&gt; ServerSession: mcp tools call http response
+    end
+</pre>
+
+<h3 id="api-reqeust-and-response"><a class="header" href="#api-reqeust-and-response">API reqeust and response</a></h3>
+<ul>
+<li>
+<p>websocket connect request</p>
+<p>在建立 WebSocket 连接时，代码示例中设置了以下请求头：</p>
+<ul>
+<li><code>Authorization</code>: 用于存放访问令牌，形如 <code>"Bearer &lt;token&gt;"</code></li>
+<li><code>Protocol-Version</code>: 协议版本号，与 hello 消息体内的 <code>version</code> 字段保持一致</li>
+<li><code>Device-Id</code>: 设备物理网卡 MAC 地址</li>
+<li><code>Client-Id</code>: 软件生成的 UUID（擦除 NVS 或重新烧录完整固件会重置）</li>
+</ul>
+<p>这些头会随着 WebSocket 握手一起发送到服务器，服务器可根据需求进行校验、认证等。</p>
+</li>
+<li>
+<p>websocket connect response</p>
+</li>
+<li>
+<p>hello message request</p>
+<pre><code class="language-json">{
+  "type": "hello",
+  "version": 1,
+  "features": {
+    "mcp": true
+  },
+  "transport": "websocket",
+  "audio_params": {
+    "format": "opus",
+    "sample_rate": 16000,
+    "channels": 1,
+    "frame_duration": 60
+  }
+}
+</code></pre>
+</li>
+<li>
+<p>hello message response</p>
+<pre><code class="language-json">{
+  "type": "hello",
+  "transport": "websocket",
+  "session_id": "xxx",
+  "audio_params": {
+    "format": "opus",
+    "sample_rate": 24000,
+    "channels": 1,
+    "frame_duration": 60
+  }
+}
+</code></pre>
+</li>
+<li>
+<p>mcp initialize message request</p>
+<pre><code class="language-json">{
+  "jsonrpc": "2.0",
+  "method": "initialize",
+  "params": {
+    "capabilities": {
+      // 客户端能力，可选
+    }
+  },
+  "id": 1 // 请求 ID
+}
+</code></pre>
+</li>
+<li>
+<p>mcp initialize message response</p>
+<pre><code class="language-json">{
+  "jsonrpc": "2.0",
+  "id": 1, // 匹配请求 ID
+  "result": {
+    "protocolVersion": "2024-11-05",
+    "capabilities": {
+      "tools": {} // 这里的 tools 似乎不列出详细信息，需要 tools/list
+    },
+    "serverInfo": {
+      "name": "...", // 设备名称 (BOARD_NAME)
+      "version": "..." // 设备固件版本
+    }
+  }
+}
+</code></pre>
+</li>
+<li>
+<p>mcp tools list message request</p>
+<pre><code class="language-json">{
+  "jsonrpc": "2.0",
+  "method": "tools/list",
+  "params": {
+    "cursor": "" // 用于分页，首次请求为空字符串
+  },
+  "id": 2 // 请求 ID
+}
+</code></pre>
+</li>
+<li>
+<p>mcp tools list message response</p>
+<pre><code class="language-json">{
+  "jsonrpc": "2.0",
+  "id": 2, // 匹配请求 ID
+  "result": {
+    "tools": [ // 工具对象列表
+      {
+        "name": "self.get_device_status",
+        "description": "...",
+        "inputSchema": { ... } // 参数 schema
+      },
+      {
+        "name": "self.audio_speaker.set_volume",
+        "description": "...",
+        "inputSchema": { ... } // 参数 schema
+      }
+      // ... 更多工具
+    ],
+    "nextCursor": "..." // 如果列表很大需要分页，这里会包含下一个请求的 cursor 值
+  }
+}
+</code></pre>
+</li>
+<li>
+<p>listen message</p>
+<pre><code class="language-json">{
+  "session_id": "xxx",
+  "type": "listen",
+  "state": "start",
+  "mode": "manual"
+}
+</code></pre>
+<ul>
+<li>“session_id”：会话标识</li>
+<li>“type”: “listen”</li>
+<li>“state”：“start”, “stop”, “detect”（唤醒检测已触发）</li>
+<li>“mode”：“auto”, “manual” 或 “realtime”，表示识别模式。</li>
+</ul>
+</li>
+<li>
+<p>stt message</p>
+<pre><code class="language-json">{
+  "session_id": "xxx",
+  "type": "stt",
+  "text": "..."
+}
+</code></pre>
+<ul>
+<li>表示服务器端识别到了用户语音。（例如语音转文本结果）</li>
+<li>设备可能将此文本显示到屏幕上，后续再进入回答等流程。</li>
+</ul>
+</li>
+<li>
+<p>llm message</p>
+<pre><code class="language-json">{
+  "session_id": "xxx",
+  "type": "llm",
+  "emotion": "happy",
+  "text": "😀"
+}
+</code></pre>
+<ul>
+<li>服务器指示设备调整表情动画 / UI 表达。</li>
+</ul>
+</li>
+<li>
+<p>mcp tools call message request</p>
+<pre><code class="language-json">{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "self.audio_speaker.set_volume", // 要调用的工具名称
+    "arguments": {
+      // 工具参数，对象格式
+      "volume": 50 // 参数名及其值
+    }
+  },
+  "id": 3 // 请求 ID
+}
+</code></pre>
+</li>
+<li>
+<p>mcp tools call message response</p>
+<pre><code class="language-json">{
+  "jsonrpc": "2.0",
+  "id": 3, // 匹配请求 ID
+  "result": {
+    "content": [
+      // 工具执行结果内容
+      { "type": "text", "text": "true" } // 示例：set_volume 返回 bool
+    ],
+    "isError": false // 表示成功
+  }
+}
+</code></pre>
+<ul>
+<li>设备成功响应消息</li>
+</ul>
+<pre><code class="language-json">{
+  "jsonrpc": "2.0",
+  "id": 3, // 匹配请求 ID
+  "error": {
+    "code": -32601, // JSON-RPC 错误码，例如 Method not found (-32601)
+    "message": "Unknown tool: self.non_existent_tool" // 错误描述
+  }
+}
+</code></pre>
+<ul>
+<li>设备失败响应消息</li>
+</ul>
+</li>
+<li>
+<p>tts message</p>
+<pre><code class="language-json">{
+  "session_id": "xxx",
+  "type": "tts",
+  "state": "start"
+}
+</code></pre>
+<ul>
+<li>服务器准备下发 TTS 音频，设备端进入 “speaking” 播放状态。</li>
+</ul>
+<pre><code class="language-json">{
+  "session_id": "xxx",
+  "type": "tts",
+  "state": "stop"
+}
+</code></pre>
+<ul>
+<li>表示本次 TTS 结束。</li>
+</ul>
+<pre><code class="language-json">{
+  "session_id": "xxx",
+  "type": "tts",
+  "state": "sentence_start",
+  "text": "..."
+}
+</code></pre>
+<ul>
+<li>让设备在界面上显示当前要播放或朗读的文本片段（例如用于显示给用户）。</li>
+</ul>
+</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="server"><a class="header" href="#server">Server</a></h1>
+<h2 id="file-structure-1"><a class="header" href="#file-structure-1">File structure</a></h2>
+<p><em>TODO</em></p>
+<h2 id="data-flow"><a class="header" href="#data-flow">Data flow</a></h2>
+<p><strong><em>TODO</em></strong></p>
+<h2 id="model"><a class="header" href="#model">Model</a></h2>
+<h3 id="llm"><a class="header" href="#llm">LLM</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Model</th><th>Memory</th><th>File Size</th><th>Remark</th></tr>
+</thead>
+<tbody>
+<tr><td>unsloth/Qwen3-1.7B-GGUF</td><td>2.5GB</td><td>1.11GB</td><td>Qwen3-1.7B-Q4_K_M.gguf</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="asr"><a class="header" href="#asr">ASR</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Model</th><th>Memory</th><th>File Size</th><th>Remark</th></tr>
+</thead>
+<tbody>
+<tr><td>openai/whisper-tiny</td><td>0.45GB</td><td>0.15GB</td><td></td></tr>
+<tr><td>openai/whisper-small</td><td>1.1GB</td><td>0.96GB</td><td></td></tr>
+<tr><td>Qwen/Qwen3-ASR-0.6B</td><td>2GB</td><td>1.88GB</td><td></td></tr>
+<tr><td>openai/whisper-large-v3-turbo</td><td>4GB</td><td>1.62GB</td><td></td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="tts"><a class="header" href="#tts">TTS</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Model</th><th>Memory</th><th>File Size</th><th>Remark</th></tr>
+</thead>
+<tbody>
+<tr><td>mzdk100/kokoro</td><td>0.12GB</td><td>0.37GB</td><td></td></tr>
+<tr><td>openbmb/VoxCPM-0.5B</td><td>2GB</td><td>1.61GB</td><td></td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="cuda-toolkit-install-in-fedora-43--setup-env"><a class="header" href="#cuda-toolkit-install-in-fedora-43--setup-env">CUDA Toolkit install in fedora 43 &amp; setup env</a></h2>
+<pre><code class="language-shell">sudo sh cuda_12.8.1_570.124.06_linux.run --toolkit --no-drm --silent --override
+</code></pre>
+<pre><code class="language-.zshrc">export PATH="/usr/local/cuda/bin:$PATH"
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64
+export LIBRARY_PATH=$LIBRARY_PATH:/usr/local/cuda/lib64
+
+``` shell
+conda create -n cuda
+# for candle library
+conda install conda-forge::gcc==14.3.0
+conda install conda-forge::gxx==14.3.0
+# for openssl library
+conda install anaconda::openssl
+conda activate cuda
+# develop...
+</code></pre>
+<h2 id="spec"><a class="header" href="#spec">Spec</a></h2>
+<p><a href="https://rust-lang.github.io/api-guidelines/">https://rust-lang.github.io/api-guidelines/</a></p>
+<p><a href="https://rust-coding-guidelines.github.io/rust-coding-guidelines-zh/overview.html">https://rust-coding-guidelines.github.io/rust-coding-guidelines-zh/overview.html</a></p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="esp32"><a class="header" href="#esp32">ESP32</a></h1>
+<h2 id="checkout"><a class="header" href="#checkout">Checkout</a></h2>
+<pre><code class="language-shell">git clone git@github.com:78/xiaozhi-esp32.git
+</code></pre>
+<h2 id="install-esp-idf"><a class="header" href="#install-esp-idf">Install ESP IDF</a></h2>
+<blockquote>
+<p><a href="https://docs.espressif.com/projects/esp-idf/zh_CN/v5.5.2/esp32/get-started/linux-macos-setup.html">https://docs.espressif.com/projects/esp-idf/zh_CN/v5.5.2/esp32/get-started/linux-macos-setup.html</a></p>
+</blockquote>
+<h2 id="development-2"><a class="header" href="#development-2">Development</a></h2>
+<h3 id="setup-enviroment-and-flash-device"><a class="header" href="#setup-enviroment-and-flash-device">Setup enviroment and flash device</a></h3>
+<ul>
+<li>esp32-s3</li>
+</ul>
+<pre><code class="language-shell">. $HOME/esp/esp-idf/export.sh
+idf.py set-target esp32-s3
+idf.py menuconfig
+idf.py build
+idf.py -p PORT flash
+# macos
+idf.py -p /dev/cu.usbserial-14410 flash
+# linux
+sudo chmod 777 /dev/ttyACM0
+idf.py -p /dev/ttyACM0 flash
+</code></pre>
+<h3 id="other-useful-command"><a class="header" href="#other-useful-command">Other useful command</a></h3>
+<ul>
+<li>Get PORT</li>
+</ul>
+<pre><code class="language-shell">ls /dev/cu.*
+</code></pre>
+<ul>
+<li>Debug monitor</li>
+</ul>
+<pre><code class="language-shell">idf.py monitor
+idf.py -p PORT flash monitor
+
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="app"><a class="header" href="#app">App</a></h1>
+<blockquote class="blockquote-tag blockquote-tag-warning">
+<p class="blockquote-tag-title"><svg viewbox="0 0 16 16" width="18" height="18"><path d="M6.457 1.047c.659-1.234 2.427-1.234 3.086 0l6.082 11.378A1.75 1.75 0 0 1 14.082 15H1.918a1.75 1.75 0 0 1-1.543-2.575Zm1.763.707a.25.25 0 0 0-.44 0L1.698 13.132a.25.25 0 0 0 .22.368h12.164a.25.25 0 0 0 .22-.368Zm.53 3.996v2.5a.75.75 0 0 1-1.5 0v-2.5a.75.75 0 0 1 1.5 0ZM9 11a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"></path></svg>Warning</p>
+<p>App not implement any chobits feature right now,just make a basic framework.</p>
+</blockquote>
+<h2 id="framework"><a class="header" href="#framework">Framework</a></h2>
+<ul>
+<li><input disabled="" type="checkbox" checked=""> Theme framework</li>
+<li><input disabled="" type="checkbox" checked=""> Adaptive
+<ul>
+<li><input disabled="" type="checkbox" checked=""> Desktop or not</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox" checked=""> Text scale</li>
+<li><input disabled="" type="checkbox" checked=""> I18n</li>
+<li><input disabled="" type="checkbox" checked=""> Network
+<ul>
+<li><input disabled="" type="checkbox" checked=""> Dio</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox" checked=""> Database
+<ul>
+<li><input disabled="" type="checkbox" checked=""> Sqlite</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox" checked=""> Util
+<ul>
+<li><input disabled="" type="checkbox" checked=""> Unique Id
+<ul>
+<li><input disabled="" type="checkbox" checked=""> nanoid2</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox" checked=""> Event Bus</li>
+<li><input disabled="" type="checkbox" checked=""> Auto upgrade
+<ul>
+<li><input disabled="" type="checkbox" checked=""> Android</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox"> Logging
+<ul>
+<li><input disabled="" type="checkbox" checked=""> Rotating log File(Without Web Env)</li>
+<li><input disabled="" type="checkbox"> Export log file or upload log file</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox"> Release
+<ul>
+<li><input disabled="" type="checkbox" checked=""> Android</li>
+<li><input disabled="" type="checkbox"> IOS</li>
+<li><input disabled="" type="checkbox"> Windows
+<ul>
+<li><input disabled="" type="checkbox" checked=""> exe(unpack)</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox"> Linux</li>
+<li><input disabled="" type="checkbox"> MacOS</li>
+<li><input disabled="" type="checkbox" checked=""> Web</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox" checked=""> Env Config
+<ul>
+<li><input disabled="" type="checkbox" checked=""> Dev</li>
+<li><input disabled="" type="checkbox" checked=""> Prod</li>
+</ul>
+</li>
+</ul>
+<h2 id="advance"><a class="header" href="#advance">Advance</a></h2>
+<ul>
+<li><input disabled="" type="checkbox" checked=""> Auth
+<ul>
+<li><input disabled="" type="checkbox" checked=""> Spring-authorization-server</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox"> User Profile</li>
+</ul>
+<h2 id="develop-flow"><a class="header" href="#develop-flow">Develop Flow</a></h2>
+<ul>
+<li><input disabled="" type="checkbox" checked=""> Changelog</li>
+<li><input disabled="" type="checkbox"> CI
+<ul>
+<li><input disabled="" type="checkbox" checked=""> Build</li>
+<li><input disabled="" type="checkbox"> Code Quality</li>
+<li><input disabled="" type="checkbox"> Test</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox"> Testing
+<ul>
+<li><input disabled="" type="checkbox" checked=""> Unit Test(Example)</li>
+<li><input disabled="" type="checkbox" checked=""> Widget Test(Example)</li>
+<li><input disabled="" type="checkbox"> Integration Test</li>
+</ul>
+</li>
+</ul>
+<h2 id="coding"><a class="header" href="#coding">Coding</a></h2>
+<h3 id="database-versioning"><a class="header" href="#database-versioning">Database Versioning</a></h3>
+<blockquote>
+<p>lib\modules\app\app_store.dart</p>
+</blockquote>
+<pre><code class="language-dart">//DB init
+DbManager.instance().init([ChangeLogV1()]);
+Database db = await DbManager.instance().open();
+</code></pre>
+<h3 id="database-record-to-view-model"><a class="header" href="#database-record-to-view-model">Database Record To View Model</a></h3>
+<blockquote>
+<p>Example</p>
+</blockquote>
+<pre><code class="language-dart">class MemoMapper{
+    static Future&lt;List&lt;MemoEntity&gt;&gt; selectAll() async {
+        List&lt;Map&lt;String, dynamic&gt;&gt; findResult =
+            await DbManager.instance().find(MemoEntity.tableName);
+        return Future.value(findResult.map((e) =&gt; MemoEntity.fromJson(e)).toList());
+  }
+}
+
+class AppStore{
+    Future&lt;List&lt;MemoModel&gt;&gt; getMemoList() async {
+        List&lt;MemoEntity&gt; memoEntityList = await MemoMapper.selectAll();
+        return Future(() =&gt;
+            memoEntityList.map((e) =&gt; MemoModel.fromJson(e.toJson())).toList());
+      }
+}
+
+class _MemoPageState{
+
+    void initState() {
+        super.initState();
+        Provider.of&lt;AppStore&gt;(context, listen: false).getMemoList().then((value) {
+          setState(() {
+            memoModelList = value;
+          });
+        });
+      }
+}
+</code></pre>
+<h3 id="paggingpull-refresh-and-load-more"><a class="header" href="#paggingpull-refresh-and-load-more">Pagging(Pull refresh and load more)</a></h3>
+<blockquote>
+<p>Example</p>
+</blockquote>
+<pre><code class="language-dart">class _MemoPageState extends State&lt;MemoPage&gt; {
+  List&lt;MemoModel&gt; _memoModelList = [];
+  late EasyRefreshController _controller;
+  late int _pageNum;
+  late int _pageSize;
+  late int _total;
+
+  @override
+  void initState() {
+    super.initState();
+    resetPageInfo();
+    _controller = EasyRefreshController(
+      controlFinishRefresh: true,
+      controlFinishLoad: true,
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void resetPageInfo() {
+    setState(() {
+      _pageNum = 1;
+      _pageSize = 10;
+      _total = 0;
+      _memoModelList = [];
+    });
+  }
+
+  Future&lt;PageResult&gt; _loadData() async {
+    var result = await Provider.of&lt;AppStore&gt;(context, listen: false).pageMemo(
+        PageParam(
+            pageNum: _pageNum, pageSize: _pageSize, orderBy: " datetime desc"));
+    if (!mounted) {
+      return Future.value(result);
+    }
+    _memoModelList.addAll(result.rows);
+    _total = result.total;
+    LogHelper.debug(
+        "[Memo] loadData pageNum = $_pageNum,pageSize = $_pageSize,total = $_total");
+    return Future.value(result);
+  }
+
+  void _refreshList() async {
+    resetPageInfo();
+    await _loadData();
+    setState(() {});
+    _controller.finishRefresh();
+    _controller.resetFooter();
+  }
+
+  void _loadList() async {
+    _pageNum++;
+    PageResult result = await _loadData();
+    setState(() {});
+    if (result.hasNext) {
+      _controller.finishLoad(IndicatorResult.success);
+    } else {
+      _controller.finishLoad(IndicatorResult.noMore);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+        body: EasyRefresh(
+            refreshOnStart: true,
+            controller: _controller,
+            header: RefreshHeader(context),
+            footer: RefreshFooter(context),
+            onRefresh: _refreshList,
+            onLoad: _loadList,
+            child: CustomScrollView(slivers: [
+              SliverGrid(
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  return _createMemoItem(_memoModelList[index]);
+                }, childCount: _memoModelList.length),
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 210),
+              )
+            ])),
+        floatingActionButton: _getFloatingActionButton());
+  }
+}
+</code></pre>
+<h3 id="httprequest"><a class="header" href="#httprequest">HttpRequest</a></h3>
+<pre><code class="language-dart">Response result = await HttpClient.instance().get("/");
+LogHelper.info(result.body().toString());
+</code></pre>
+<h2 id="json-model-gen"><a class="header" href="#json-model-gen">JSON Model Gen</a></h2>
+<pre><code class="language-shell">dart run build_runner build
+</code></pre>
+<h2 id="release"><a class="header" href="#release">Release</a></h2>
+<h3 id="android"><a class="header" href="#android">Android</a></h3>
+<blockquote>
+<p><a href="https://docs.flutter.dev/deployment/android">Build and release an Android app | Flutter</a></p>
+</blockquote>
+<ol>
+<li>
+<p>Create an keystore</p>
+<pre><code class="language-shell">keytool -genkey -v -keystore .\android-app-keystore.jks -storetype JKS -keyalg RSA -keysize 2048 -validity 10000 -alias android-app
+</code></pre>
+</li>
+<li>
+<p>create [project]/android/key.properties and reference the keystore from the app</p>
+<pre><code class="language-properties">storePassword=&lt;password from previous step&gt;
+keyPassword=&lt;password from previous step&gt;
+keyAlias=android-app
+storeFile=&lt;location of the key store file, such as /Users/&lt;user name&gt;/android-app-keystore.jks or C:\\Users\\&lt;user name&gt;\\android-app-keystore.jks&gt;
+</code></pre>
+</li>
+<li>
+<p>run release command(eg: prod env)</p>
+<pre><code class="language-shell">flutter build apk --dart-define=DART_DEFINE_APP_ENV=prod
+</code></pre>
+</li>
+</ol>
+<h2 id="conventional-commits"><a class="header" href="#conventional-commits">Conventional Commits</a></h2>
+<blockquote>
+<p><a href="https://github.com/angular/angular/blob/main/CONTRIBUTING.md#-commit-message-format">https://github.com/angular/angular/blob/main/CONTRIBUTING.md#-commit-message-format</a></p>
+<p><a href="https://www.conventionalcommits.org/en/v1.0.0/">https://www.conventionalcommits.org/en/v1.0.0/</a></p>
+<p><a href="https://www.conventionalcommits.org/zh-hans/v1.0.0/">https://www.conventionalcommits.org/zh-hans/v1.0.0/</a></p>
+</blockquote>
+<p>The Conventional Commits specification is a lightweight convention on top of commit messages. It provides an easy set of rules for creating an explicit commit history; which makes it easier to write automated tools on top of. This convention dovetails with <a href="http://semver.org">SemVer</a>, by describing the features, fixes, and breaking changes made in commit messages.</p>
+<p>The commit message should be structured as follows:</p>
+<hr>
+<pre><code class="language-txt">&lt;type&gt;[optional scope]: &lt;description&gt;
+
+[optional body]
+
+[optional footer(s)]
+</code></pre>
+<hr>
+<p>The commit contains the following structural elements, to communicate intent to the consumers of your library:</p>
+<ol>
+<li><strong>fix:</strong> a commit of the <em>type</em> <code>fix</code> patches a bug in your codebase (this correlates with <a href="http://semver.org/#summary"><code>PATCH</code></a> in Semantic Versioning).</li>
+<li><strong>feat:</strong> a commit of the <em>type</em> <code>feat</code> introduces a new feature to the codebase (this correlates with <a href="http://semver.org/#summary"><code>MINOR</code></a> in Semantic Versioning).</li>
+<li><strong>BREAKING CHANGE:</strong> a commit that has a footer <code>BREAKING CHANGE:</code>, or appends a <code>!</code> after the type/scope, introduces a breaking API change (correlating with <a href="http://semver.org/#summary"><code>MAJOR</code></a> in Semantic Versioning). A BREAKING CHANGE can be part of commits of any <em>type</em>.</li>
+<li><em>types</em> other than <code>fix:</code> and <code>feat:</code> are allowed, for example <a href="https://github.com/conventional-changelog/commitlint/tree/master/%40commitlint/config-conventional">@commitlint/config-conventional</a> (based on the <a href="https://github.com/angular/angular/blob/22b96b9/CONTRIBUTING.md#-commit-message-guidelines">Angular convention</a>) recommends <code>build:</code>, <code>chore:</code>, <code>ci:</code>, <code>docs:</code>, <code>style:</code>, <code>refactor:</code>, <code>perf:</code>, <code>test:</code>, and others.</li>
+<li><em>footers</em> other than <code>BREAKING CHANGE: &lt;description&gt;</code> may be provided and follow a convention similar to <a href="https://git-scm.com/docs/git-interpret-trailers">git trailer format</a>.</li>
+</ol>
+<p>Additional types are not mandated by the Conventional Commits specification, and have no implicit effect in Semantic Versioning (unless they include a BREAKING CHANGE). A scope may be provided to a commit’s type, to provide additional contextual information and is contained within parenthesis, e.g., <code>feat(parser): add ability to parse arrays</code>.</p>
+<h2 id="sqlite3-on-web"><a class="header" href="#sqlite3-on-web">Sqlite3 on web</a></h2>
+<blockquote>
+<p>sqflite_common_ffi_web</p>
+</blockquote>
+<h3 id="setup-binaries"><a class="header" href="#setup-binaries">Setup binaries</a></h3>
+<p>Implementation requires <a href="https://github.com/simolus3/sqlite3.dart/releases">sqlite3.wasm binaries</a> into your web folder as well as a sqflite specific shared worker.</p>
+<p>You can install binaries using the command:</p>
+<pre><code class="language-bash">dart run sqflite_common_ffi_web:setup
+</code></pre>
+<p>It should create the following files in your web folder:</p>
+<ul>
+<li><code>sqlite3.wasm</code></li>
+<li><code>sqflite_sw.js</code></li>
+</ul>
+<p>that you can put in source control or not (personally I don’t)</p>
+<p>Note: when sqlite3 and its wasm binary are updated, you may need to run the command again using the force option:</p>
+<pre><code class="language-bash">dart run sqflite_common_ffi_web:setup --force
+</code></pre>
+<h2 id="offline-map"><a class="header" href="#offline-map">Offline Map</a></h2>
+<ol>
+<li>
+<p>Generate XYZ tiles(Directory)</p>
+<p>QGIS-&gt;Toolbox-&gt;Generate XYZ tiles(Directory)</p>
+</li>
+<li>
+<p>Gen pubspec.yaml assets path</p>
+</li>
+</ol>
+<pre><code class="language-bash">ls -R assets | grep ':'
+</code></pre>
+<h2 id="coordinate"><a class="header" href="#coordinate">Coordinate</a></h2>
+<ol>
+<li>
+<p>Server save the coordinate format is WGS84</p>
+</li>
+<li>
+<p>Client map is gaode map,who’s format is GCJ-02;</p>
+</li>
+<li>
+<p>So we must transform the coordinate from WGS84 to GCJ-02 and we use the util <a href="https://pub-web.flutter-io.cn/packages/coordtransform_dart">coordtransform_dart</a>.</p>
+</li>
+</ol>
+<h2 id="qa"><a class="header" href="#qa">Q&amp;A</a></h2>
+<p>Q1. setState() or markNeedsBuild() called during build. This ModelBinding widget cannot be marked as needing to build because the framework is already in the process of building widgets.</p>
+<blockquote>
+<p><a href="https://fluttercorner.com/setstate-or-markneedsbuild-called-during-build-a-vertical-renderflex-overflowed/">https://fluttercorner.com/setstate-or-markneedsbuild-called-during-build-a-vertical-renderflex-overflowed/</a></p>
+</blockquote>
+<p>Solution 1: use a call back function
+You just need to use a call back function. Because Should be setState method call before the build method had completed the process of building the widgets and thats why you are facing this error.</p>
+<pre><code class="language-dart">WidgetsBinding.instance.addPostFrameCallback((_){
+
+// Your Code Here
+
+});
+</code></pre>
+<h2 id="other"><a class="header" href="#other">Other</a></h2>
+<ol>
+<li>pod install slow</li>
+</ol>
+<pre><code class="language-shell">cd ./ios/
+#如有clash这类代理软件，则执行下面代理设置命令，使用代理进行依赖库的下载
+#export https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 all_proxy=socks5://127.0.0.1:7890
+pod install --verbose
+</code></pre>
+<h2 id="relate-project"><a class="header" href="#relate-project">Relate Project</a></h2>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="faq"><a class="header" href="#faq">FAQ</a></h1>
+<ol>
+<li>
+<p>Why project name is chobits?</p>
+<p>It’s a dream about <a href="https://en.wikipedia.org/wiki/Chobits">chobits</a> and <a href="https://en.wikipedia.org/wiki/Planetarian:_The_Reverie_of_a_Little_Planet">Planetarian: The Reverie of a Little Planet</a></p>
+</li>
+</ol>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+
+            </nav>
+
+        </div>
+
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr-ef4e11c1.min.js"></script>
+        <script src="mark-09e88c2c.min.js"></script>
+        <script src="searcher-c2a407aa.js"></script>
+
+        <script src="clipboard-1626706a.min.js"></script>
+        <script src="highlight-abc7f01d.js"></script>
+        <script src="book-a0b12cfe.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="mermaid-eefea253.min.js"></script>
+        <script src="mermaid-init-ccf746f1.js"></script>
+
+        <script>
+        window.addEventListener('load', function() {
+            window.setTimeout(window.print, 100);
+        });
+        </script>
+
+
+    </div>
+    </body>
+</html>
