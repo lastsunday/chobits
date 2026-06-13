@@ -1,0 +1,43 @@
+[git]
+conventional_commits = true
+
+commit_parsers = [
+  { message = "^\\w+(\\(\\w+\\))?\\!:", group = "💣 BREAKING CHANGES" },
+  { body = "BREAKING CHANGE", group = "💣 BREAKING CHANGES" },
+  { message = "^feat", group = "⭐ Added" },
+  { message = "^fix", group = "🐛 Fixed" },
+  { message = "^perf", group = "🚀 Performance" },
+  { message = "^remove", group = "🗑️ Removed" },
+  { message = "^deprecate", group = "❕ Deprecated" },
+  { message = "^security", group = "🛡️ Security" },
+  { message = ".*", skip = true },
+]
+
+commit_preprocessors = [
+  { pattern = "(?m)^CHANGELOG: .*", replace_command = "bash -c \"if git diff-tree --no-commit-id -r --name-only $COMMIT_SHA | grep -qvE '${GIT_CLIFF_INCLUDE_PATTERNS:-.*}' 2>/dev/null; then exit 0; else cat; fi\"" },
+]
+
+[changelog]
+trim = false
+body = """
+## {{ version }} ({{ timestamp | date(format="%Y-%m-%d") }})
+{%- for group, commits in commits | group_by(attribute="group") %}
+{%- set_global has_entries = false -%}
+{%- for commit in commits -%}
+{%- if "CHANGELOG: " in commit.raw_message -%}
+{%- set_global has_entries = true -%}
+{%- endif -%}
+{%- endfor -%}
+{%- if has_entries %}
+
+### {{ group }}
+{% for commit in commits -%}
+{%- if "CHANGELOG: " in commit.raw_message -%}
+{%- for footer in commit.footers -%}{% if footer.token == "CHANGELOG" %}
+- {{ footer.value | upper_first }}{% endif %}{% endfor -%}
+{%- endif -%}
+{%- endfor -%}
+{%- endif -%}
+{%- endfor %}
+
+"""

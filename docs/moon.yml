@@ -1,0 +1,18 @@
+language: "rust"
+tags: ["docs"]
+
+tasks:
+  build:
+    command: "mdbook build"
+    inputs:
+      - "src/**/*"
+      - "book.toml"
+    outputs:
+      - "book"
+
+  dev:
+    command: "mdbook serve --open"
+    options:
+      persistent: true
+      cache: false
+      runInCI: false
