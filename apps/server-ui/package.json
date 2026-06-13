@@ -1,4 +1,10 @@
 {
   "name": "@chobits/server-ui",
-  "private": true
+  "private": true,
+  "scripts": {
+    "build": "vite build",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit --project tsconfig.app.json",
+    "preview": "vite preview"
+  }
 }
