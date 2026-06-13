@@ -18,6 +18,12 @@ tasks:
     args: ['run', 'typecheck']
     deps:
       - ~:ensure-deps
+  dev:
+    command: 'pnpm'
+    args: ['run', 'dev']
+    options:
+      persistent: true
+      runInCI: false
   preview:
     command: 'pnpm'
     args: ['run', 'preview']
