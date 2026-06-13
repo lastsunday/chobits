@@ -346,6 +346,12 @@ pub fn setup_web(router: Router) -> Router {
                 .route_layer(CompressionLayer::new()),
         )
         .nest(
+            "/locales",
+            Router::new()
+                .route("/{*file}", get(web::locales_handler))
+                .route_layer(CompressionLayer::new()),
+        )
+        .nest(
             "/device/assets",
             Router::new()
                 .route("/{*file}", get(web::device_assets_handler))
