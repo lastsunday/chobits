@@ -1,6 +1,6 @@
 #[cfg(unix)]
 use std::sync::atomic::Ordering;
-use std::{error::Error, sync::Arc};
+use std::{error::Error, sync::Arc, time::Duration};
 
 use api::config::{
     asr::AsrConfig, audio::AudioConfig, database::DatabaseConfig, llm::LlmConfig,
@@ -12,10 +12,7 @@ use tracing::info;
 
 use crate::{clap::Args, server::Server};
 mod clap;
-mod restart;
-mod runtime;
 mod server;
-mod signal;
 
 pub fn run() -> Result<(), Box<dyn Error>> {
     let args = clap::parse();
@@ -23,16 +20,19 @@ pub fn run() -> Result<(), Box<dyn Error>> {
 }
 
 pub fn run_with_args(args: &Args) -> Result<(), Box<dyn Error>> {
-    let runtime = runtime::new(args)?;
+    framework::panic::init();
+    framework::deadlock::spawn();
+
+    let runtime = framework::runtime::build(&args.runtime_config())?;
     let server = Server::new(args, Some(runtime.handle()))?;
 
-    runtime.spawn(signal::signal(server.clone()));
+    runtime.spawn(framework::signal::handle_signals(server.clone()));
     runtime.block_on(async_main(&server))?;
-    runtime::shutdown(&server, runtime);
+    framework::runtime::shutdown(runtime, Duration::from_millis(10000));
 
     #[cfg(unix)]
     if server.server.restarting.load(Ordering::Acquire) {
-        restart::restart();
+        framework::utils::restart::restart_process();
     }
 
     info!("Exit");

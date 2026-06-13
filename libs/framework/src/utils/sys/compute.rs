@@ -44,6 +44,21 @@ pub fn cores_available() -> impl Iterator<Item = Id> {
     from_mask(*CORES_AVAILABLE)
 }
 
+/// Set the CPU affinity for the current thread to the given list of core IDs.
+#[inline]
+pub fn set_affinity(ids: impl Iterator<Item = Id>) {
+    let ids: Vec<_> = ids.collect();
+    let core_ids = core_affinity::get_core_ids().unwrap_or_default();
+    for core_id in core_ids {
+        if ids.contains(&core_id.id) {
+            core_affinity::set_for_current(core_id);
+            break;
+        }
+    }
+}
+
+
+
 fn query_cores_available() -> impl Iterator<Item = Id> {
     core_affinity::get_core_ids()
         .unwrap_or_default()

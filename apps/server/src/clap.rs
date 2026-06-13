@@ -1,6 +1,6 @@
 //! Integration with `clap`
 
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Duration};
 
 use clap::{ArgAction, Parser};
 use figment::{Figment, value::Value};
@@ -94,6 +94,26 @@ pub struct Args {
 		require_equals(false),
 	)]
     pub gc_muzzy: Option<bool>,
+}
+
+impl Args {
+    pub(crate) fn runtime_config(&self) -> framework::runtime::RuntimeConfig {
+        framework::runtime::RuntimeConfig {
+            worker_threads: self.worker_threads,
+            global_event_interval: self.global_event_interval,
+            kernel_event_interval: self.kernel_event_interval,
+            kernel_events_per_tick: self.kernel_events_per_tick,
+            worker_affinity: self.worker_affinity,
+            gc_on_park: self.gc_on_park,
+            gc_muzzy: self.gc_muzzy,
+            worker_name: "chobits:worker",
+            worker_min: 2,
+            worker_keepalive: 36,
+            max_blocking_threads: 1024,
+            shutdown_timeout: Duration::from_millis(10000),
+            ..Default::default()
+        }
+    }
 }
 
 /// Parse commandline arguments into structured data
