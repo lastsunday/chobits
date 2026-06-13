@@ -31,7 +31,7 @@ instance.interceptors.response.use(async (response) => {
   const { status } = response;
   if (status == HttpStatusCode.Unauthorized) {
     try {
-      let token = await refreshToken(getRefreshToken());
+      const token = await refreshToken(getRefreshToken());
       setStoredToken(token);
       return instance(response.config);
     } catch (e) {
@@ -72,7 +72,7 @@ const refreshToken = async (refresh_token: string | null): Promise<Token> => {
   }
 }
 
-export async function postJson<T>(url: string, obj: Object): Promise<T> {
+export async function postJson<T>(url: string, obj: object): Promise<T> {
   const { status, data } = await instance.post(url, JSON.stringify(obj));
   if (status == HttpStatusCode.Ok || status == HttpStatusCode.BadRequest) {
     if (data) {
@@ -91,7 +91,7 @@ export async function postJson<T>(url: string, obj: Object): Promise<T> {
   }
 }
 
-export async function getJson<T>(url: string, params?: any): Promise<T> {
+export async function getJson<T>(url: string, params?: Record<string, unknown>): Promise<T> {
   const { status, data } = await instance.get(url, { params });
   if (status == HttpStatusCode.Ok || status == HttpStatusCode.BadRequest) {
     if (data) {

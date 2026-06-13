@@ -1,4 +1,4 @@
-import { showNotification } from "@mantine/notifications";
+import { notifications } from "@mantine/notifications";
 import { QueryClient } from "@tanstack/react-query";
 
 export const queryClient = new QueryClient({
@@ -8,8 +8,8 @@ export const queryClient = new QueryClient({
     },
     mutations: {
       throwOnError: false,
-      onError(error, variables, context) {
-        showNotification({
+      onError(error, _variables, _context) {
+        notifications.show({
           color: "red",
           title: "Error",
           message: error.message
