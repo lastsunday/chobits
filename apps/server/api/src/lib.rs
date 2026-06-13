@@ -30,8 +30,7 @@ use axum::routing::get;
 use bytesize::ByteSize;
 use either::Either;
 use framework::config::auth::AuthConfig;
-use framework::error::ApiError;
-use framework::error::ApiResult;
+use framework::error::{ApiError, ApiResult, critical_code::CriticalErrorCode, framework_code::FrameworkErrorCode};
 use framework::trace::LatencyOnResponse;
 use futures::future::join_all;
 use migration::MigratorTrait;
@@ -271,7 +270,7 @@ pub fn setup_default(router: Router) -> Router {
         .fallback(web::index_handler)
         .method_not_allowed_fallback(async || -> ApiResult<()> {
             tracing::warn!("Method not allowed");
-            Err(ApiError::MethodNotAllowed)
+            Err(ApiError::from_app_error(FrameworkErrorCode::MethodNotAllowed))
         });
     let timeout =
         TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_secs(120));
@@ -333,7 +332,7 @@ fn setup_api_fallback(router: Router) -> Router {
         "/api",
         Router::new().fallback(async || -> ApiResult<()> {
             tracing::warn!("Not found");
-            Err(ApiError::NotFound)
+            Err(ApiError::from_app_error(CriticalErrorCode::ResourceNotFound))
         }),
     )
 }

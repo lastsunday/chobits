@@ -3,11 +3,10 @@ name = "framework"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-publish = false
 
 [dependencies]
-chobits-build-metadata.workspace = true
-core_affinity = { workspace = true }
+chobits-framework-macros = { package = "framework-macros", path = "macros" }
+chobits-build-metadata = { workspace = true }
 xid = { workspace = true }
 bcrypt = { workspace = true }
 axum = { workspace = true, features = ["macros"] }
@@ -23,9 +22,10 @@ tower-http = { workspace = true, features = [
   "compression-full",
 ] }
 tracing-subscriber = { workspace = true, features = ["env-filter", "chrono"] }
+tracing-error = { workspace = true, features = ["traced-error"] }
 validator = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
-anyhow = { workspace = true }
+anyhow = { workspace = true, features = ["backtrace"] }
 jsonwebtoken = { workspace = true }
 sea-orm = { workspace = true, features = [
   "with-chrono",
@@ -39,5 +39,7 @@ sea-orm = { workspace = true, features = [
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 utoipa = { workspace = true, features = ["axum_extras", "debug", "chrono"] }
-config = { workspace = true, features = ["yaml"] }
 num_cpus = { workspace = true }
+strum = { workspace = true }
+strum_macros = { workspace = true }
+core_affinity = { workspace = true }

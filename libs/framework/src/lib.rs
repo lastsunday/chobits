@@ -9,6 +9,7 @@ pub mod info;
 pub mod logger;
 pub mod middleware;
 pub mod password;
+pub mod prelude;
 pub mod trace;
 pub mod utils;
 

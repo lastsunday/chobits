@@ -1,6 +1,12 @@
 [workspace]
 resolver = '2'
-members = ['apps/server']
+members = [
+  'apps/server',
+  'libs/macros',
+  'libs/build-metadata',
+  'libs/framework',
+  'libs/framework/macros',
+]
 
 [workspace.package]
 version = "0.1.0"
@@ -8,8 +14,9 @@ edition = "2024"
 authors = ["lastsunday"]
 
 [workspace.dependencies]
-chobits-build-metadata = { package = "chobits_build_metadata", path = "apps/server/build_metadata", default-features = false }
-chobits-macros = { package = "chobits_macros", path = "apps/server/macros", default-features = false }
+chobits-build-metadata = { package = "chobits_build_metadata", path = "libs/build-metadata", default-features = false }
+chobits-macros = { package = "chobits_macros", path = "libs/macros", default-features = false }
+chobits-framework-macros = { package = "framework-macros", path = "libs/framework/macros", default-features = false }
 clap = "4.6.1"
 axum = "0.8.9"
 axum-extra = "0.12.5"
@@ -21,6 +28,8 @@ color-eyre = "0.6.5"
 tracing-appender = "0.2.3"
 tracing-error = "0.2.1"
 # log end
+strum = "0.27"
+strum_macros = "0.27"
 toml = "1.1.2+spec-1.1.0"
 syn = "2.0.117"
 quote = "1.0.45"

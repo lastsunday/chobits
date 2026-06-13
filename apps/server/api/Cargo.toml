@@ -13,7 +13,7 @@ path = "src/lib.rs"
 entity = { path = "../entity" }
 migration = { path = "../migration" }
 service = { path = "../service" }
-framework = { path = "../framework" }
+framework = { path = "../../../libs/framework" }
 web = { path = "../web" }
 chobits-macros = { workspace = true }
 

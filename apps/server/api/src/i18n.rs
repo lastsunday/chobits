@@ -18,6 +18,13 @@ impl<'a> I18nError<'a> {
     }
 
     pub fn gen_api_error(&self, headers: &HeaderMap) -> ApiError {
-        ApiError::Biz(self.code, t(self.key, headers))
+        ApiError::App {
+            code: self.code as u32,
+            message: t(self.key, headers),
+            extra_message: None,
+            file: None,
+            line: None,
+            error: None,
+        }
     }
 }

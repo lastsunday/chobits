@@ -25,7 +25,7 @@ serde = { workspace = true, features = ["derive"] }
 rmcp = { workspace = true }
 migration = { path = "../migration" }
 entity = { path = "../entity" }
-framework = { path = "../framework" }
+framework = { path = "../../../libs/framework" }
 
 [features]
 default = []
