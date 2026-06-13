@@ -67,12 +67,12 @@ async fn test_tts_default() -> anyhow::Result<()> {
     info!("audio len = {}", audio_len);
 
     // 4. decode opus packet to pcm data
-    let mut decoder = opus::Decoder::new(ENCODE_SAMPLE_RATE, opus::Channels::Mono).unwrap();
+    let mut decoder = opus_rs::OpusDecoder::new(ENCODE_SAMPLE_RATE as i32, 1).unwrap();
     let mut decode_data: Vec<f32> = Vec::new();
     for n in 0..audio_len {
         let mut samples = vec![0f32; size];
         let data = audio.get(n).unwrap();
-        let len = decoder.decode_float(data, &mut samples, false).unwrap();
+        let len = decoder.decode(data, size, &mut samples).unwrap();
         decode_data.append(&mut samples[..len].to_vec());
     }
 

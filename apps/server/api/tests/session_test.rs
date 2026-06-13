@@ -1413,8 +1413,8 @@ async fn create_session()
             }))
         )
             .with_tts(Arc::new(TtsFactory::create_model(&TtsConfig {
-                model: Some(TtsModel::Kokoro),
-                path: Some(String::from("data/tts/model/mzdk100/kokoro/")),
+                model: Some(TtsModel::Voxcpm),
+                path: Some(String::from("data/tts/model/openbmb/VoxCPM-0.5B/")),
                 ..Default::default()
                 }
             , &audio_config).await.unwrap()))
@@ -1504,10 +1504,10 @@ fn get_audio() -> Vec<Vec<u8>> {
     // write(fp, &pcm_data, sr, 1);
 
     const ENCODE_SAMPLE_RATE: u32 = 16000;
-    let mut encoder = opus::Encoder::new(
-        ENCODE_SAMPLE_RATE,
-        opus::Channels::Mono,
-        opus::Application::Audio,
+    let mut encoder = opus_rs::OpusEncoder::new(
+        ENCODE_SAMPLE_RATE as i32,
+        1,
+        opus_rs::Application::Audio,
     )
     .unwrap();
 
@@ -1526,9 +1526,9 @@ fn get_audio() -> Vec<Vec<u8>> {
     for n in 0..count {
         let start = n * size;
         let end = cmp::min((n + 1) * size, len);
-        let packet = encoder
-            .encode_vec_float(&pcm_data[start..end], size)
-            .unwrap();
+        let mut packet = vec![0u8; 4000];
+        let encoded_len = encoder.encode(&pcm_data[start..end], size, &mut packet).unwrap();
+        packet.truncate(encoded_len);
         audio.push(packet);
     }
     audio
