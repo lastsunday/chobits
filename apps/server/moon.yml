@@ -52,3 +52,9 @@ tasks:
     options:
       persistent: true
       cache: false
+
+  dev-minimal:
+    command: "cargo run --package chobits-server -- -O vad_model=void -O asr_model=void -O tts_model=mute -O llm_model=echo"
+    options:
+      persistent: true
+      cache: false
