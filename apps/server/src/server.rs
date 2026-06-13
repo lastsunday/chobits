@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use api::config::Config;
 use async_trait::async_trait;
+use framework::logging::LogConfig;
 use framework::signal::SignalHandler;
 use tokio::runtime;
 use tracing::info;
@@ -28,7 +29,7 @@ impl Server {
             .and_then(|raw| update(raw, args))
             .and_then(|raw| Config::new(&raw))?;
 
-        let log_config = framework::config::logging::LogConfig::default();
+        let log_config = LogConfig::default();
 
         let (reload_handles, flame_guard, cap_state) =
             framework::logging::init(&log_config)?;
@@ -61,7 +62,7 @@ impl SignalHandler for Server {
         self.server.shutdown()
     }
 
-    async fn signal(&self, sig: &str) -> Result<(), anyhow::Error> {
+    async fn signal(&self, sig: &'static str) -> Result<(), anyhow::Error> {
         self.server.signal(sig)
     }
 }

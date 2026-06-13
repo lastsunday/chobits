@@ -17,7 +17,7 @@ use tracing::error;
 pub struct TtsVoxCPM {
     instance: Arc<Mutex<VoxCPMGenerate>>,
     gen_sample_rate: u32,
-    encoder: Arc<Mutex<opus::Encoder>>,
+    encoder: Arc<Mutex<opus_rs::OpusEncoder>>,
     encode_sample_rate: u32,
     encode_channel: u32,
     encode_frame_duration: u64,
@@ -45,11 +45,12 @@ impl TtsVoxCPM {
                 None => 16000,
             }
         };
-        let encoder = opus::Encoder::new(
-            encode_sample_rate,
-            opus::Channels::Mono,
-            opus::Application::LowDelay,
-        )?;
+        let encoder = opus_rs::OpusEncoder::new(
+            encode_sample_rate as i32,
+            1,
+            opus_rs::Application::RestrictedLowDelay,
+        )
+        .map_err(|e| anyhow::anyhow!("opus encoder: {}", e))?;
         Ok(Self {
             instance: Arc::new(Mutex::new(instance)),
             encoder: Arc::new(Mutex::new(encoder)),

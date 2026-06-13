@@ -24,22 +24,21 @@ wget https://huggingface.co/Qwen/Qwen3-ASR-0.6B/resolve/5eb144179a02acc5e5ba31e7
 wget https://huggingface.co/Qwen/Qwen3-ASR-0.6B/resolve/5eb144179a02acc5e5ba31e748d22b0cf3e303b0/merges.txt -O asr/model/Qwen/Qwen3-ASR-0.6B/merges.txt
 
 mkdir -p tts
-mkdir -p tts/model/mzdk100/kokoro
-wget https://github.com/mzdk100/kokoro/releases/download/V1.1/kokoro-v1.1-zh.onnx -O tts/model/mzdk100/kokoro/model.onnx
-wget https://github.com/mzdk100/kokoro/releases/download/V1.1/voices-v1.1-zh.bin -O tts/model/mzdk100/kokoro/voice.bin
-# mkdir -p tts/model/openbmb/VoxCPM-0.5B
-# wget https://huggingface.co/openbmb/VoxCPM-0.5B/resolve/f67d35a3848e0bec0fdb8c33e6fc92cf293ee72f/config.json -O tts/model/openbmb/VoxCPM-0.5B/config.json
-# wget https://huggingface.co/openbmb/VoxCPM-0.5B/resolve/f67d35a3848e0bec0fdb8c33e6fc92cf293ee72f/pytorch_model.bin -O tts/model/openbmb/VoxCPM-0.5B/pytorch_model.bin
-# wget https://huggingface.co/openbmb/VoxCPM-0.5B/resolve/f67d35a3848e0bec0fdb8c33e6fc92cf293ee72f/tokenizer.json -O tts/model/openbmb/VoxCPM-0.5B/tokenizer.json
-# wget https://huggingface.co/openbmb/VoxCPM-0.5B/resolve/f67d35a3848e0bec0fdb8c33e6fc92cf293ee72f/audiovae.pth -O tts/model/openbmb/VoxCPM-0.5B/audiovae.pth
+# 0.5B
+mkdir -p tts/model/openbmb/VoxCPM-0.5B
+wget https://huggingface.co/openbmb/VoxCPM-0.5B/resolve/f67d35a3848e0bec0fdb8c33e6fc92cf293ee72f/config.json -O tts/model/openbmb/VoxCPM-0.5B/config.json
+wget https://huggingface.co/openbmb/VoxCPM-0.5B/resolve/f67d35a3848e0bec0fdb8c33e6fc92cf293ee72f/pytorch_model.bin -O tts/model/openbmb/VoxCPM-0.5B/pytorch_model.bin
+wget https://huggingface.co/openbmb/VoxCPM-0.5B/resolve/f67d35a3848e0bec0fdb8c33e6fc92cf293ee72f/tokenizer.json -O tts/model/openbmb/VoxCPM-0.5B/tokenizer.json
+wget https://huggingface.co/openbmb/VoxCPM-0.5B/resolve/f67d35a3848e0bec0fdb8c33e6fc92cf293ee72f/audiovae.pth -O tts/model/openbmb/VoxCPM-0.5B/audiovae.pth
+# 1.5B
 # mkdir -p tts/model/openbmb/VoxCPM-1.5B
 # wget https://huggingface.co/openbmb/VoxCPM1.5/resolve/21c5944939d8750786d45603a313ba4e382313a8/config.json -O tts/model/openbmb/VoxCPM-1.5B/config.json
 # wget https://huggingface.co/openbmb/VoxCPM1.5/resolve/21c5944939d8750786d45603a313ba4e382313a8/model.safetensors -O tts/model/openbmb/VoxCPM-1.5B/model.safetensors
 # wget https://huggingface.co/openbmb/VoxCPM1.5/resolve/21c5944939d8750786d45603a313ba4e382313a8/tokenizer.json -O tts/model/openbmb/VoxCPM-1.5B/tokenizer.json
 # wget https://huggingface.co/openbmb/VoxCPM1.5/resolve/21c5944939d8750786d45603a313ba4e382313a8/audiovae.pth -O tts/model/openbmb/VoxCPM-1.5B/audiovae.pth
 
-# mkdir -p tts/reference/
-# wget https://github.com/jhqxxx/aha/raw/3ba4de8a7dd578b809fa4676f865a438abba91ab/assets/audio/voice_05.wav -O tts/reference/voice_05.wav
+mkdir -p tts/reference/
+wget https://github.com/jhqxxx/aha/raw/3ba4de8a7dd578b809fa4676f865a438abba91ab/assets/audio/voice_05.wav -O tts/reference/voice_05.wav
 
 # mkdir -p vad
 # mkdir -p vad/model/onnx-community/silero-vad

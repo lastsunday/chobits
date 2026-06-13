@@ -91,11 +91,11 @@
 
 # This item is undocumented. Please contribute documentation for it.
 #
-#tts_model = kokoro
+#tts_model = voxcpm
 
 # This item is undocumented. Please contribute documentation for it.
 #
-#tts_path = data/tts/model/mzdk100/kokoro/
+#tts_path = data/tts/model/openbmb/VoxCPM-0.5B/
 
 # This item is undocumented. Please contribute documentation for it.
 #
@@ -103,7 +103,7 @@
 
 # This item is undocumented. Please contribute documentation for it.
 #
-#tts_reference_prompt_wav_path = file://data/tts/reference/voice_05.wav
+#tts_reference_prompt_wav_path = data/tts/reference/voice_05.wav
 
 # This item is undocumented. Please contribute documentation for it.
 #

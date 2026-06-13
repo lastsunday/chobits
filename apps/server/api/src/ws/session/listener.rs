@@ -32,7 +32,7 @@ pub struct DefaultListener {
     voice_data: Arc<Mutex<Vec<f32>>>,
     vad: Arc<Mutex<Box<dyn Vad>>>,
     asr: Arc<Mutex<Box<dyn Asr>>>,
-    decoder: Arc<Mutex<opus::Decoder>>,
+    decoder: Arc<Mutex<opus_rs::OpusDecoder>>,
     pub state: ListenState,
     silence_voice_timeout: Option<i64>,
     latest_speaking_time: Option<i64>,
@@ -49,7 +49,7 @@ impl DefaultListener {
             .input_sample_rate
             .expect("input sample rate is empty");
         let decoder = Arc::new(Mutex::new(
-            opus::Decoder::new(sample_rate, opus::Channels::Mono).unwrap(),
+            opus_rs::OpusDecoder::new(sample_rate as i32, 1).unwrap(),
         ));
         Self {
             vad,
@@ -93,7 +93,7 @@ impl Listener for DefaultListener {
                 ((sample_rate as u64 * channel as u64 * frame_duration) / 1000) as usize;
             let mut samples = vec![0f32; frame_size];
             let mut decoder = self.decoder.lock().await;
-            let len = decoder.decode_float(&data, &mut samples, false).unwrap();
+            let len = decoder.decode(&data, frame_size, &mut samples).unwrap();
             let mut temp_voice_data = temp_voice_data.lock().await;
             temp_voice_data.append(&mut samples[..len].to_vec());
             let mut vad = vad.lock().await;

@@ -71,7 +71,7 @@ rust-i18n = "3.1.5"
 futures-util = "0.3.31"
 futures-channel = "0.3.31"
 jiff = "0.2.19"
-opus = "0.3.1"
+opus-rs = "0.1.22"
 tokio-stream = "0.1.18"
 tokio-util = "0.7.18"
 futures = "0.3.32"
@@ -124,8 +124,6 @@ rand = "0.10.0"
 rand_distr = "0.6.0"
 qwen-asr = "0.3.0"
 # asr end
-# tts start
-kokoro-tts = "0.3.2"
 # tts end
 # mcp start
 rmcp = "0.15.0"

@@ -134,11 +134,11 @@ pub struct Config {
     #[serde(default = "default_vad_num_threads")]
     pub vad_num_threads: Option<i32>,
 
-    /// default: kokoro
+    /// default: voxcpm
     #[serde(default = "default_tts_model")]
     pub tts_model: Option<TtsModel>,
 
-    /// default: data/tts/model/mzdk100/kokoro/
+    /// default: data/tts/model/openbmb/VoxCPM-0.5B/
     #[serde(default = "default_tts_path")]
     pub tts_path: Option<String>,
 
@@ -146,7 +146,7 @@ pub struct Config {
     #[serde(default = "default_tts_reference_prompt_text")]
     pub tts_reference_prompt_text: Option<String>,
 
-    /// default: file://data/tts/reference/voice_05.wav
+    /// default: data/tts/reference/voice_05.wav
     #[serde(default = "default_tts_reference_prompt_wav_path")]
     pub tts_reference_prompt_wav_path: Option<String>,
 
@@ -287,11 +287,11 @@ fn default_auth_client_secret() -> Option<String> {
 }
 
 fn default_tts_model() -> Option<TtsModel> {
-    Some(TtsModel::Kokoro)
+    Some(TtsModel::Voxcpm)
 }
 
 fn default_tts_path() -> Option<String> {
-    Some(String::from("data/tts/model/mzdk100/kokoro/"))
+    Some(String::from("data/tts/model/openbmb/VoxCPM-0.5B/"))
 }
 
 fn default_tts_reference_prompt_text() -> Option<String> {
@@ -299,7 +299,7 @@ fn default_tts_reference_prompt_text() -> Option<String> {
 }
 
 fn default_tts_reference_prompt_wav_path() -> Option<String> {
-    Some(String::from("file://data/tts/reference/voice_05.wav"))
+    Some(String::from("data/tts/reference/voice_05.wav"))
 }
 
 fn default_asr_model() -> Option<AsrModel> {
@@ -500,7 +500,6 @@ pub enum AsrModel {
 #[serde(rename_all = "lowercase")]
 pub enum TtsModel {
     #[default]
-    Kokoro,
     Voxcpm,
     Mute,
 }

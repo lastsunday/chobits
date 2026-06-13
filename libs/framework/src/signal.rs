@@ -7,7 +7,7 @@ use tokio::signal;
 pub trait SignalHandler: Send + Sync {
 	async fn reload(&self) -> Result<(), anyhow::Error>;
 	async fn shutdown(&self) -> Result<(), anyhow::Error>;
-	async fn signal(&self, sig: &str) -> Result<(), anyhow::Error>;
+	async fn signal(&self, sig: &'static str) -> Result<(), anyhow::Error>;
 }
 
 #[cfg(unix)]

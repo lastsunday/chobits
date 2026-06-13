@@ -73,7 +73,7 @@ rust-i18n = { workspace = true }
 futures-util = { workspace = true, features = ["sink", "std"] }
 futures-channel = { workspace = true }
 jiff = { workspace = true }
-opus = { workspace = true }
+opus-rs = { workspace = true }
 tokio-stream = { workspace = true }
 tokio-util = { workspace = true }
 futures = { workspace = true }
@@ -108,8 +108,6 @@ qwen-asr = { workspace = true }
 # vad start
 earshot = { workspace = true }
 # vad end
-# tts start
-kokoro-tts = { workspace = true }
 # tts end
 # mcp start
 rmcp = { workspace = true, features = [
