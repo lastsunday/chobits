@@ -8,6 +8,7 @@ mod suppress;
 
 use std::sync::Arc;
 
+pub use crate::logging::LoggingHandle;
 pub use capture::Capture;
 pub use console::{ConsoleFormat, ConsoleWriter, is_systemd_mode};
 pub use reload::{LogLevelReloadHandles, ReloadHandle};

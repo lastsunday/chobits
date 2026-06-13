@@ -1,114 +1,259 @@
-use std::sync::Arc;
+use std::{
+	io,
+	sync::{
+		Arc, RwLock,
+		atomic::{AtomicUsize, Ordering},
+	},
+};
 
-use tracing_subscriber::{EnvFilter, Layer, Registry, fmt, layer::SubscriberExt, reload};
+use tracing_appender::rolling;
+use tracing_subscriber::{
+	EnvFilter, Layer, Registry,
+	fmt::{self, format::FmtSpan, writer::BoxMakeWriter},
+	layer::SubscriberExt,
+	reload,
+};
 
-use crate::log::{ConsoleFormat, ConsoleWriter, LogLevelReloadHandles, capture, fmt_span};
+use crate::config::logging::{LogConfig, LogFormat};
+use crate::log::capture;
 
 #[cfg(feature = "perf")]
 use tracing_flame::FlameLayer;
 
 #[cfg(feature = "perf")]
-pub(crate) type TracingFlameGuard =
-	Option<tracing_flame::FlushGuard<std::io::BufWriter<std::fs::File>>>;
+type TracingFlameGuard = Option<tracing_flame::FlushGuard<std::fs::File>>;
 #[cfg(not(feature = "perf"))]
-pub(crate) type TracingFlameGuard = ();
+type TracingFlameGuard = ();
 
-pub struct LogConfig {
-	pub log_thread_ids: bool,
-	pub log_colors: bool,
-	pub log: String,
-	pub log_filter_regex: bool,
-	pub log_span_events: String,
-	pub log_to_journald: bool,
-	pub journald_identifier: Option<String>,
-	#[cfg(feature = "sentry")]
-	pub sentry_filter: String,
-	#[cfg(feature = "otlp")]
-	pub otlp_filter: String,
-	#[cfg(feature = "otlp")]
-	pub allow_otlp: bool,
-	#[cfg(feature = "otlp")]
-	pub otlp_protocol: String,
-	#[cfg(feature = "perf")]
-	pub tracing_flame: bool,
-	#[cfg(feature = "perf")]
-	pub tracing_flame_filter: String,
-	#[cfg(feature = "perf")]
-	pub tracing_flame_output_path: PathBuf,
-	#[cfg(feature = "console")]
-	pub tokio_console: bool,
+const LEVELS: &[tracing_subscriber::filter::LevelFilter] = &[
+	tracing_subscriber::filter::LevelFilter::ERROR,
+	tracing_subscriber::filter::LevelFilter::WARN,
+	tracing_subscriber::filter::LevelFilter::INFO,
+	tracing_subscriber::filter::LevelFilter::DEBUG,
+	tracing_subscriber::filter::LevelFilter::TRACE,
+];
+
+struct ReloadHandle {
+	set_level: Box<dyn Fn(tracing_subscriber::filter::LevelFilter) + Send + Sync>,
 }
 
-impl Default for LogConfig {
-	fn default() -> Self {
+impl ReloadHandle {
+	fn new<S: tracing::Subscriber + 'static>(
+		handle: reload::Handle<EnvFilter, S>,
+	) -> Self {
 		Self {
-			log_thread_ids: false,
-			log_colors: true,
-			log: "info".into(),
-			log_filter_regex: false,
-			log_span_events: "CLOSE".into(),
-			log_to_journald: false,
-			journald_identifier: None,
-			#[cfg(feature = "sentry")]
-			sentry_filter: "".into(),
-			#[cfg(feature = "otlp")]
-			otlp_filter: "".into(),
-			#[cfg(feature = "otlp")]
-			allow_otlp: false,
-			#[cfg(feature = "otlp")]
-			otlp_protocol: "http".into(),
-			#[cfg(feature = "perf")]
-			tracing_flame: false,
-			#[cfg(feature = "perf")]
-			tracing_flame_filter: "".into(),
-			#[cfg(feature = "perf")]
-			tracing_flame_output_path: PathBuf::from("tracing.flame"),
-			#[cfg(feature = "console")]
-			tokio_console: false,
+			set_level: Box::new(move |level: tracing_subscriber::filter::LevelFilter| {
+				let filter = EnvFilter::builder()
+					.with_default_directive(level.into())
+					.from_env_lossy();
+				let _ = handle.modify(|f| *f = filter);
+			}),
+		}
+	}
+
+	fn set(&self, level: tracing_subscriber::filter::LevelFilter) {
+		(self.set_level)(level);
+	}
+}
+
+pub struct LoggingHandle {
+	console_ctl: ReloadHandle,
+	file_ctl: Option<ReloadHandle>,
+	pub config: Arc<RwLock<LogConfig>>,
+	pub level_index: Arc<AtomicUsize>,
+	_console_guard: tracing_appender::non_blocking::WorkerGuard,
+	_file_guard: Option<tracing_appender::non_blocking::WorkerGuard>,
+	_flame_guard: TracingFlameGuard,
+}
+
+impl LoggingHandle {
+	pub fn cycle_console_level(&self) {
+		let idx = self.level_index.fetch_add(1, Ordering::Relaxed);
+		let level = LEVELS[idx % LEVELS.len()];
+		self.console_ctl.set(level);
+	}
+
+	pub fn reload_from_config(&self) {
+		if let Ok(cfg) = self.config.read() {
+			let level = cfg
+				.console_level
+				.parse::<tracing_subscriber::filter::LevelFilter>()
+				.unwrap_or(tracing_subscriber::filter::LevelFilter::INFO);
+			self.console_ctl.set(level);
+
+			if let Some(ref file_ctl) = self.file_ctl {
+				let file_level = cfg
+					.file_level
+					.parse::<tracing_subscriber::filter::LevelFilter>()
+					.unwrap_or(tracing_subscriber::filter::LevelFilter::INFO);
+				file_ctl.set(file_level);
+			}
 		}
 	}
 }
 
-#[allow(unused_variables)]
-pub fn init(
-	config: &LogConfig,
-) -> Result<(LogLevelReloadHandles, TracingFlameGuard, Arc<capture::State>), anyhow::Error> {
-	let reload_handles = LogLevelReloadHandles::default();
+fn build_console_layer<S, W>(
+	format: LogFormat,
+	log_thread_ids: bool,
+	log_colors: bool,
+	writer: W,
+) -> Box<dyn Layer<S> + Send + Sync + 'static>
+where
+	S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a> + Send + Sync + 'static,
+	W: for<'a> tracing_subscriber::fmt::MakeWriter<'a> + Send + Sync + 'static,
+{
+	let span_events = FmtSpan::CLOSE;
+	match format {
+		LogFormat::Json => Box::new(
+			fmt::layer()
+				.with_span_events(span_events)
+				.with_thread_ids(log_thread_ids)
+				.with_ansi(log_colors)
+				.json()
+				.with_writer(writer),
+		),
+		LogFormat::Compact => Box::new(
+			fmt::layer()
+				.with_span_events(span_events)
+				.with_thread_ids(log_thread_ids)
+				.with_ansi(log_colors)
+				.compact()
+				.with_writer(writer),
+		),
+		LogFormat::Pretty => Box::new(
+			fmt::layer()
+				.with_span_events(span_events)
+				.with_thread_ids(log_thread_ids)
+				.with_ansi(log_colors)
+				.pretty()
+				.with_writer(writer),
+		),
+		LogFormat::Text => Box::new(
+			fmt::layer()
+				.with_span_events(span_events)
+				.with_thread_ids(log_thread_ids)
+				.with_ansi(log_colors)
+				.with_writer(writer),
+		),
+	}
+}
 
-	let console_span_events = fmt_span::from_str(&config.log_span_events).unwrap_or(
-		tracing_subscriber::fmt::format::FmtSpan::CLOSE,
+fn build_file_layer<S>(
+	format: LogFormat,
+	writer: BoxMakeWriter,
+) -> Box<dyn Layer<S> + Send + Sync + 'static>
+where
+	S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a> + Send + Sync + 'static,
+{
+	let span_events = FmtSpan::CLOSE;
+	match format {
+		LogFormat::Json => Box::new(
+			fmt::layer()
+				.with_span_events(span_events)
+				.json()
+				.with_writer(writer),
+		),
+		LogFormat::Compact => Box::new(
+			fmt::layer()
+				.with_span_events(span_events)
+				.compact()
+				.with_writer(writer),
+		),
+		LogFormat::Pretty => Box::new(
+			fmt::layer()
+				.with_span_events(span_events)
+				.pretty()
+				.with_writer(writer),
+		),
+		LogFormat::Text => Box::new(
+			fmt::layer()
+				.with_span_events(span_events)
+				.with_writer(writer),
+		),
+	}
+}
+
+fn mk_filter(enabled: bool, level: &str) -> EnvFilter {
+	if !enabled {
+		return EnvFilter::new("off");
+	}
+	let level_filter = level
+		.parse::<tracing_subscriber::filter::LevelFilter>()
+		.unwrap_or(tracing_subscriber::filter::LevelFilter::INFO);
+	EnvFilter::builder()
+		.with_default_directive(level_filter.into())
+		.from_env_lossy()
+}
+
+#[allow(unused_variables)]
+pub fn init(config: LogConfig) -> anyhow::Result<LoggingHandle> {
+	let _console_level = config
+		.console_level
+		.parse::<tracing_subscriber::filter::LevelFilter>()
+		.map_err(|e| anyhow::anyhow!("invalid console log level: {e}"))?;
+	let _file_level = config
+		.file_level
+		.parse::<tracing_subscriber::filter::LevelFilter>()
+		.map_err(|e| anyhow::anyhow!("invalid file log level: {e}"))?;
+
+	let console_filter = mk_filter(config.console_enabled, &config.console_level);
+	let (console_filter_layer, console_reload) = reload::Layer::new(console_filter);
+
+	let file_filter = mk_filter(config.file_enabled, &config.file_level);
+	let (file_filter_layer, file_reload) = reload::Layer::new(file_filter);
+
+	let (file_writer, file_guard) = if config.file_enabled {
+		let rotation = match config.file_rotation {
+			crate::config::logging::LogRotation::Daily => rolling::Rotation::DAILY,
+			crate::config::logging::LogRotation::Hourly => rolling::Rotation::HOURLY,
+			crate::config::logging::LogRotation::Never => rolling::Rotation::NEVER,
+		};
+		let appender = rolling::RollingFileAppender::builder()
+			.rotation(rotation)
+			.filename_prefix(&config.file_name)
+			.max_log_files(config.file_max_files)
+			.build(&config.file_directory)
+			.map_err(|e| anyhow::anyhow!("failed to create file appender: {e}"))?;
+		let (non_blocking, guard) = tracing_appender::non_blocking(appender);
+		(BoxMakeWriter::new(non_blocking), Some(guard))
+	} else {
+		let (w, g) = tracing_appender::non_blocking(io::sink());
+		(BoxMakeWriter::new(w), Some(g))
+	};
+
+	let (console_writer, console_guard) = tracing_appender::non_blocking(io::stdout());
+
+	let console_layer = build_console_layer(
+		config.console_format,
+		config.log_thread_ids,
+		config.log_colors,
+		console_writer,
 	);
 
-	let console_filter = EnvFilter::builder()
-		.with_regex(config.log_filter_regex)
-		.parse(&config.log)
-		.map_err(|e| anyhow::anyhow!("Config(log, \"{e}.\")"))?;
-
-	let console_layer = fmt::Layer::new()
-		.with_span_events(console_span_events)
-		.event_format(ConsoleFormat::new(config.log_thread_ids, config.log_colors))
-		.fmt_fields(ConsoleFormat::new(config.log_thread_ids, config.log_colors))
-		.with_writer(ConsoleWriter::new());
-
-	let (console_reload_filter, console_reload_handle) =
-		reload::Layer::new(console_filter.clone());
-
-	reload_handles.add("console", Box::new(console_reload_handle));
+	let file_layer = build_file_layer(config.file_format, file_writer);
 
 	let cap_state = Arc::new(capture::State::new());
 	let cap_layer = capture::Layer::new(&cap_state);
 
 	let subscriber = Registry::default()
-		.with(console_layer.with_filter(console_reload_filter))
+		.with(console_layer.with_filter(console_filter_layer))
+		.with(file_layer.with_filter(file_filter_layer))
 		.with(cap_layer);
 
 	#[cfg(all(target_family = "unix", feature = "journald"))]
 	if config.log_to_journald {
 		println!("Initialising journald logging");
-		if let Err(e) = init_journald_logging(config) {
+		if let Err(e) = init_journald_logging(&config) {
 			eprintln!("Failed to initialize journald logging: {e}");
 		}
 	}
+
+	let console_reload_handle = ReloadHandle::new(console_reload);
+	let file_reload_handle = if config.file_enabled {
+		Some(ReloadHandle::new(file_reload))
+	} else {
+		None
+	};
 
 	#[cfg(feature = "sentry")]
 	let subscriber = {
@@ -116,9 +261,8 @@ pub fn init(
 			.map_err(|e| anyhow::anyhow!("Config(sentry_filter, \"{e}.\")"))?;
 
 		let sentry_layer = sentry_tracing::layer();
-		let (sentry_reload_filter, sentry_reload_handle) = reload::Layer::new(sentry_filter);
+		let (sentry_reload_filter, _sentry_reload_handle) = reload::Layer::new(sentry_filter);
 
-		reload_handles.add("sentry", Box::new(sentry_reload_handle));
 		subscriber.with(sentry_layer.with_filter(sentry_reload_filter))
 	};
 
@@ -162,9 +306,8 @@ pub fn init(
 
 			let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
 
-			let (otlp_reload_filter, otlp_reload_handle) =
+			let (otlp_reload_filter, _otlp_reload_handle) =
 				reload::Layer::new(otlp_filter.clone());
-			reload_handles.add("otlp", Box::new(otlp_reload_handle));
 
 			Some(telemetry.with_filter(otlp_reload_filter))
 		});
@@ -199,9 +342,17 @@ pub fn init(
 	#[cfg_attr(not(feature = "perf"), allow(clippy::let_unit_value))]
 	let flame_guard = ();
 
-	let ret = (reload_handles, flame_guard, cap_state);
+	let handle = LoggingHandle {
+		console_ctl: console_reload_handle,
+		file_ctl: file_reload_handle,
+		config: Arc::new(RwLock::new(config)),
+		level_index: Arc::new(AtomicUsize::new(0)),
+		_console_guard: console_guard,
+		_file_guard: file_guard,
+		_flame_guard: flame_guard,
+	};
 
-	let (console_enabled, console_disabled_reason) = tokio_console_enabled(config);
+	let (console_enabled, console_disabled_reason) = tokio_console_enabled(&handle.config.read().unwrap());
 	#[cfg(all(feature = "console", feature = "tokio_unstable"))]
 	if console_enabled {
 		let console_layer = console_subscriber::ConsoleLayer::builder()
@@ -209,7 +360,7 @@ pub fn init(
 			.spawn();
 
 		set_global_default(subscriber.with(console_layer));
-		return Ok(ret);
+		return Ok(handle);
 	}
 
 	set_global_default(subscriber);
@@ -218,7 +369,7 @@ pub fn init(
 		tracing::warn!("{}", console_disabled_reason);
 	}
 
-	Ok(ret)
+	Ok(handle)
 }
 
 #[cfg(all(target_family = "unix", feature = "journald"))]
@@ -226,7 +377,8 @@ fn init_journald_logging(config: &LogConfig) -> Result<(), anyhow::Error> {
 	use tracing_journald::Layer as JournaldLayer;
 
 	let journald_filter =
-		EnvFilter::try_new(&config.log).map_err(|e| anyhow::anyhow!("Config(log, \"{e}.\")"))?;
+		EnvFilter::try_new(&config.console_level)
+			.map_err(|e| anyhow::anyhow!("Config(log, \"{e}.\")"))?;
 
 	let mut journald_layer = JournaldLayer::new()
 		.map_err(|e| anyhow::anyhow!("Config(journald, \"Failed to initialize journald layer: {e}.\")"))?;
@@ -246,7 +398,7 @@ fn init_journald_logging(config: &LogConfig) -> Result<(), anyhow::Error> {
 fn tokio_console_enabled(config: &LogConfig) -> (bool, &'static str) {
 	#[cfg(all(feature = "console", feature = "tokio_unstable"))]
 	{
-		if !config.tokio_console {
+		if !config.tokio_console_enabled {
 			return (false, "tokio console is available but disabled by the configuration.");
 		}
 

@@ -184,3 +184,55 @@
 # This item is undocumented. Please contribute documentation for it.
 #
 #matrix_client_password =
+
+# Enable console logging
+#
+#log_console_enabled = true
+
+# Console log level (trace, debug, info, warn, error)
+#
+#log_console_level = info
+
+# Console log format (text, json, compact, pretty)
+#
+#log_console_format = text
+
+# Enable file logging
+#
+#log_file_enabled = false
+
+# File log level (trace, debug, info, warn, error)
+#
+#log_file_level = info
+
+# File log format (text, json, compact, pretty)
+#
+#log_file_format = json
+
+# File log directory
+#
+#log_file_directory = ./logs
+
+# File log name prefix
+#
+#log_file_name = server
+
+# Max log files to retain
+#
+#log_file_max_files = 10
+
+# Log rotation (daily, hourly, never)
+#
+#log_file_rotation = daily
+
+# Enable tracing-flame profiling output
+#
+#log_flame_enabled = false
+
+# Flame graph output directory
+#
+#log_flame_directory = ./flame
+
+# Enable tokio-console
+#
+#log_tokio_console_enabled = false

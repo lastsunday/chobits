@@ -230,6 +230,84 @@ pub struct Config {
     #[serde(default = "default_matrix_client_password")]
     pub matrix_client_password: Option<String>,
 
+    /// Enable console logging
+    ///
+    /// default: true
+    #[serde(default = "default_log_console_enabled")]
+    pub log_console_enabled: Option<bool>,
+
+    /// Console log level (trace, debug, info, warn, error)
+    ///
+    /// default: info
+    #[serde(default = "default_log_console_level")]
+    pub log_console_level: Option<String>,
+
+    /// Console log format (text, json, compact, pretty)
+    ///
+    /// default: text
+    #[serde(default = "default_log_console_format")]
+    pub log_console_format: Option<String>,
+
+    /// Enable file logging
+    ///
+    /// default: false
+    #[serde(default = "default_log_file_enabled")]
+    pub log_file_enabled: Option<bool>,
+
+    /// File log level (trace, debug, info, warn, error)
+    ///
+    /// default: info
+    #[serde(default = "default_log_file_level")]
+    pub log_file_level: Option<String>,
+
+    /// File log format (text, json, compact, pretty)
+    ///
+    /// default: json
+    #[serde(default = "default_log_file_format")]
+    pub log_file_format: Option<String>,
+
+    /// File log directory
+    ///
+    /// default: ./logs
+    #[serde(default = "default_log_file_directory")]
+    pub log_file_directory: Option<String>,
+
+    /// File log name prefix
+    ///
+    /// default: server
+    #[serde(default = "default_log_file_name")]
+    pub log_file_name: Option<String>,
+
+    /// Max log files to retain
+    ///
+    /// default: 10
+    #[serde(default = "default_log_file_max_files")]
+    pub log_file_max_files: Option<usize>,
+
+    /// Log rotation (daily, hourly, never)
+    ///
+    /// default: daily
+    #[serde(default = "default_log_file_rotation")]
+    pub log_file_rotation: Option<String>,
+
+    /// Enable tracing-flame profiling output
+    ///
+    /// default: false
+    #[serde(default = "default_log_flame_enabled")]
+    pub log_flame_enabled: Option<bool>,
+
+    /// Flame graph output directory
+    ///
+    /// default: ./flame
+    #[serde(default = "default_log_flame_directory")]
+    pub log_flame_directory: Option<String>,
+
+    /// Enable tokio-console
+    ///
+    /// default: false
+    #[serde(default = "default_log_tokio_console_enabled")]
+    pub log_tokio_console_enabled: Option<bool>,
+
     #[serde(flatten)]
     #[allow(clippy::zero_sized_map_values)]
     // this is a catchall, the map shouldn't be zero at runtime
@@ -398,6 +476,58 @@ fn default_matrix_client_username() -> Option<String> {
 
 fn default_matrix_client_password() -> Option<String> {
     None
+}
+
+fn default_log_console_enabled() -> Option<bool> {
+    Some(true)
+}
+
+fn default_log_console_level() -> Option<String> {
+    Some("info".into())
+}
+
+fn default_log_console_format() -> Option<String> {
+    Some("text".into())
+}
+
+fn default_log_file_enabled() -> Option<bool> {
+    Some(false)
+}
+
+fn default_log_file_level() -> Option<String> {
+    Some("info".into())
+}
+
+fn default_log_file_format() -> Option<String> {
+    Some("json".into())
+}
+
+fn default_log_file_directory() -> Option<String> {
+    Some("./logs".into())
+}
+
+fn default_log_file_name() -> Option<String> {
+    Some("server".into())
+}
+
+fn default_log_file_max_files() -> Option<usize> {
+    Some(10)
+}
+
+fn default_log_file_rotation() -> Option<String> {
+    Some("daily".into())
+}
+
+fn default_log_flame_enabled() -> Option<bool> {
+    Some(false)
+}
+
+fn default_log_flame_directory() -> Option<String> {
+    Some("./flame".into())
+}
+
+fn default_log_tokio_console_enabled() -> Option<bool> {
+    Some(false)
 }
 
 impl Config {
