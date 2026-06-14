@@ -8,7 +8,6 @@ pub mod i18n;
 pub mod id;
 pub mod info;
 pub mod log;
-pub mod logger;
 pub mod logging;
 pub mod middleware;
 pub mod panic;
