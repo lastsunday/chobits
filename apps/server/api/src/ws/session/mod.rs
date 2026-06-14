@@ -1,4 +1,5 @@
 use super::frame::{Frame, FrameError, FrameResult};
+use self::trace::Direction;
 use super::session::listener::Listener;
 use super::session::round::{Command, Round};
 use crate::config::audio::AudioConfig;
@@ -24,6 +25,7 @@ use tracing::{error, info, trace};
 pub mod listener;
 pub mod output_controller;
 pub mod round;
+pub mod trace;
 
 #[derive(Default)]
 pub struct SessionBuilder {
@@ -95,7 +97,7 @@ pub struct Session {
     pub id: String,
     pub current_round: Option<Box<Round>>,
     output_tx: OutputTx,
-    trace_log: Option<output_controller::TraceLog>,
+    pub trace_log: trace::TraceLog,
     phase: Phase,
     latest_activity_time: Arc<Mutex<Option<i64>>>,
     history: Arc<Mutex<History>>,
@@ -146,7 +148,7 @@ impl Session {
             id,
             current_round: None,
             output_tx: None,
-            trace_log: None,
+            trace_log: trace::TraceLog::new(),
             phase: Phase::Hello,
             latest_activity_time: Arc::new(Mutex::new(None)),
             history: Arc::new(Mutex::new(History {
@@ -195,8 +197,8 @@ impl Session {
             .build()
             .with_history(self.history.clone())
             .with_max_prompt_len(self.config.max_prompt_len);
-        let trace_log = self.trace_log.clone().expect("trace_log not created, call output_frame before new_round");
-        let traced_tx = output_controller::TracedSender::new(tx.clone(), trace_log, "E");
+        let trace_log = self.trace_log.clone();
+        let traced_tx = output_controller::TracedSender::new(tx.clone(), trace_log, Direction::Internal);
         self.current_round = Some(Box::new(Round::new(
             self.id.clone(),
             traced_tx,
@@ -218,7 +220,23 @@ impl Session {
     }
 
     pub async fn accept_frame<'a>(&mut self, frame: &Frame<'a>) {
-        let phase = self.phase.clone();
+        self.trace_log.push_input(&format!("{:?}", frame));
+
+        match frame {
+            Frame::Close(_) => {
+                info!(target:"session","close");
+                self.stop().await;
+                return;
+            }
+            Frame::Abort(_) => {
+                info!(target:"session","abort");
+                self.new_round().await;
+                return;
+            }
+            Frame::Ping { .. } | Frame::Pong { .. } => return,
+            _ => {}
+        }
+
         if let Frame::Mcp(message) = frame {
             match self.device_mcp_phase {
                 DeviceMcpPhase::ToolCall => {
@@ -246,6 +264,7 @@ impl Session {
             }
             return;
         }
+        let phase = self.phase.clone();
         match phase {
             Phase::Hello => self.handle_phase_hello(frame).await,
             Phase::ListenDetect => self.handle_phase_listen_detect(frame).await,
@@ -261,12 +280,11 @@ impl Session {
         let (controller_output_tx, controller_output_rx) =
             channel::<Result<FrameResult, FrameError>>(64);
 
-        let trace_log = output_controller::TraceLog::new();
-        self.trace_log = Some(trace_log.clone());
+        let trace_log = self.trace_log.clone();
         let traced_output_tx = output_controller::TracedSender::new(
             controller_output_tx,
             trace_log,
-            "→",
+            Direction::Outbound,
         );
 
         let frame_duration = self
@@ -307,15 +325,6 @@ impl Session {
         *time
     }
 
-    pub fn traces(&self) -> Vec<output_controller::TraceEntry> {
-        self.trace_log
-            .as_ref()
-            .map(|log| {
-                let guard = log.buf.lock().expect("trace_buf lock");
-                guard.iter().cloned().collect()
-            })
-            .unwrap_or_default()
-    }
 }
 
 include!("handle/phase.rs");

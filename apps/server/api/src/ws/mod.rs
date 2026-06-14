@@ -150,68 +150,20 @@ where
         if result.is_break() {
             if let Some(item) = result.break_value() {
                 match item {
-                    Some(frame) => {
-                        match frame {
-                            frame::Frame::Voice { data: _data } => {
-                                trace!(target:"frame","[RECV] Voice");
-                            }
-                            _ => {
-                                debug!(target:"frame","[RECV] {:?}", frame);
-                            }
-                        }
-                        match frame {
-                            frame::Frame::Close(close_message) => {
-                                info!("break value close message = {:?}", close_message);
-                                session.stop().await;
-                                return;
-                            }
-                            _ => {
-                                session.accept_frame(&frame).await;
-                            }
-                        }
-                    }
-                    None => {
-                        info!("break value none");
-                        session.stop().await;
-                        return;
-                    }
+                    Some(frame) => session.accept_frame(&frame).await,
+                    None => info!("break value none"),
                 }
             }
+            session.stop().await;
             return;
         }
         if result.is_continue()
             && let Some(item) = result.continue_value()
+            && let Some(frame) = item
         {
-            match item {
-                Some(frame) => {
-                    match frame {
-                        frame::Frame::Voice { data: _data } => {
-                            trace!(target:"frame","[RECV] Voice");
-                        }
-                        _ => {
-                            debug!(target:"frame","[RECV] {:?}", frame);
-                        }
-                    }
-                    match frame {
-                        frame::Frame::Abort(abort_message) => {
-                            debug!(",abort message = {:?}", abort_message);
-                            session.new_round().await;
-                        }
-                        frame::Frame::Ping { data } => {
-                            debug!("ping,len = {}", data.len());
-                        }
-                        frame::Frame::Pong { data } => {
-                            debug!("pong,len = {}", data.len());
-                        }
-                        _ => {
-                            session.accept_frame(&frame).await;
-                        }
-                    }
-                }
-                None => {
-                    info!("unkonw continue message");
-                }
-            }
+            session.accept_frame(&frame).await
+        } else {
+            info!("unkonw continue message");
         }
     }
 }

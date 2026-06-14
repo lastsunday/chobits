@@ -1,74 +1,32 @@
 use super::super::frame::{FrameError, FrameResult};
+use super::trace::{Direction, TraceKind, TraceLog};
 use chrono::Local;
 use service::chobits::message::tts::TtsState;
-use std::collections::VecDeque;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex as StdMutex};
+use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::{Receiver, Sender, error::SendError};
 use tokio::time::{Duration, sleep};
 
 const PRE_BUFFER_FRAME_COUNT: u64 = 6;
-pub(crate) const TRACE_CAPACITY: usize = 500;
 
-pub type TraceBuf = Arc<StdMutex<VecDeque<TraceEntry>>>;
-
-#[derive(Debug, Clone)]
-pub struct TraceEntry {
-    pub ts: String,
-    pub seq: u64,
-    pub dir: &'static str,
-    pub kind: String,
-    pub detail: String,
-}
-
-#[derive(Clone)]
-pub struct TraceLog {
-    pub buf: TraceBuf,
-    pub seq: Arc<AtomicU64>,
-}
-
-impl TraceLog {
-    pub fn new() -> Self {
-        Self {
-            buf: Arc::new(StdMutex::new(VecDeque::new())),
-            seq: Arc::new(AtomicU64::new(1)),
-        }
-    }
-
-    pub fn push(&self, dir: &'static str, kind: String, detail: String) {
-        let mut buf = self.buf.lock().expect("trace_buf lock");
-        if buf.len() >= TRACE_CAPACITY {
-            buf.pop_front();
-        }
-        buf.push_back(TraceEntry {
-            ts: Local::now().format("%H:%M:%S.%3f").to_string(),
-            seq: self.seq.fetch_add(1, Ordering::Relaxed),
-            dir,
-            kind,
-            detail,
-        });
-    }
-}
-
-fn trace_info_from_result(item: &Result<FrameResult, FrameError>) -> (String, String) {
+fn trace_info_from_result(item: &Result<FrameResult, FrameError>) -> (TraceKind, String) {
     match item {
-        Ok(FrameResult::AudioResult(msg)) => ("Audio".into(), format!("{} bytes", msg.data.len())),
+        Ok(FrameResult::AudioResult(msg)) => (TraceKind::Audio, format!("{} bytes", msg.data.len())),
         Ok(FrameResult::TTSResult(msg)) => {
-            let detail = msg.text.clone().or_else(|| msg.state.as_ref().map(|s| format!("{:?}", s))).unwrap_or_default();
-            ("TTS".into(), detail)
+            let detail = msg
+                .text
+                .clone()
+                .or_else(|| msg.state.as_ref().map(|s| format!("{:?}", s)))
+                .unwrap_or_default();
+            (TraceKind::TTS, detail)
         }
-        Ok(FrameResult::STTResult(msg)) => {
-            ("STT".into(), msg.text.clone().unwrap_or_default())
-        }
-        Ok(FrameResult::LLMResult(msg)) => {
-            ("LLM".into(), msg.text.clone().unwrap_or_default())
-        }
-        Ok(FrameResult::HelloResult(_)) => ("Hello".into(), String::new()),
-        Ok(FrameResult::McpResult(_)) => ("MCP".into(), String::new()),
-        Ok(FrameResult::CloseResult) => ("Close".into(), String::new()),
-        Err(_) => ("Error".into(), String::new()),
+        Ok(FrameResult::STTResult(msg)) => (TraceKind::STT, msg.text.clone().unwrap_or_default()),
+        Ok(FrameResult::LLMResult(msg)) => (TraceKind::LLM, msg.text.clone().unwrap_or_default()),
+        Ok(FrameResult::HelloResult(_)) => (TraceKind::Hello, String::new()),
+        Ok(FrameResult::McpResult(_)) => (TraceKind::MCP, String::new()),
+        Ok(FrameResult::CloseResult) => (TraceKind::Close, String::new()),
+        Err(_) => (TraceKind::Error, String::new()),
     }
 }
 
@@ -76,24 +34,26 @@ fn trace_info_from_result(item: &Result<FrameResult, FrameError>) -> (String, St
 pub struct TracedSender {
     inner: Sender<Result<FrameResult, FrameError>>,
     log: TraceLog,
-    dir: &'static str,
+    dir: Direction,
 }
 
 impl TracedSender {
     pub fn new(
         inner: Sender<Result<FrameResult, FrameError>>,
         log: TraceLog,
-        dir: &'static str,
+        dir: Direction,
     ) -> Self {
         Self { inner, log, dir }
     }
 
-    pub async fn send(&self, item: Result<FrameResult, FrameError>) -> Result<(), SendError<Result<FrameResult, FrameError>>> {
+    pub async fn send(
+        &self,
+        item: Result<FrameResult, FrameError>,
+    ) -> Result<(), SendError<Result<FrameResult, FrameError>>> {
         let (kind, detail) = trace_info_from_result(&item);
         self.log.push(self.dir, kind, detail);
         self.inner.send(item).await
     }
-
 }
 
 pub struct OutputController {
@@ -165,7 +125,9 @@ impl OutputController {
     async fn pace_audio(&mut self) {
         if self.audio_send_count >= PRE_BUFFER_FRAME_COUNT {
             let elapsed = self.audio_last_time.elapsed();
-            let delay_ms = self.frame_duration.saturating_sub(elapsed.as_millis() as u64);
+            let delay_ms = self
+                .frame_duration
+                .saturating_sub(elapsed.as_millis() as u64);
             if delay_ms > 0 {
                 sleep(Duration::from_millis(delay_ms)).await;
             }

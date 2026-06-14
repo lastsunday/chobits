@@ -166,10 +166,6 @@ impl Session {
                 let state = self.listener.get_state();
                 match &self.current_round {
                     Some(_round) => {
-                        // debug!(
-                        //     "listener listen round end = {} state = {:?}",
-                        //     round_end, state,
-                        // );
                         self.listener.listen(data).await;
                         if state == crate::ws::session::listener::ListenState::End {
                             self.handle_listen_end().await;
@@ -400,10 +396,6 @@ impl Session {
                 let state = self.listener.get_state();
                 match &self.current_round {
                     Some(_round) => {
-                        // debug!(
-                        //     "listener listen round end = {} state = {:?}",
-                        //     round_end, state,
-                        // );
                         self.listener.listen(data).await;
                         if state == crate::ws::session::listener::ListenState::End {
                             self.handle_listen_end().await;
