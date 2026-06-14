@@ -1,7 +1,7 @@
 use super::super::frame::FrameResult;
 use super::trace::{Direction, TraceKind, TraceLog};
 use chrono::Local;
-use framework::error::ApiError;
+use framework::error::AppError;
 use service::chobits::message::tts::TtsState;
 use std::sync::Arc;
 use std::time::Instant;
@@ -11,7 +11,7 @@ use tokio::time::{Duration, sleep};
 
 const PRE_BUFFER_FRAME_COUNT: u64 = 6;
 
-fn trace_info_from_result(item: &Result<FrameResult, ApiError>) -> (TraceKind, String) {
+fn trace_info_from_result(item: &Result<FrameResult, AppError>) -> (TraceKind, String) {
     match item {
         Ok(FrameResult::AudioResult(msg)) => (TraceKind::Audio, format!("{} bytes", msg.data.len())),
         Ok(FrameResult::TTSResult(msg)) => {
@@ -33,14 +33,14 @@ fn trace_info_from_result(item: &Result<FrameResult, ApiError>) -> (TraceKind, S
 
 #[derive(Clone)]
 pub struct TracedSender {
-    inner: Sender<Result<FrameResult, ApiError>>,
+    inner: Sender<Result<FrameResult, AppError>>,
     log: TraceLog,
     dir: Direction,
 }
 
 impl TracedSender {
     pub fn new(
-        inner: Sender<Result<FrameResult, ApiError>>,
+        inner: Sender<Result<FrameResult, AppError>>,
         log: TraceLog,
         dir: Direction,
     ) -> Self {
@@ -49,8 +49,8 @@ impl TracedSender {
 
     pub async fn send(
         &self,
-        item: Result<FrameResult, ApiError>,
-    ) -> Result<(), SendError<Result<FrameResult, ApiError>>> {
+        item: Result<FrameResult, AppError>,
+    ) -> Result<(), SendError<Result<FrameResult, AppError>>> {
         let (kind, detail) = trace_info_from_result(&item);
         self.log.push(self.dir, kind, detail);
         self.inner.send(item).await
@@ -58,7 +58,7 @@ impl TracedSender {
 }
 
 pub struct OutputController {
-    input_rx: Receiver<Result<FrameResult, ApiError>>,
+    input_rx: Receiver<Result<FrameResult, AppError>>,
     output_tx: TracedSender,
     audio_send_count: u64,
     audio_last_time: Instant,
@@ -68,7 +68,7 @@ pub struct OutputController {
 
 impl OutputController {
     pub fn new(
-        input_rx: Receiver<Result<FrameResult, ApiError>>,
+    input_rx: Receiver<Result<FrameResult, AppError>>,
         output_tx: TracedSender,
         frame_duration: u64,
         latest_activity_time: Arc<Mutex<Option<i64>>>,
@@ -98,7 +98,7 @@ impl OutputController {
     }
 
     /// returns true if should stop
-    async fn dispatch(&mut self, item: Result<FrameResult, ApiError>) -> bool {
+    async fn dispatch(&mut self, item: Result<FrameResult, AppError>) -> bool {
         match &item {
             Ok(FrameResult::TTSResult(msg)) if msg.state == Some(TtsState::Start) => {
                 self.audio_send_count = 0;
@@ -115,7 +115,7 @@ impl OutputController {
     }
 
     /// returns true if output channel closed
-    async fn send_now(&mut self, item: Result<FrameResult, ApiError>) -> bool {
+    async fn send_now(&mut self, item: Result<FrameResult, AppError>) -> bool {
         {
             let mut time = self.latest_activity_time.lock().await;
             *time = Some(Local::now().timestamp_millis());

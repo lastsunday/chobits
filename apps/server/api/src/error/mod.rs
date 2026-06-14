@@ -1,1 +1,1 @@
-pub use framework::error::{ApiError, AppErrorCode};
+pub use framework::error::{AppError, AppErrorCode};

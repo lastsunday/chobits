@@ -7,7 +7,7 @@ use crate::{
     mcp::client::McpClient,
     ws::frame::FrameResult,
 };
-use framework::error::ApiError;
+use framework::error::AppError;
 use anyhow::Context;
 use async_trait::async_trait;
 use rig::{
@@ -47,7 +47,7 @@ pub struct DeviceMcpClient {
     next_cursor: Option<String>,
     pub tools: Vec<Tool>,
     pub phase: DeviceMcpPhase,
-    output_tx: Sender<Result<FrameResult, ApiError>>,
+        output_tx: Sender<Result<FrameResult, AppError>>,
     call_tool_result_rx: Arc<Mutex<Receiver<anyhow::Result<ToolResult>>>>,
 }
 
@@ -109,7 +109,7 @@ impl McpClient for DeviceMcpClient {
 impl DeviceMcpClient {
     pub fn new(
         session_id: Option<String>,
-        output_tx: Sender<Result<FrameResult, ApiError>>,
+    output_tx: Sender<Result<FrameResult, AppError>>,
         call_tool_result_rx: Arc<Mutex<Receiver<anyhow::Result<ToolResult>>>>,
     ) -> Self {
         Self {

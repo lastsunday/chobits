@@ -3,7 +3,7 @@ use candle_core::{
     utils::{cuda_is_available, metal_is_available},
 };
 use framework::err;
-use framework::error::{ApiError, critical_code::CriticalErrorCode};
+use framework::error::{AppError, critical_code::CriticalErrorCode};
 use rig::completion::CompletionError;
 
 use framework::prelude::error;
@@ -101,7 +101,7 @@ impl From<ModelError> for CompletionError {
     }
 }
 
-impl From<ModelError> for ApiError {
+impl From<ModelError> for AppError {
     fn from(value: ModelError) -> Self {
         match &value {
             ModelError::Chat(_) => err!(ModelErrorCode::Chat).with_extra(value.to_string()),

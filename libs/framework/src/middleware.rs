@@ -6,7 +6,7 @@ use tower_http::auth::{AsyncAuthorizeRequest, AsyncRequireAuthorizationLayer};
 use crate::prelude::*;
 use crate::{
     auth::Jwt,
-    error::{ApiError, auth_code::AuthErrorCode},
+    error::{AppError, auth_code::AuthErrorCode},
 };
 
 static AUTH_LAYER_INSTANCE: LazyLock<AsyncRequireAuthorizationLayer<JwtAuth>> =
@@ -42,7 +42,7 @@ impl AsyncAuthorizeRequest<Body> for JwtAuth {
             let token = request
                 .headers()
                 .get(header::AUTHORIZATION)
-                .map(|value| -> Result<_, ApiError> {
+                .map(|value| -> Result<_, AppError> {
                     let token = value
                         .to_str()
                         .map_err(|_| err!(AuthErrorCode::AuthHeaderInvalid))?

@@ -5,7 +5,7 @@ use axum::{
     http::HeaderMap,
 };
 use axum_extra::{TypedHeader, headers};
-use framework::{data::valid::ValidJson, err, error::ApiResult, id::gen_id};
+use framework::{data::valid::ValidJson, err, error::AppResult, id::gen_id};
 use std::net::SocketAddr;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
@@ -177,7 +177,7 @@ async fn ota(
     host: TypedHeader<headers::Host>,
     //TODO: param not use
     ValidJson(_param): ValidJson<OtaParam>,
-) -> ApiResult<Json<OtaResult>> {
+) -> AppResult<Json<OtaResult>> {
     if headers.get(KEY_DEVICE_ID).is_none() {
         return Err(err!(OtaErrorCode::LackDeviceId));
     }
@@ -245,7 +245,7 @@ async fn activate(
     State(AppState { .. }): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
-) -> ApiResult<String> {
+) -> AppResult<String> {
     if headers.get(KEY_DEVICE_ID).is_none() {
         return Err(err!(OtaErrorCode::LackDeviceId));
     }

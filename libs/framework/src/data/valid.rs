@@ -1,11 +1,11 @@
 use crate::data::path::Path;
 use crate::data::query::Query;
-use crate::{data::json::Json, error::ApiError};
+use crate::{data::json::Json, error::AppError};
 use axum::extract::{FromRequest, FromRequestParts, Request};
 use axum::http::request::Parts;
 
 #[derive(Debug, Clone, Default, FromRequest, FromRequestParts)]
-#[from_request(via(axum_valid::Valid), rejection(ApiError))]
+#[from_request(via(axum_valid::Valid), rejection(AppError))]
 pub struct Valid<T>(pub T);
 
 #[derive(Debug, Clone, Default)]
@@ -20,9 +20,9 @@ macro_rules! impl_from_request {
         impl<S, T> FromRequestParts<S> for $name<T>
         where
             S: Send + Sync,
-            Valid<$wrapper<T>>: FromRequestParts<S, Rejection = ApiError>,
+            Valid<$wrapper<T>>: FromRequestParts<S, Rejection = AppError>,
         {
-            type Rejection = ApiError;
+            type Rejection = AppError;
 
             async fn from_request_parts(
                 parts: &mut Parts,
@@ -36,9 +36,9 @@ macro_rules! impl_from_request {
         impl<S, T> FromRequest<S> for $name<T>
         where
             S: Send + Sync,
-            Valid<$wrapper<T>>: FromRequest<S, Rejection = ApiError>,
+            Valid<$wrapper<T>>: FromRequest<S, Rejection = AppError>,
         {
-            type Rejection = ApiError;
+            type Rejection = AppError;
 
             async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
                 Ok($name(Valid::from_request(req, state).await?.0.0))

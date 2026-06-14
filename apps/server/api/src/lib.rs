@@ -28,7 +28,7 @@ use axum::routing::get;
 use bytesize::ByteSize;
 use either::Either;
 use framework::config::auth::AuthConfig;
-use framework::error::{ApiError, ApiResult, critical_code::CriticalErrorCode, framework_code::FrameworkErrorCode};
+use framework::error::{AppError, AppResult, critical_code::CriticalErrorCode, framework_code::FrameworkErrorCode};
 use framework::trace::LatencyOnResponse;
 use futures::future::join_all;
 use migration::MigratorTrait;
@@ -264,9 +264,9 @@ pub fn create_router(
 pub fn setup_default(router: Router) -> Router {
     let app = router
         .fallback(web::index_handler)
-        .method_not_allowed_fallback(async || -> ApiResult<()> {
+        .method_not_allowed_fallback(async || -> AppResult<()> {
             tracing::warn!("Method not allowed");
-            Err(ApiError::from_app_error(FrameworkErrorCode::MethodNotAllowed))
+            Err(AppError::from_code(FrameworkErrorCode::MethodNotAllowed))
         });
     let timeout =
         TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_secs(120));
@@ -326,9 +326,9 @@ fn api_setup(router: OpenApiRouter, api_router: OpenApiRouter) -> OpenApiRouter 
 fn setup_api_fallback(router: Router) -> Router {
     router.nest(
         "/api",
-        Router::new().fallback(async || -> ApiResult<()> {
+        Router::new().fallback(async || -> AppResult<()> {
             tracing::warn!("Not found");
-            Err(ApiError::from_app_error(CriticalErrorCode::ResourceNotFound))
+            Err(AppError::from_code(CriticalErrorCode::ResourceNotFound))
         }),
     )
 }

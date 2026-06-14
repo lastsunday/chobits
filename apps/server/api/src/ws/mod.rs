@@ -26,7 +26,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use axum_extra::{TypedHeader, headers};
-use framework::error::ApiError;
+use framework::error::AppError;
 use framework::id::gen_id;
 use framework::prelude::error as error_code;
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
@@ -179,7 +179,7 @@ where
 }
 
 async fn on_send<W>(
-    mut output: impl Stream<Item = Result<FrameResult, ApiError>> + Unpin + Send + 'static,
+    mut output: impl Stream<Item = Result<FrameResult, AppError>> + Unpin + Send + 'static,
     mut write: W,
 ) where
     W: Sink<Message> + Unpin + Send + 'static,
@@ -244,7 +244,7 @@ async fn on_send<W>(
             }
             Err(api_err) => {
                 api_err.log();
-                let ApiError::App { code, message, .. } = &api_err;
+                let AppError::App { code, message, .. } = &api_err;
                 send_text(&mut write, &ErrorFrame { mtype: "error", code: *code, message: message.clone() }).await;
             }
         }

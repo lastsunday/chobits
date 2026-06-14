@@ -21,7 +21,7 @@ pub mod critical_code;
 pub mod framework_code;
 pub mod third_party_code;
 
-pub type ApiResult<T> = Result<T, ApiError>;
+pub type AppResult<T> = Result<T, AppError>;
 
 pub trait AppErrorCode: Send + Sync {
     fn code(&self) -> u32;
@@ -29,7 +29,7 @@ pub trait AppErrorCode: Send + Sync {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum ApiError {
+pub enum AppError {
     #[error("App error: {code}")]
     App {
         code: u32,
@@ -41,9 +41,9 @@ pub enum ApiError {
     },
 }
 
-impl ApiError {
-    pub fn from_app_error<T: AppErrorCode + Send + Sync + 'static>(err: T) -> Self {
-        ApiError::App {
+impl AppError {
+    pub fn from_code<T: AppErrorCode + Send + Sync + 'static>(err: T) -> Self {
+        AppError::App {
             code: err.code(),
             message: err.message(),
             extra_message: None,
@@ -55,14 +55,14 @@ impl ApiError {
 
     pub fn with_extra(self, extra: impl Into<String>) -> Self {
         match self {
-            ApiError::App {
+            AppError::App {
                 code,
                 message,
                 extra_message: _,
                 file,
                 line,
                 error,
-            } => ApiError::App {
+            } => AppError::App {
                 code,
                 message,
                 extra_message: Some(extra.into()),
@@ -75,7 +75,7 @@ impl ApiError {
 
     pub fn log(&self) {
         match self {
-            ApiError::App {
+            AppError::App {
                 code,
                 message,
                 extra_message,
@@ -122,7 +122,7 @@ impl ApiError {
 
     pub fn gen_response(&self) -> Response {
         let (status_code, code, message) = match self {
-            ApiError::App {
+            AppError::App {
                 code,
                 message,
                 extra_message: _,
@@ -182,23 +182,23 @@ impl ApiError {
     }
 }
 
-impl IntoResponse for ApiError {
+impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         self.log();
         self.gen_response()
     }
 }
 
-impl From<ApiError> for Response {
-    fn from(value: ApiError) -> Self {
+impl From<AppError> for Response {
+    fn from(value: AppError) -> Self {
         value.into_response()
     }
 }
 
-impl From<anyhow::Error> for ApiError {
+impl From<anyhow::Error> for AppError {
     fn from(value: anyhow::Error) -> Self {
         let err = critical_code::CriticalErrorCode::InternalError;
-        ApiError::App {
+        AppError::App {
             code: err.code(),
             message: err.message(),
             extra_message: Some(value.to_string()),
@@ -209,10 +209,10 @@ impl From<anyhow::Error> for ApiError {
     }
 }
 
-impl From<DbErr> for ApiError {
+impl From<DbErr> for AppError {
     fn from(value: DbErr) -> Self {
         let err = base_code::BaseErrorCode::Database;
-        ApiError::App {
+        AppError::App {
             code: err.code(),
             message: err.message(),
             extra_message: Some(value.to_string()),
@@ -223,10 +223,10 @@ impl From<DbErr> for ApiError {
     }
 }
 
-impl From<QueryRejection> for ApiError {
+impl From<QueryRejection> for AppError {
     fn from(value: QueryRejection) -> Self {
         let err = framework_code::FrameworkErrorCode::QueryInvalid;
-        ApiError::App {
+        AppError::App {
             code: err.code(),
             message: err.message(),
             extra_message: Some(value.to_string()),
@@ -237,10 +237,10 @@ impl From<QueryRejection> for ApiError {
     }
 }
 
-impl From<PathRejection> for ApiError {
+impl From<PathRejection> for AppError {
     fn from(value: PathRejection) -> Self {
         let err = framework_code::FrameworkErrorCode::PathInvalid;
-        ApiError::App {
+        AppError::App {
             code: err.code(),
             message: err.message(),
             extra_message: Some(value.to_string()),
@@ -251,10 +251,10 @@ impl From<PathRejection> for ApiError {
     }
 }
 
-impl From<JsonRejection> for ApiError {
+impl From<JsonRejection> for AppError {
     fn from(value: JsonRejection) -> Self {
         let err = framework_code::FrameworkErrorCode::JsonInvalid;
-        ApiError::App {
+        AppError::App {
             code: err.code(),
             message: err.message(),
             extra_message: Some(value.to_string()),
@@ -265,10 +265,10 @@ impl From<JsonRejection> for ApiError {
     }
 }
 
-impl From<bcrypt::BcryptError> for ApiError {
+impl From<bcrypt::BcryptError> for AppError {
     fn from(value: bcrypt::BcryptError) -> Self {
         let err = third_party_code::ThirdPartyErrorCode::PasswordError;
-        ApiError::App {
+        AppError::App {
             code: err.code(),
             message: err.message(),
             extra_message: Some(value.to_string()),
@@ -279,12 +279,12 @@ impl From<bcrypt::BcryptError> for ApiError {
     }
 }
 
-impl From<axum_valid::ValidRejection<ApiError>> for ApiError {
-    fn from(value: axum_valid::ValidRejection<ApiError>) -> Self {
+impl From<axum_valid::ValidRejection<AppError>> for AppError {
+    fn from(value: axum_valid::ValidRejection<AppError>) -> Self {
         match value {
             axum_valid::ValidRejection::Valid(errors) => {
                 let err = framework_code::FrameworkErrorCode::ValidationInvalid;
-                ApiError::App {
+                AppError::App {
                     code: err.code(),
                     message: err.message(),
                     extra_message: Some(errors.to_string()),
@@ -303,16 +303,16 @@ impl From<axum_valid::ValidRejection<ApiError>> for ApiError {
 macro_rules! err {
     ($code:expr) => {{
         {
-            let api_err = $crate::error::ApiError::from_app_error($code);
+            let api_err = $crate::error::AppError::from_code($code);
             let new_err = match api_err {
-                $crate::error::ApiError::App {
+                $crate::error::AppError::App {
                     code,
                     message,
                     extra_message,
                     file: _,
                     line: _,
                     error,
-                } => $crate::error::ApiError::App {
+                } => $crate::error::AppError::App {
                     code,
                     message: message.clone(),
                     extra_message,

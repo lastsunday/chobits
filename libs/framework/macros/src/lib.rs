@@ -88,13 +88,13 @@ pub fn error(_attr: TokenStream, input: TokenStream) -> TokenStream {
         })
         .collect();
 
-    let target: Type = syn::parse_quote!(crate::error::ApiError);
+    let target: Type = syn::parse_quote!(crate::error::AppError);
 
     // From impl
     let from_impl = quote! {
         impl #impl_generics From<#name #ty_generics> for #target #where_clause {
             fn from(err: #name #ty_generics) -> Self {
-                #target::from_app_error(err)
+                #target::from_code(err)
             }
         }
     };
@@ -108,7 +108,7 @@ pub fn error(_attr: TokenStream, input: TokenStream) -> TokenStream {
     // 6. message() - returns message (custom or auto-generated)
     // 7. code() - returns enum value as u32
     // 8. AppErrorCode trait implementation
-    // 9. From<Enum> for ApiError implementation
+    // 9. From<Enum> for AppError implementation
     let expanded = quote! {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, strum_macros::IntoStaticStr, strum_macros::Display)]
         #[repr(u32)]
@@ -135,8 +135,8 @@ pub fn error(_attr: TokenStream, input: TokenStream) -> TokenStream {
                 *self as u32
             }
 
-            pub fn with_extra(self, extra: impl Into<String>) -> crate::error::ApiError {
-                crate::error::ApiError::from_app_error(self).with_extra(extra)
+            pub fn with_extra(self, extra: impl Into<String>) -> crate::error::AppError {
+                crate::error::AppError::from_code(self).with_extra(extra)
             }
         }
 

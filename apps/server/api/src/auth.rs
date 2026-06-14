@@ -8,7 +8,7 @@ use framework::{
         ApiResponse,
         valid::{ValidJson, ValidQuery},
     },
-    error::ApiResult,
+    error::AppResult,
     err,
     middleware::get_auth_layer,
     password::{hash, verify},
@@ -63,7 +63,7 @@ async fn login(
     State(AppState { conn, .. }): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     ValidJson(param): ValidJson<LoginParam>,
-) -> ApiResult<ApiResponse<LoginResult>> {
+) -> AppResult<ApiResponse<LoginResult>> {
     let user = User::find()
         .filter(user::Column::Account.eq(&param.account))
         .one(&conn)
@@ -113,7 +113,7 @@ async fn access_token(
     State(AppState { auth_config, .. }): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     ValidQuery(param): ValidQuery<AccessTokenParam>,
-) -> ApiResult<ApiResponse<LoginResult>> {
+) -> AppResult<ApiResponse<LoginResult>> {
     if !param.client_id.eq(auth_config
         .client_id
         .as_ref()
@@ -160,7 +160,7 @@ async fn reset_password(
     State(AppState { conn, .. }): State<AppState>,
     Extension(principal): Extension<Principal>,
     ValidJson(param): ValidJson<ResetPasswordParam>,
-) -> ApiResult<ApiResponse<()>> {
+) -> AppResult<ApiResponse<()>> {
     let user = User::find()
         .filter(user::Column::Id.eq(principal.id.clone()))
         .one(&conn)
@@ -183,7 +183,7 @@ async fn reset_password(
 #[utoipa::path(get, path = "/auth/user",tag=TAG,security(()),responses(
     (status=OK,body=ApiResponse<Principal>)
 ))]
-async fn user(Extension(principal): Extension<Principal>) -> ApiResult<ApiResponse<Principal>> {
+async fn user(Extension(principal): Extension<Principal>) -> AppResult<ApiResponse<Principal>> {
     Ok(ApiResponse::success(Some(principal)))
 }
 

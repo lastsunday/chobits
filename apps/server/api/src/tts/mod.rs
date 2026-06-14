@@ -103,9 +103,9 @@ impl TtsFactory {
 
 use crate::common::ModelErrorCode;
 use framework::err;
-use framework::error::ApiError;
+use framework::error::AppError;
 
-impl From<TtsError> for ApiError {
+impl From<TtsError> for AppError {
     fn from(value: TtsError) -> Self {
         err!(ModelErrorCode::Tts).with_extra(value.to_string())
     }

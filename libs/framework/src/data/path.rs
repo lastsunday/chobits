@@ -1,10 +1,10 @@
 use axum::extract::FromRequestParts;
 use axum_valid::HasValidate;
 
-use crate::error::ApiError;
+use crate::error::AppError;
 
 #[derive(Debug, Clone, Copy, Default, FromRequestParts)]
-#[from_request(via(axum::extract::Path), rejection(ApiError))]
+#[from_request(via(axum::extract::Path), rejection(AppError))]
 pub struct Path<T>(pub T);
 
 impl<T> HasValidate for Path<T> {

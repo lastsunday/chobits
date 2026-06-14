@@ -3,7 +3,7 @@ use crate::ws::WsErrorCode;
 use async_trait::async_trait;
 use chrono::Local;
 use framework::err;
-use framework::error::ApiError;
+use framework::error::AppError;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::Sender;
@@ -16,7 +16,7 @@ pub trait Listener: Send + Sync {
     fn get_state(&self) -> ListenState;
     async fn get_result(&mut self) -> core::result::Result<ListenResult, ModelError>;
     async fn reset(&mut self, silence_voice_timeout: Option<i64>);
-    async fn set_sender(&mut self, tx: Sender<Result<FrameResult, ApiError>>);
+    async fn set_sender(&mut self, tx: Sender<Result<FrameResult, AppError>>);
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -43,7 +43,7 @@ pub struct DefaultListener {
     silence_voice_timeout: Option<i64>,
     latest_speaking_time: Option<i64>,
     audio_config: Arc<AudioConfig>,
-    error_tx: Option<Sender<Result<FrameResult, ApiError>>>,
+    error_tx: Option<Sender<Result<FrameResult, AppError>>>,
 }
 
 impl DefaultListener {
@@ -202,7 +202,7 @@ impl Listener for DefaultListener {
         vad.clear().await;
     }
 
-    async fn set_sender(&mut self, tx: Sender<Result<FrameResult, ApiError>>) {
+    async fn set_sender(&mut self, tx: Sender<Result<FrameResult, AppError>>) {
         self.error_tx = Some(tx);
     }
 }
