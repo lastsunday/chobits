@@ -309,7 +309,7 @@ async fn test_chat_flow_listen_auto() -> anyhow::Result<()> {
 
     session.stop().await;
     let _ = &state.conn.close().await?;
-    tear_down(&container).await;
+    tear_down(container).await;
     Ok(())
 }
 
@@ -544,7 +544,7 @@ async fn test_chat_flow_listen_realtime() -> anyhow::Result<()> {
 
     session.stop().await;
     let _ = &state.conn.close().await?;
-    tear_down(&container).await;
+    tear_down(container).await;
     Ok(())
 }
 
@@ -723,7 +723,7 @@ async fn test_chat_flow_handle_text_message_multiple_time() -> anyhow::Result<()
     }
     session.stop().await;
     let _ = &state.conn.close().await?;
-    tear_down(&container).await;
+    tear_down(container).await;
     Ok(())
 }
 
@@ -782,7 +782,7 @@ async fn test_chat_flow_handle_text_message() -> anyhow::Result<()> {
     join_handle.await?;
     session.stop().await;
     let _ = &state.conn.close().await?;
-    tear_down(&container).await;
+    tear_down(container).await;
     Ok(())
 }
 
@@ -854,7 +854,7 @@ async fn test_chat_flow_break() -> anyhow::Result<()> {
     join_handle.await?;
     session.stop().await;
     let _ = &state.conn.close().await?;
-    tear_down(&container).await;
+    tear_down(container).await;
     Ok(())
 }
 
@@ -1115,7 +1115,7 @@ async fn test_mcp_flow_server_client() -> anyhow::Result<()> {
     // join_handle.await.unwrap();
     session.stop().await;
     let _ = &state.conn.close().await?;
-    tear_down(&container).await;
+    tear_down(container).await;
     Ok(())
 }
 
@@ -1360,7 +1360,7 @@ async fn test_mcp_flow_device_client() -> anyhow::Result<()> {
     // join_handle.await.unwrap();
     session.stop().await;
     let _ = &state.conn.close().await?;
-    tear_down(&container).await;
+    tear_down(container).await;
     Ok(())
 }
 

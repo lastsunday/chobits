@@ -84,7 +84,7 @@ async fn test_administrator_mcp() -> anyhow::Result<()> {
     client.cancel().await?;
 
     let _ = &state.conn.close().await.unwrap();
-    tear_down(&container).await;
+    tear_down(container).await;
 
     Ok(())
 }

@@ -118,8 +118,8 @@ async fn main() {
         })
         .after(|_feature, _rule, _scenario, _ev, world| {
             async move {
-                if let Some(world) = world.as_ref() {
-                    tear_down(&world.container).await;
+                if let Some(world) = world {
+                    tear_down(world.container.take()).await;
                 }
             }
             .boxed()

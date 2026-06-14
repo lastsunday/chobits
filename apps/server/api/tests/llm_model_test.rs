@@ -378,7 +378,7 @@ async fn test_chat_mcp(text: &str) -> anyhow::Result<()> {
         info!("{:?}", chat_history);
     }
     let _ = &state.conn.close().await.unwrap();
-    tear_down(&container).await;
+    tear_down(container).await;
     Ok(())
 }
 
