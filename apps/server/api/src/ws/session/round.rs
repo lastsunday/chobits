@@ -1,4 +1,5 @@
 use super::super::frame::{FrameError, FrameResult};
+use super::output_controller::TracedSender;
 use crate::llm::client::{ChatRequest, Client};
 use crate::tts::Tts;
 use crate::util::llm::{EMOJI_MAP, analyze_emotion};
@@ -14,24 +15,20 @@ use service::chobits::message::stt::SttMessage;
 use service::chobits::message::tts::{TtsMessage, TtsState};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Instant;
 use tokio::sync::Mutex;
-use tokio::sync::mpsc::Sender;
 use tokio::sync::mpsc::error::SendError;
-use tokio::time::{Duration, sleep};
 use tracing::{Instrument, Level, debug, error, info, span};
 
 pub struct Round {
     pub parent_id: String,
     pub id: String,
-    tx: Sender<Result<FrameResult, FrameError>>,
+    tx: TracedSender,
     stop: Arc<AtomicBool>,
     client: Arc<Client>,
     tts: Arc<Box<dyn Tts>>,
     pub tts_state: Arc<Mutex<Option<TtsState>>>,
     pub speaking: Arc<AtomicBool>,
     pub end: Arc<AtomicBool>,
-    output_frame_duration: Option<u64>,
 }
 
 #[derive(Debug)]
@@ -44,11 +41,10 @@ pub enum Command<'a> {
 async fn change_tts_state(tts_state: Arc<Mutex<Option<TtsState>>>, state: TtsState) {
     let mut tts_state = tts_state.lock().await;
     *tts_state = Some(state);
-    // drop(tts_state);
 }
 
 async fn send_tts_frame(
-    tx: Sender<Result<FrameResult, FrameError>>,
+    tx: &TracedSender,
     session_id: String,
     state: TtsState,
     text: Option<String>,
@@ -64,7 +60,7 @@ async fn send_tts_frame(
 
 async fn send_tts_frame_and_change_state(
     tts_state: Arc<Mutex<Option<TtsState>>>,
-    tx: Sender<Result<FrameResult, FrameError>>,
+    tx: &TracedSender,
     session_id: String,
     state: TtsState,
     text: Option<String>,
@@ -77,10 +73,9 @@ async fn send_tts_frame_and_change_state(
 impl Round {
     pub fn new(
         parent_id: String,
-        tx: Sender<Result<FrameResult, FrameError>>,
+        tx: TracedSender,
         client: Arc<Client>,
         tts: Arc<Box<dyn Tts>>,
-        output_frame_duration: Option<u64>,
     ) -> Self {
         Self {
             parent_id,
@@ -92,7 +87,6 @@ impl Round {
             tts_state: Arc::new(Mutex::new(None)),
             speaking: Arc::new(AtomicBool::new(false)),
             end: Arc::new(AtomicBool::new(false)),
-            output_frame_duration,
         }
     }
 
@@ -106,13 +100,9 @@ impl Round {
                 self.llm_tts_handle(text).await;
             }
             Command::Wake { text } => {
-                // let system_prompt = config::get().logic().system_wake_prompt();
-                // TODO: add wake tip to text?
                 self.llm_tts_handle(text).await;
             }
             Command::ListenUnclear { text } => {
-                // let system_prompt = config::get().logic().system_listen_unclear_prompt();
-                // TODO: add unclear tip to text?
                 self.llm_tts_handle(text).await;
             }
         }
@@ -128,9 +118,7 @@ impl Round {
         let tts_state_clone = self.tts_state.clone();
         let speaking = self.speaking.clone();
         let end = self.end.clone();
-        // let history = self.history.clone();
         let text = String::from(text);
-        let output_frame_duration = self.output_frame_duration;
         let span = span!(parent:None,Level::DEBUG, "socket", id=%session_id);
         tokio::spawn(
             async move {
@@ -152,16 +140,11 @@ impl Round {
                 };
                 let llm_output = client.chat(request);
                 let mut tts_output = tts.stream(Box::pin(llm_output)).await;
-                let delay = output_frame_duration.expect("output frame duration is empty");
-                let mut latest_time = Instant::now() + Duration::from_millis(delay);
-                // pre buffer count
-                let pre_buffer_frame_count: u64 = 6;
-                let mut send_frame_count: u64 = 0;
                 let speaking = speaking.clone();
                 let stop_me = stop_me.clone();
                 if send_tts_frame_and_change_state(
                     tts_state_clone.clone(),
-                    tx.clone(),
+                    &tx,
                     session_id.clone(),
                     TtsState::Start,
                     None,
@@ -179,19 +162,15 @@ impl Round {
                                 break;
                             }
                             let text = result.text;
-                            // TODO: add llm response text to chat history
-                            // TODO: consider all llm text? tts output text?(tts output in one message item?)
                             let emotion = analyze_emotion(&text);
                             let session_id = session_id.clone();
                             let tx = tx.clone();
                             let text = text.clone();
                             let audio_data = result.audio;
-                            // TODO: save text and tts with session id,round id to database
                             let tts_state_clone = tts_state_clone.clone();
                             let speaking = speaking.clone();
                             let stop_me_by_tts_packet = stop_me.clone();
                             let result: Result<(), anyhow::Error> = async {
-                                //llm
                                 tx.send(Ok(FrameResult::LLMResult(LlmMessage::new(
                                     Some(session_id.to_string()),
                                     Some(emotion.to_string()),
@@ -201,14 +180,12 @@ impl Round {
                                 .context("send llm result failure")?;
                                 send_tts_frame_and_change_state(
                                     tts_state_clone.clone(),
-                                    tx.clone(),
+                                    &tx,
                                     session_id.clone(),
                                     TtsState::SentenceStart,
                                     Some(text.to_string()),
                                 )
                                 .await?;
-                                //audio
-                                //real time send audio
                                 let audio_data = audio_data.unwrap_or_default();
                                 let data = audio_data.into_iter();
                                 speaking.store(true, Ordering::Relaxed);
@@ -218,32 +195,19 @@ impl Round {
                                     if stop_me_by_tts_packet.load(Ordering::Relaxed) {
                                         break;
                                     }
-                                    let now = Instant::now();
-                                    let offset = (now - latest_time).as_millis() as u64;
-                                    let mut actual_delay: u64 = 0;
-                                    if offset < delay {
-                                        actual_delay = delay - offset;
-                                    }
-                                    if send_frame_count >= pre_buffer_frame_count
-                                        && actual_delay > 0
-                                    {
-                                        sleep(Duration::from_millis(actual_delay)).await;
-                                    }
-                                    latest_time = Instant::now();
                                     tx.send(Ok(FrameResult::AudioResult(AudioMessage::new(
                                         Some(session_id.to_string()),
                                         packet,
                                     ))))
                                     .await
                                     .context("send audio result failure")?;
-                                    send_frame_count += 1;
                                 }
                                 debug!(target:"round","send audio frame end");
                                 speaking.store(false, Ordering::Relaxed);
                                 debug!(target:"round","speaking end");
                                 send_tts_frame_and_change_state(
                                     tts_state_clone.clone(),
-                                    tx.clone(),
+                                    &tx,
                                     session_id.clone(),
                                     TtsState::SentenceEnd,
                                     None,
@@ -270,7 +234,7 @@ impl Round {
                 }
                 if send_tts_frame_and_change_state(
                     tts_state_clone.clone(),
-                    tx.clone(),
+                    &tx,
                     session_id.clone(),
                     TtsState::Stop,
                     None,
@@ -292,7 +256,7 @@ impl Round {
                         let result: Result<(), anyhow::Error> = async {
                             if tts_state < &TtsState::Start {
                                 send_tts_frame(
-                                    tx.clone(),
+                                    &tx,
                                     session_id.clone(),
                                     TtsState::SentenceStart,
                                     None,
@@ -306,7 +270,7 @@ impl Round {
                             }
                             if tts_state < &TtsState::SentenceStart {
                                 send_tts_frame(
-                                    tx.clone(),
+                                    &tx,
                                     session_id.clone(),
                                     TtsState::SentenceEnd,
                                     None,
@@ -320,7 +284,7 @@ impl Round {
                             }
                             if tts_state < &TtsState::SentenceEnd {
                                 send_tts_frame(
-                                    tx.clone(),
+                                    &tx,
                                     session_id.clone(),
                                     TtsState::Stop,
                                     None,

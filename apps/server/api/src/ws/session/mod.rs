@@ -15,14 +15,14 @@ use rig::message::ToolResult;
 use service::chobits::message::hello::{AudioParam, HelloMessage};
 use service::chobits::message::listen::ListenState;
 use service::chobits::message::{AudioFormat, Transport};
-use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::mpsc::{Sender, channel};
-use tokio::sync::{Mutex, Notify};
+use tokio::sync::Mutex;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{error, info, trace};
 
 pub mod listener;
+pub mod output_controller;
 pub mod round;
 
 #[derive(Default)]
@@ -95,6 +95,7 @@ pub struct Session {
     pub id: String,
     pub current_round: Option<Box<Round>>,
     output_tx: OutputTx,
+    trace_log: Option<output_controller::TraceLog>,
     phase: Phase,
     latest_activity_time: Arc<Mutex<Option<i64>>>,
     history: Arc<Mutex<History>>,
@@ -145,6 +146,7 @@ impl Session {
             id,
             current_round: None,
             output_tx: None,
+            trace_log: None,
             phase: Phase::Hello,
             latest_activity_time: Arc::new(Mutex::new(None)),
             history: Arc::new(Mutex::new(History {
@@ -193,12 +195,13 @@ impl Session {
             .build()
             .with_history(self.history.clone())
             .with_max_prompt_len(self.config.max_prompt_len);
+        let trace_log = self.trace_log.clone().expect("trace_log not created, call output_frame before new_round");
+        let traced_tx = output_controller::TracedSender::new(tx.clone(), trace_log, "E");
         self.current_round = Some(Box::new(Round::new(
             self.id.clone(),
-            tx.clone(),
+            traced_tx,
             Arc::new(client),
             self.tts.clone(),
-            self.audio_config.output_frame_duration,
         )));
         if let Some(round) = &mut self.current_round {
             round.start().await;
@@ -253,62 +256,45 @@ impl Session {
     pub async fn output_frame(
         &mut self,
     ) -> impl Stream<Item = Result<FrameResult, FrameError>> + Unpin + Send + 'static {
-        let (outer_tx, outer_rx) = channel::<Result<FrameResult, FrameError>>(1);
-        let (inner_tx, mut inner_rx) = channel::<Result<FrameResult, FrameError>>(1);
-        let frame_result_list = Arc::new(Mutex::new(VecDeque::new()));
-        let frame_result_list_share_for_main_logic = frame_result_list.clone();
-        let notify = Arc::new(Notify::new());
-        let notify_share_for_main_logic = notify.clone();
-        // frame send to core logic
-        tokio::spawn(async move {
-            while let Some(frame_result) = inner_rx.recv().await {
-                let mut frame_result_list = frame_result_list.lock().await;
-                if frame_result_list.is_empty() {
-                    notify.notify_one();
-                }
-                frame_result_list.push_back(frame_result);
-            }
-        });
-        // core logic handle
-        let latest_activity_time = self.latest_activity_time.clone();
-        tokio::spawn(async move {
-            loop {
-                let frame_result = {
-                    let mut frame_result_list = frame_result_list_share_for_main_logic.lock().await;
-                    frame_result_list.pop_front()
-                };
-                match frame_result {
-                    Some(frame_result) => {
-                        let mut time = latest_activity_time.lock().await;
-                        *time = Some(Local::now().timestamp_millis());
-                        drop(time);
-                        let result = outer_tx.send(frame_result).await;
-                        if result.is_err() {
-                            info!("outer tx send frame result failure");
-                            break;
-                        }
-                    }
-                    None => {
-                        notify_share_for_main_logic.notified().await;
-                    }
-                }
-            }
-        });
+        let (controller_input_tx, controller_input_rx) =
+            channel::<Result<FrameResult, FrameError>>(64);
+        let (controller_output_tx, controller_output_rx) =
+            channel::<Result<FrameResult, FrameError>>(64);
+
+        let trace_log = output_controller::TraceLog::new();
+        self.trace_log = Some(trace_log.clone());
+        let traced_output_tx = output_controller::TracedSender::new(
+            controller_output_tx,
+            trace_log,
+            "→",
+        );
+
+        let frame_duration = self
+            .audio_config
+            .output_frame_duration
+            .expect("output frame duration is empty");
+        let controller = self::output_controller::OutputController::new(
+            controller_input_rx,
+            traced_output_tx,
+            frame_duration,
+            self.latest_activity_time.clone(),
+        );
+        controller.start();
 
         let (device_mcp_call_tool_result_tx, device_mcp_call_tool_result_rx) =
             channel::<anyhow::Result<ToolResult>>(1);
         self.device_mcp_call_tool_result_tx = Some(device_mcp_call_tool_result_tx);
         let mcp_device_client = DeviceMcpClient::new(
             Some(self.id.clone()),
-            inner_tx.clone(),
+            controller_input_tx.clone(),
             Arc::new(Mutex::new(device_mcp_call_tool_result_rx)),
         );
         let mcp_device_client = Arc::new(Mutex::new(mcp_device_client));
         let mcp_host = self.mcp_host.clone();
         let mut mcp_host = mcp_host.lock().await;
         mcp_host.set_device_client(mcp_device_client.clone()).await;
-        self.output_tx = Some(inner_tx.clone());
-        ReceiverStream::new(outer_rx)
+        self.output_tx = Some(controller_input_tx.clone());
+        ReceiverStream::new(controller_output_rx)
     }
 
     pub async fn update_latest_activity_time(&mut self) {
@@ -319,6 +305,16 @@ impl Session {
     pub async fn get_latest_activity_time(&mut self) -> Option<i64> {
         let time = self.latest_activity_time.lock().await;
         *time
+    }
+
+    pub fn traces(&self) -> Vec<output_controller::TraceEntry> {
+        self.trace_log
+            .as_ref()
+            .map(|log| {
+                let guard = log.buf.lock().expect("trace_buf lock");
+                guard.iter().cloned().collect()
+            })
+            .unwrap_or_default()
     }
 }
 
