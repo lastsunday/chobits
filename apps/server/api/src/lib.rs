@@ -1,18 +1,16 @@
 pub mod asr;
 pub mod auth;
-pub mod auth_error;
 pub mod common;
 pub mod config;
-pub mod i18n;
 pub mod index;
 pub mod llm;
 pub mod matrix;
 pub mod mcp;
 pub mod ota;
 pub mod ota_data;
-pub mod ota_error;
 pub mod server;
 pub mod tts;
+pub mod error;
 pub mod util;
 pub mod vad;
 pub mod ws;
@@ -70,9 +68,7 @@ use crate::llm::LlmFactory;
 use crate::tts::TtsFactory;
 use crate::vad::VadFactory;
 
-#[macro_use]
-extern crate rust_i18n;
-i18n!("locales", fallback = "zh");
+
 
 #[allow(clippy::too_many_arguments)]
 pub async fn start(

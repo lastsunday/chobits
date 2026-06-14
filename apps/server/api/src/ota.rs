@@ -5,12 +5,12 @@ use axum::{
     http::HeaderMap,
 };
 use axum_extra::{TypedHeader, headers};
-use framework::{data::valid::ValidJson, error::ApiResult, id::gen_id};
+use framework::{data::valid::ValidJson, err, error::ApiResult, id::gen_id};
 use std::net::SocketAddr;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 use crate::ota_data::*;
-use crate::{AppState, ota_error::*};
+use crate::AppState;
 
 use chrono::Local;
 use jiff::tz::TimeZone;
@@ -179,13 +179,13 @@ async fn ota(
     ValidJson(_param): ValidJson<OtaParam>,
 ) -> ApiResult<Json<OtaResult>> {
     if headers.get(KEY_DEVICE_ID).is_none() {
-        return Err(ERROR_OTA_LACK_DEVICE_ID.gen_api_error(&headers));
+        return Err(err!(OtaErrorCode::LackDeviceId));
     }
     if headers.get(KEY_CLIENT_ID).is_none() {
-        return Err(ERROR_OTA_LACK_CLIENT_ID.gen_api_error(&headers));
+        return Err(err!(OtaErrorCode::LackClientId));
     }
     if headers.get(KEY_USER_AGENT).is_none() {
-        return Err(ERROR_OTA_LACK_USER_AGENT.gen_api_error(&headers));
+        return Err(err!(OtaErrorCode::LackUserAgent));
     }
     // TODO: save device info to database
     let _device_id = headers.get(KEY_DEVICE_ID).unwrap().to_str().unwrap();
@@ -247,9 +247,18 @@ async fn activate(
     headers: HeaderMap,
 ) -> ApiResult<String> {
     if headers.get(KEY_DEVICE_ID).is_none() {
-        return Err(ERROR_OTA_LACK_DEVICE_ID.gen_api_error(&headers));
+        return Err(err!(OtaErrorCode::LackDeviceId));
     }
     // TODO:check device id in database
     // TODO:logic failure need return status code 202
     Ok(String::from("success"))
+}
+
+use framework::prelude::error;
+
+#[error]
+pub enum OtaErrorCode {
+    LackDeviceId = 502001,
+    LackClientId = 502002,
+    LackUserAgent = 502003,
 }

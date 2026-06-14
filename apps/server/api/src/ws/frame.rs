@@ -21,6 +21,7 @@ pub enum Frame<'a> {
     Pong { data: &'a [u8] },
     Close(CloseMessage<'a>),
     Mcp(McpMessage),
+    Error { code: u32, message: String },
 }
 
 #[derive(Debug)]
@@ -32,10 +33,4 @@ pub enum FrameResult {
     AudioResult(AudioMessage),
     CloseResult,
     McpResult(McpRequest),
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum FrameError {
-    #[error("tts error {0}")]
-    Tts(String),
 }

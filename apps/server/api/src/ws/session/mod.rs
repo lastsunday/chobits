@@ -1,4 +1,5 @@
-use super::frame::{Frame, FrameError, FrameResult};
+use super::frame::{Frame, FrameResult};
+use framework::error::ApiError;
 use self::trace::Direction;
 use super::session::listener::Listener;
 use super::session::round::{Command, Round};
@@ -91,7 +92,7 @@ impl SessionBuilder {
     }
 }
 
-type OutputTx = Option<Sender<Result<FrameResult, FrameError>>>;
+type OutputTx = Option<Sender<Result<FrameResult, ApiError>>>;
 
 pub struct Session {
     pub id: String,
@@ -274,11 +275,11 @@ impl Session {
 
     pub async fn output_frame(
         &mut self,
-    ) -> impl Stream<Item = Result<FrameResult, FrameError>> + Unpin + Send + 'static {
+    ) -> impl Stream<Item = Result<FrameResult, ApiError>> + Unpin + Send + 'static {
         let (controller_input_tx, controller_input_rx) =
-            channel::<Result<FrameResult, FrameError>>(64);
+            channel::<Result<FrameResult, ApiError>>(64);
         let (controller_output_tx, controller_output_rx) =
-            channel::<Result<FrameResult, FrameError>>(64);
+            channel::<Result<FrameResult, ApiError>>(64);
 
         let trace_log = self.trace_log.clone();
         let traced_output_tx = output_controller::TracedSender::new(
@@ -311,6 +312,7 @@ impl Session {
         let mcp_host = self.mcp_host.clone();
         let mut mcp_host = mcp_host.lock().await;
         mcp_host.set_device_client(mcp_device_client.clone()).await;
+        self.listener.set_sender(controller_input_tx.clone()).await;
         self.output_tx = Some(controller_input_tx.clone());
         ReceiverStream::new(controller_output_rx)
     }

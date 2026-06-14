@@ -1,10 +1,13 @@
-use super::super::frame::{FrameError, FrameResult};
+use super::super::frame::FrameResult;
 use super::output_controller::TracedSender;
+use crate::ws::WsErrorCode;
 use crate::llm::client::{ChatRequest, Client};
 use crate::tts::Tts;
 use crate::util::llm::{EMOJI_MAP, analyze_emotion};
 use anyhow::Context;
 use core::result::Result;
+use framework::err;
+use framework::error::ApiError;
 use framework::id::gen_id;
 use futures::StreamExt;
 use rig::OneOrMany;
@@ -48,7 +51,7 @@ async fn send_tts_frame(
     session_id: String,
     state: TtsState,
     text: Option<String>,
-) -> Result<(), SendError<Result<FrameResult, FrameError>>> {
+) -> Result<(), SendError<Result<FrameResult, ApiError>>> {
     tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
         Some(session_id),
         Some(state),
@@ -64,7 +67,7 @@ async fn send_tts_frame_and_change_state(
     session_id: String,
     state: TtsState,
     text: Option<String>,
-) -> Result<(), SendError<Result<FrameResult, FrameError>>> {
+) -> Result<(), SendError<Result<FrameResult, ApiError>>> {
     change_tts_state(tts_state, state.clone()).await;
     send_tts_frame(tx, session_id, state, text).await?;
     Ok(())
@@ -224,7 +227,7 @@ impl Round {
                         }
                         Err(e) => {
                             error!(target:"round","{:?}", e);
-                            if let Err(e) = tx.send(Err(FrameError::Tts(e.to_string()))).await {
+                            if let Err(e) = tx.send(Err(err!(WsErrorCode::TtsEncode).with_extra(e.to_string()))).await {
                                 error!(target:"round","{:?}", e);
                             }
                             stop_me.store(true, Ordering::Relaxed);

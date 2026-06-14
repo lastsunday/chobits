@@ -101,6 +101,16 @@ impl TtsFactory {
     }
 }
 
+use crate::common::ModelErrorCode;
+use framework::err;
+use framework::error::ApiError;
+
+impl From<TtsError> for ApiError {
+    fn from(value: TtsError) -> Self {
+        err!(ModelErrorCode::Tts).with_extra(value.to_string())
+    }
+}
+
 pub fn encode_sample_to_tts_packet(
     sample: Vec<f32>,
     encoder: &mut opus_rs::OpusEncoder,

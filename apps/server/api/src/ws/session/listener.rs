@@ -1,8 +1,12 @@
-use crate::{asr::Asr, common::ModelError, config::audio::AudioConfig, vad::Vad};
+use crate::{asr::Asr, common::ModelError, config::audio::AudioConfig, vad::Vad, ws::frame::FrameResult};
+use crate::ws::WsErrorCode;
 use async_trait::async_trait;
 use chrono::Local;
+use framework::err;
+use framework::error::ApiError;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tokio::sync::mpsc::Sender;
 use tracing::debug;
 
 #[async_trait]
@@ -12,7 +16,9 @@ pub trait Listener: Send + Sync {
     fn get_state(&self) -> ListenState;
     async fn get_result(&mut self) -> core::result::Result<ListenResult, ModelError>;
     async fn reset(&mut self, silence_voice_timeout: Option<i64>);
+    async fn set_sender(&mut self, tx: Sender<Result<FrameResult, ApiError>>);
 }
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ListenState {
     Idle,
@@ -37,6 +43,7 @@ pub struct DefaultListener {
     silence_voice_timeout: Option<i64>,
     latest_speaking_time: Option<i64>,
     audio_config: Arc<AudioConfig>,
+    error_tx: Option<Sender<Result<FrameResult, ApiError>>>,
 }
 
 impl DefaultListener {
@@ -61,6 +68,7 @@ impl DefaultListener {
             silence_voice_timeout: None,
             latest_speaking_time: None,
             audio_config,
+            error_tx: None,
         }
     }
 }
@@ -121,9 +129,6 @@ impl Listener for DefaultListener {
                     vad.pop().await;
                     let mut voice_data = voice_data.lock().await;
                     voice_data.append(&mut segment.samples);
-                    // let start_sec = (segment.start as f32) / sample_rate as f32;
-                    // let duration_sec = (voice_data.len() as f32) / sample_rate as f32;
-                    // tracing::info!("start={}s duration={}s", start_sec, duration_sec);
                 }
             }
         }
@@ -164,18 +169,22 @@ impl Listener for DefaultListener {
             .expect("input sample rate is empty");
         let asr = self.asr.clone();
         let mut asr = asr.lock().await;
-        // the follow code want to output wav file to test
-        // use wavers::write;
-        // let file_name = Utc::now().format("%Y%m%d%H%M%S").to_string();
-        // let fp = format!("./asr_result{}.wav", file_name);
-        // let sr: i32 = 16000;
-        // write(fp, &voice_data, sr, 1);
-        let result = asr.transcribe(sample_rate, &voice_data).await?;
-        // debug!("recognizer result = {:?}", result);
-        Ok(ListenResult {
-            text: result.text,
-            prob: result.prob,
-        })
+        let result = asr.transcribe(sample_rate, &voice_data).await;
+        match result {
+            Ok(transcript) => Ok(ListenResult {
+                text: transcript.text,
+                prob: transcript.prob,
+            }),
+            Err(e) => {
+                tracing::error!("{:?}", e);
+                if let Some(tx) = &self.error_tx {
+                    let _ = tx
+                        .send(Err(err!(WsErrorCode::AsrFailure).with_extra(e.to_string())))
+                        .await;
+                }
+                Err(e)
+            }
+        }
     }
 
     async fn reset(&mut self, silence_voice_timeout: Option<i64>) {
@@ -191,5 +200,9 @@ impl Listener for DefaultListener {
         let vad = self.vad.clone();
         let mut vad = vad.lock().await;
         vad.clear().await;
+    }
+
+    async fn set_sender(&mut self, tx: Sender<Result<FrameResult, ApiError>>) {
+        self.error_tx = Some(tx);
     }
 }

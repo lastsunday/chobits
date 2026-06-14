@@ -14,7 +14,7 @@ use crate::{
     tts::TtsFactory,
     vad::VadFactory,
     ws::{
-        frame::{FrameError, FrameResult},
+        frame::FrameResult,
         session::Session,
     },
 };
@@ -26,7 +26,9 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use axum_extra::{TypedHeader, headers};
+use framework::error::ApiError;
 use framework::id::gen_id;
+use framework::prelude::error as error_code;
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
 use message_converter::convert_to_frame;
 use rmcp::transport::{
@@ -39,6 +41,14 @@ use tokio::sync::Mutex;
 use tracing::{Instrument, Level, debug, error, info, span, trace};
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
+
+#[derive(Serialize)]
+struct ErrorFrame {
+    #[serde(rename = "type")]
+    mtype: &'static str,
+    code: u32,
+    message: String,
+}
 
 const TAG: &str = "ws";
 
@@ -169,7 +179,7 @@ where
 }
 
 async fn on_send<W>(
-    mut output: impl Stream<Item = Result<FrameResult, FrameError>> + Unpin + Send + 'static,
+    mut output: impl Stream<Item = Result<FrameResult, ApiError>> + Unpin + Send + 'static,
     mut write: W,
 ) where
     W: Sink<Message> + Unpin + Send + 'static,
@@ -232,9 +242,10 @@ async fn on_send<W>(
                     }
                 }
             }
-            Err(e) => {
-                error!("{:?}", e);
-                return;
+            Err(api_err) => {
+                api_err.log();
+                let ApiError::App { code, message, .. } = &api_err;
+                send_text(&mut write, &ErrorFrame { mtype: "error", code: *code, message: message.clone() }).await;
             }
         }
     }
@@ -304,4 +315,13 @@ where
             _ => Err((StatusCode::NOT_FOUND, "unknown version").into_response()),
         }
     }
+}
+
+#[error_code]
+pub enum WsErrorCode {
+    TtsEncode = 504001,
+    TtsText = 504002,
+    AsrFailure = 504003,
+    LlmFailure = 504004,
+    InternalError = 504005,
 }

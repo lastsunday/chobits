@@ -292,6 +292,8 @@ dependencies = [
  "serde_yaml",
  "service",
  "sse-stream",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
  "symphonia",
  "testcontainers",
  "testcontainers-modules",
