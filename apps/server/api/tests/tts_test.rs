@@ -18,9 +18,9 @@ use wavers::write;
 /// cargo test --test tts_test -- test_tts_default --ignored --nocapture
 async fn test_tts_default() -> anyhow::Result<()> {
     const ENCODE_SAMPLE_RATE: u32 = 16000;
-    // 16000Hz * 1 channel * 60 ms / 1000 = 960
-    const MONO_60MS: usize = ENCODE_SAMPLE_RATE as usize * 60 / 1000;
-    let size = MONO_60MS;
+    // 16000Hz * 1 channel * 20 ms / 1000 = 320
+    const MONO_20MS: usize = ENCODE_SAMPLE_RATE as usize * 20 / 1000;
+    let size = MONO_20MS;
     TtsFactory::init(
         Arc::new(TtsConfig {
             model: Some(TtsModel::Voxcpm),
@@ -32,11 +32,11 @@ async fn test_tts_default() -> anyhow::Result<()> {
         }),
         Arc::new(AudioConfig {
             input_sample_rate: Some(16000),
-            input_frame_duration: Some(60_u64),
+            input_frame_duration: Some(20_u64),
             input_channel: Some(1),
             output_sample_rate: Some(16000),
             output_channel: Some(1),
-            output_frame_duration: Some(60_u64),
+            output_frame_duration: Some(20_u64),
         }),
     )
     .await?;

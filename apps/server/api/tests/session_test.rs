@@ -281,19 +281,19 @@ async fn test_chat_flow_listen_auto() -> anyhow::Result<()> {
                 data: audio.get(n).unwrap(),
             })
             .await;
-        sleep(Duration::from_millis(60)).await;
+        sleep(Duration::from_millis(20)).await;
     }
     info!("send silent voice");
-    // 16000Hz * 1 channel * 60 ms / 1000 = 960 samples -> frameSize
-    // 60ms * 30 = 1800ms
-    // silent time = 1800ms > config setting
-    for _ in 0..180 {
+    // 16000Hz * 1 channel * 20 ms / 1000 = 320 samples -> frameSize
+    // 20ms * 360 = 7200ms
+    // silent time = 7200ms > config setting
+    for _ in 0..360 {
         session
             .accept_frame(&Frame::Voice {
-                data: vec![0u8; 960].as_ref(),
+                data: vec![0u8; 320].as_ref(),
             })
             .await;
-        sleep(Duration::from_millis(60)).await;
+        sleep(Duration::from_millis(20)).await;
     }
     while let Some(data) = output.next().await {
         let data = data.unwrap();
@@ -449,19 +449,19 @@ async fn test_chat_flow_listen_realtime() -> anyhow::Result<()> {
                 data: audio.get(n).unwrap(),
             })
             .await;
-        sleep(Duration::from_millis(60)).await;
+        sleep(Duration::from_millis(20)).await;
     }
     info!("send silent voice");
-    // 16000Hz * 1 channel * 60 ms / 1000 = 960 samples -> frameSize
-    // 60ms * 30 = 1800ms
+    // 16000Hz * 1 channel * 20 ms / 1000 = 320 samples -> frameSize
+    // 20ms * 90 = 1800ms
     // silent time = 1800ms > config setting
-    for _ in 0..30 {
+    for _ in 0..90 {
         session
             .accept_frame(&Frame::Voice {
-                data: vec![0u8; 960].as_ref(),
+                data: vec![0u8; 320].as_ref(),
             })
             .await;
-        sleep(Duration::from_millis(60)).await;
+        sleep(Duration::from_millis(20)).await;
     }
     assert!(matches!(
         output.next().await.unwrap().unwrap(),
@@ -503,13 +503,13 @@ async fn test_chat_flow_listen_realtime() -> anyhow::Result<()> {
             ..
         })
     ));
-    for _ in 0..90 {
+    for _ in 0..120 {
         session
             .accept_frame(&Frame::Voice {
-                data: vec![0u8; 960].as_ref(),
+                data: vec![0u8; 320].as_ref(),
             })
             .await;
-        sleep(Duration::from_millis(60)).await;
+        sleep(Duration::from_millis(20)).await;
     }
 
     while let Some(data) = output.next().await {
@@ -527,13 +527,13 @@ async fn test_chat_flow_listen_realtime() -> anyhow::Result<()> {
             }
         }
     }
-    for _ in 0..90 {
+    for _ in 0..120 {
         session
             .accept_frame(&Frame::Voice {
-                data: vec![0u8; 960].as_ref(),
+                data: vec![0u8; 320].as_ref(),
             })
             .await;
-        sleep(Duration::from_millis(60)).await;
+        sleep(Duration::from_millis(20)).await;
     }
 
     info!("close result checking");
@@ -587,13 +587,13 @@ async fn test_chat_flow_listen_realtime_silent_voice_connection_timeout() -> any
             ..Default::default()
         }))
         .await;
-    // 16000Hz * 1 channel * 60 ms / 1000 = 960 samples -> frameSize
-    // 60ms * 30 = 1800ms
+    // 16000Hz * 1 channel * 20 ms / 1000 = 320 samples -> frameSize
+    // 20ms * 90 = 1800ms
     // silent time = 1800ms > config setting
-    for _ in 0..30 {
+    for _ in 0..90 {
         session
             .accept_frame(&Frame::Voice {
-                data: vec![0u8; 960].as_ref(),
+                data: vec![0u8; 320].as_ref(),
             })
             .await;
     }
@@ -613,13 +613,13 @@ async fn test_chat_flow_listen_realtime_silent_voice_connection_timeout() -> any
         }
     }
     // silent 3600ms
-    for _ in 0..60 {
+    for _ in 0..180 {
         session
             .accept_frame(&Frame::Voice {
-                data: vec![0u8; 960].as_ref(),
+                data: vec![0u8; 320].as_ref(),
             })
             .await;
-        sleep(Duration::from_millis(60)).await;
+        sleep(Duration::from_millis(20)).await;
     }
     loop {
         let data = output.next().await.unwrap().unwrap();
@@ -1387,11 +1387,11 @@ async fn create_session()
 
     let audio_config = Arc::new(AudioConfig {
         input_sample_rate: Some(16000),
-        input_frame_duration: Some(60_u64),
+        input_frame_duration: Some(20_u64),
         input_channel: Some(1),
         output_sample_rate: Some(16000),
         output_channel: Some(1),
-        output_frame_duration: Some(60_u64),
+        output_frame_duration: Some(20_u64),
     });
     let session = SessionBuilder::new()
         .with_listener(Box::new(DefaultListener::new(
@@ -1435,11 +1435,11 @@ async fn create_session()
 async fn create_mini_session() -> Session {
     let audio_config = Arc::new(AudioConfig {
         input_sample_rate: Some(16000),
-        input_frame_duration: Some(60_u64),
+        input_frame_duration: Some(20_u64),
         input_channel: Some(1),
         output_sample_rate: Some(16000),
         output_channel: Some(1),
-        output_frame_duration: Some(60_u64),
+        output_frame_duration: Some(20_u64),
     });
     let session_id = gen_id();
     SessionBuilder::new()
@@ -1511,9 +1511,9 @@ fn get_audio() -> Vec<Vec<u8>> {
     )
     .unwrap();
 
-    // 16000Hz * 1 channel * 60 ms / 1000 = 960
-    const MONO_60MS: usize = ENCODE_SAMPLE_RATE as usize * 60 / 1000;
-    let size = MONO_60MS;
+    // 16000Hz * 1 channel * 20 ms / 1000 = 320
+    const MONO_20MS: usize = ENCODE_SAMPLE_RATE as usize * 20 / 1000;
+    let size = MONO_20MS;
     debug!("size = {}", size);
     let len = pcm_data.len();
     let mut count = len / size;

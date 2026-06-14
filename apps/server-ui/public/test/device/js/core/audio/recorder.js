@@ -52,7 +52,7 @@ export class AudioRecorder {
                 constructor() {
                     super();
                     this.buffers = [];
-                    this.frameSize = 960;
+                    this.frameSize = 320;
                     this.buffer = new Int16Array(this.frameSize);
                     this.bufferIndex = 0;
                     this.isRecording = false;
@@ -181,7 +181,7 @@ export class AudioRecorder {
         newBuffer.set(buffer, this.pcmDataBuffer.length);
         this.pcmDataBuffer = newBuffer;
 
-        const samplesPerFrame = 960;
+        const samplesPerFrame = 320;
 
         while (this.pcmDataBuffer.length >= samplesPerFrame) {
             const frameData = this.pcmDataBuffer.slice(0, samplesPerFrame);
@@ -219,7 +219,7 @@ export class AudioRecorder {
                 }
             } else {
                 if (this.pcmDataBuffer.length > 0) {
-                    const samplesPerFrame = 960;
+        const samplesPerFrame = 320;
                     if (this.pcmDataBuffer.length < samplesPerFrame) {
                         const paddedBuffer = new Int16Array(samplesPerFrame);
                         paddedBuffer.set(this.pcmDataBuffer);

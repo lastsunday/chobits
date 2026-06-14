@@ -66,7 +66,7 @@ export function initOpusEncoder() {
         opusEncoder = {
             channels: channels,
             sampleRate: sampleRate,
-            frameSize: 960, // 60ms @ 16kHz = 60 * 16 = 960 samples
+            frameSize: 320, // 20ms @ 16kHz = 20 * 16 = 320 samples
             maxPacketSize: 4000, // 最大包大小
             module: mod,
 

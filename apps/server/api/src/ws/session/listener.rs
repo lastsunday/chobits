@@ -88,12 +88,22 @@ impl Listener for DefaultListener {
                 .audio_config
                 .input_frame_duration
                 .expect("input frame duration is empty");
-            // 16000Hz * 1 channel * 60 ms / 1000 = 960 samples -> frameSize
+            // 16000Hz * 1 channel * 20 ms / 1000 = 320 samples -> frameSize
             let frame_size =
                 ((sample_rate as u64 * channel as u64 * frame_duration) / 1000) as usize;
             let mut samples = vec![0f32; frame_size];
             let mut decoder = self.decoder.lock().await;
-            let len = decoder.decode(&data, frame_size, &mut samples).unwrap();
+            let len = match decoder.decode(&data, frame_size, &mut samples) {
+                Ok(len) => len,
+                Err(e) => {
+                    tracing::error!(
+                        "Opus decode error: {e}, data_len={}, first_bytes={:02x?}",
+                        data.len(),
+                        &data[..data.len().min(8)]
+                    );
+                    return;
+                }
+            };
             let mut temp_voice_data = temp_voice_data.lock().await;
             temp_voice_data.append(&mut samples[..len].to_vec());
             let mut vad = vad.lock().await;

@@ -401,7 +401,7 @@ fn default_audio_input_sample_rate() -> Option<u32> {
 }
 
 fn default_audio_input_frame_duration() -> Option<u64> {
-    Some(60_u64)
+    Some(20_u64)
 }
 
 fn default_audio_input_channel() -> Option<u32> {
@@ -417,7 +417,7 @@ fn default_audio_output_channel() -> Option<u32> {
 }
 
 fn default_audio_output_frame_duration() -> Option<u64> {
-    Some(60_u64)
+    Some(20_u64)
 }
 
 fn default_session_close_connection_no_voice_time() -> Option<i64> {

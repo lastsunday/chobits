@@ -39,9 +39,9 @@ async fn test_audio_encode_decode() {
     )
     .unwrap();
 
-    // 16000Hz * 1 channel * 60 ms / 1000 = 960
-    const MONO_60MS: usize = ENCODE_SAMPLE_RATE as usize * 60 / 1000;
-    let size = MONO_60MS;
+    // 16000Hz * 1 channel * 20 ms / 1000 = 320
+    const MONO_20MS: usize = ENCODE_SAMPLE_RATE as usize * 20 / 1000;
+    let size = MONO_20MS;
     info!("size = {}", size);
     let len = pcm_data.len();
     let mut count = len / size;
