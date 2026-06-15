@@ -54,9 +54,21 @@ jobs:
         with:
           languages: ${{ matrix.language }}
 
+      - name: Install Nix
+        if: matrix.language == 'rust'
+        uses: DeterminateSystems/nix-installer-action@e50d5f73bfe71c2dd0aa4218de8f4afa59f8f81d
+        with:
+          extra-conf: |
+            accept-flake-config = true
+
+      - name: Cache Nix store
+        if: matrix.language == 'rust'
+        uses: DeterminateSystems/magic-nix-cache-action@6221693898146dc97e38ad0e013488a16477a4c4
+        continue-on-error: true
+
       - name: Build Rust
         if: matrix.language == 'rust'
-        run: cargo build --workspace --exclude chobits-server --exclude web --verbose
+        run: nix develop --command cargo build --workspace --exclude chobits-server --exclude web --verbose
 
       - name: Autobuild
         uses: github/codeql-action/autobuild@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
