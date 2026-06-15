@@ -141,11 +141,8 @@ async fn test_chat_flow_listen_manual() -> anyhow::Result<()> {
         let data = output.next().await.unwrap().unwrap();
         if let FrameResult::TTSResult(tts_message) = data {
             match tts_message.state {
-                Some(data) => {
-                    if data == TtsState::Stop {
-                        break;
-                    }
-                }
+                Some(TtsState::Stop) => break,
+                Some(_) => {}
                 None => {
                     //skip
                 }
@@ -514,17 +511,10 @@ async fn test_chat_flow_listen_realtime() -> anyhow::Result<()> {
 
     while let Some(data) = output.next().await {
         let data = data.unwrap();
-        if let FrameResult::TTSResult(tts_message) = data {
-            match tts_message.state {
-                Some(t) => {
-                    if t == TtsState::Stop {
-                        break;
-                    }
-                }
-                _ => (
-                //skip
-            ),
-            }
+        if let FrameResult::TTSResult(tts_message) = data
+            && let Some(TtsState::Stop) = tts_message.state
+        {
+            break;
         }
     }
     for _ in 0..120 {
@@ -601,14 +591,9 @@ async fn test_chat_flow_listen_realtime_silent_voice_connection_timeout() -> any
         let data = output.next().await.unwrap().unwrap();
         if let FrameResult::TTSResult(tts_message) = data {
             match tts_message.state {
-                Some(data) => {
-                    if data == TtsState::Stop {
-                        break;
-                    }
-                }
-                None => {
-                    //skip
-                }
+                Some(TtsState::Stop) => break,
+                Some(_) => {}
+                None => (),
             }
         }
     }

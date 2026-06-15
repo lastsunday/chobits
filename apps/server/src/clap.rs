@@ -111,7 +111,6 @@ impl Args {
             worker_keepalive: 36,
             max_blocking_threads: 1024,
             shutdown_timeout: Duration::from_millis(10000),
-            ..Default::default()
         }
     }
 }

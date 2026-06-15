@@ -378,10 +378,10 @@ impl Model for LlmQwen {
         thread::spawn(move || {
             block_on(async move {
                 // TODO:
-                if let Err(e) = handle(&request, tokenizer, model, device, tx.clone()).await {
-                    if let Err(e) = tx.send(Err(e)).await {
-                        error!("chat llmError send error = {}", e);
-                    };
+                if let Err(e) = handle(&request, tokenizer, model, device, tx.clone()).await
+                    && let Err(e) = tx.send(Err(e)).await
+                {
+                    error!("chat llmError send error = {}", e);
                 };
                 drop(tx);
             })
@@ -410,7 +410,6 @@ mod tests {
         completion::{CompletionRequest, ToolDefinition},
         message::{AssistantContent, Message, UserContent},
     };
-    use tracing::debug;
     use tracing_test::traced_test;
 
     use crate::llm::model::qwen3::convert_request_to_prompt;
@@ -501,7 +500,7 @@ mod tests {
             tool_choice: None,
             additional_params: None,
         };
-        let result = convert_request_to_prompt(&request);
-        // debug!("{}", result);
+        let _result = convert_request_to_prompt(&request);
+        // debug!("{}", _result);
     }
 }
