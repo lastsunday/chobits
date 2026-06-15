@@ -29,4 +29,4 @@ tasks:
     args: ['run', 'preview']
     options:
       persistent: true
-      runInCI: false
+      runInCI: true
