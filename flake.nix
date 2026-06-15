@@ -69,6 +69,7 @@
               mdbook-mermaid
               git-cliff
               lefthook
+              protobuf
             ];
 
             buildInputs = with pkgs; [
@@ -96,6 +97,7 @@
             packages = with pkgs; [
               rustToolchain
               pkg-config
+              protobuf
             ];
             buildInputs = with pkgs; [
               openssl
