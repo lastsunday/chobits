@@ -248,12 +248,12 @@ impl Bot {
                 match data {
                     Ok(frame_result) => {
                         if let FrameResult::HelloResult(HelloMessage {
-                            message,
-                            version,
-                            transport,
-                            audio_params,
-                            features,
-                            session_id,
+                            message: _,
+                            version: _,
+                            transport: _,
+                            audio_params: _,
+                            features: _,
+                            session_id: _,
                         }) = frame_result
                         {
                             // TODO: handle hello result
@@ -276,12 +276,12 @@ impl Bot {
                 while let Some(data) = output.next().await {
                     match data {
                         Ok(frame_result) => match frame_result {
-                            FrameResult::HelloResult(hello_message) => todo!(),
+                            FrameResult::HelloResult(_hello_message) => todo!(),
                             FrameResult::STTResult(stt_message) => {
                                 // TODO:
                                 info!("{:?}", stt_message);
                             }
-                            FrameResult::LLMResult(llm_message) => {
+                            FrameResult::LLMResult(_llm_message) => {
                                 // TODO:
                             }
                             FrameResult::TTSResult(tts_message) => {
@@ -326,15 +326,15 @@ impl Bot {
                                     }
                                 }
                             }
-                            FrameResult::AudioResult(audio_message) => {
+                            FrameResult::AudioResult(_audio_message) => {
                                 // TODO:
                             }
                             FrameResult::CloseResult => {
                                 // TODO: shutdown session and clear session map
                             }
-                            FrameResult::McpResult(mcp_request) => todo!(),
+                            FrameResult::McpResult(_mcp_request) => todo!(),
                         },
-                        Err(e) => {
+                        Err(_e) => {
                             // TODO: handle frame error
                         }
                     }
