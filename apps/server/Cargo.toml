@@ -54,7 +54,8 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 futures-util = { workspace = true }
 jiff = { workspace = true }
-dialoguer = "0.11"
+dialoguer = { workspace = true }
+indicatif = { workspace = true }
 # download end
 
 [dev-dependencies]

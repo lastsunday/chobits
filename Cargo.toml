@@ -137,6 +137,8 @@ reqwest = { version = "0.12.28", default-features = false }
 include_dir = "0.7.4"
 sha2 = "0.10.9"
 hex = "0.4.3"
+dialoguer = "0.11"
+indicatif = "0.17"
 # download end
 # dev start
 tower = "0.5.3"

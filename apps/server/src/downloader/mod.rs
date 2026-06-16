@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use api::config::{AsrModel, Config as AppConfig, LlmModel, TtsModel, VadModel};
 use dialoguer::Select;
+use indicatif::{ProgressBar, ProgressStyle};
 use include_dir::{Dir, include_dir};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -117,6 +118,7 @@ pub async fn run(
                 eprintln!("  {cat}/{m} (default variant)");
             }
         }
+        eprintln!();
     }
 
     let mut report_files = Vec::new();
@@ -188,7 +190,7 @@ pub async fn run(
 
                     set.spawn(async move {
                         let _permit = sem.acquire_owned().await.unwrap();
-                        let result = download_file(&cl, &file_url, &dest, file_sha256.as_deref(), &mir)
+                        let result = download_file(&cl, &file_url, &dest, file_sha256.as_deref(), &mir, quiet)
                             .await
                             .map_err(|e| format!("{e}"));
                         (fpath, man, result)
@@ -375,13 +377,16 @@ async fn download_file(
     dest: &Path,
     expected_sha256: Option<&str>,
     mirrors: &[String],
+    quiet: bool,
 ) -> Result<(u64, String), Box<dyn std::error::Error>> {
     if dest.exists() {
         let (size, actual) = sha256_file(dest)?;
         if let Some(expected) = expected_sha256 {
             if actual != expected {
                 std::fs::remove_file(dest)?;
-                eprintln!("  SHA256 mismatch, re-downloading {}", dest.display());
+                if !quiet {
+                    eprintln!("  SHA256 mismatch, re-downloading {}", dest.display());
+                }
             } else {
                 return Ok((size, actual));
             }
@@ -394,11 +399,11 @@ async fn download_file(
     let candidates = generate_urls(url, mirrors);
 
     for (i, candidate) in candidates.iter().enumerate() {
-        if i > 0 {
+        if i > 0 && !quiet {
             eprintln!("  RETRY from {candidate}");
         }
 
-        let result = try_download_url(client, candidate, dest, expected_sha256).await;
+        let result = try_download_url(client, candidate, dest, expected_sha256, quiet).await;
         if result.is_ok() {
             return result;
         }
@@ -412,18 +417,47 @@ async fn try_download_url(
     url: &str,
     dest: &Path,
     expected_sha256: Option<&str>,
+    quiet: bool,
 ) -> Result<(u64, String), Box<dyn std::error::Error>> {
     let tmp = dest.with_extension("tmp");
     let mut hasher = sha2::Sha256::new();
     let mut downloaded = 0u64;
 
     let mut resp = client.get(url).send().await?;
+    let total_size = resp.content_length().unwrap_or(0);
+
+    let pb = if !quiet && total_size > 0 {
+        let pb = ProgressBar::new(total_size);
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template("{msg:.bold.dim} {bar:40.cyan/blue} {bytes}/{total_bytes} ({bytes_per_sec}, eta {eta})")
+                .unwrap()
+                .progress_chars("=>-"),
+        );
+        pb.set_message(
+            dest.file_name()
+                .unwrap_or_default()
+                .to_str()
+                .unwrap_or("")
+                .to_string(),
+        );
+        Some(pb)
+    } else {
+        None
+    };
 
     let mut file = std::fs::File::create(&tmp)?;
     while let Some(chunk) = resp.chunk().await? {
         hasher.update(&chunk);
         file.write_all(&chunk)?;
         downloaded += chunk.len() as u64;
+        if let Some(ref pb) = pb {
+            pb.set_position(downloaded);
+        }
+    }
+
+    if let Some(pb) = pb {
+        pb.finish_and_clear();
     }
 
     let actual = hex::encode(hasher.finalize());

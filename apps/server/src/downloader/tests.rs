@@ -359,7 +359,7 @@ async fn test_try_download_ok() {
     let dest = dir.join("f.bin");
     let url = format!("{}/f.bin", srv.url());
 
-    let r = try_download_url(&Client::new(), &url, &dest, None).await;
+    let r = try_download_url(&Client::new(), &url, &dest, None, true).await;
     assert!(r.is_ok());
     let (sz, sha) = r.unwrap();
     assert_eq!(sz, body.len() as u64);
@@ -387,6 +387,7 @@ async fn test_try_download_sha_mismatch() {
         &url,
         &dest,
         Some("0000000000000000000000000000000000000000000000000000000000000000"),
+        true,
     )
     .await;
     assert!(r.is_err());
@@ -399,7 +400,7 @@ async fn test_try_download_sha_mismatch() {
 async fn test_try_download_conn_refused() {
     let client = Client::builder().no_proxy().build().unwrap();
     let dir = test_dir("tdl_conn");
-    let r = try_download_url(&client, "http://127.0.0.1:18634/f.bin", &dir.join("f.bin"), None).await;
+    let r = try_download_url(&client, "http://127.0.0.1:18634/f.bin", &dir.join("f.bin"), None, true).await;
     assert!(r.is_err(), "expected error, got {:?}", r);
 }
 
@@ -422,7 +423,7 @@ async fn test_download_cached() {
     fs::write(&dest, body).unwrap();
 
     let r =
-        download_file(&Client::new(), &format!("{}/f.bin", srv.url()), &dest, Some(&sha), &[])
+        download_file(&Client::new(), &format!("{}/f.bin", srv.url()), &dest, Some(&sha), &[], true)
             .await;
     assert!(r.is_ok());
     m.assert();
@@ -450,6 +451,7 @@ async fn test_download_re_download_on_sha_mismatch() {
         &dest,
         Some(&sha),
         &[],
+        true,
     )
     .await;
     assert!(r.is_ok());
@@ -477,6 +479,7 @@ async fn test_download_fresh() {
         &dest,
         None,
         &[],
+        true,
     )
     .await;
     assert!(r.is_ok());
