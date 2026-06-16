@@ -70,6 +70,7 @@
               git-cliff
               lefthook
               protobuf
+              sccache
             ];
 
             buildInputs = with pkgs; [
@@ -90,8 +91,10 @@
               echo "  Rust: $(rustc --version)"
               echo "  Node: $(node --version)"
               echo "  pnpm: $(pnpm --version)"
+              echo "  sccache: $(sccache --version | head -1)"
               echo ""
               echo "  Run: moon run <task>"
+              export CARGO_BUILD_RUSTC_WRAPPER=sccache
             '';
           };
 
@@ -100,6 +103,7 @@
               rustToolchain
               pkg-config
               protobuf
+              sccache
             ];
             buildInputs = with pkgs; [
               openssl
@@ -113,6 +117,9 @@
               pkgs.darwin.apple_sdk.frameworks.CoreFoundation
               pkgs.darwin.apple_sdk.frameworks.Accelerate
             ];
+            shellHook = ''
+              export CARGO_BUILD_RUSTC_WRAPPER=sccache
+            '';
           };
 
           frontend = pkgs.mkShell {

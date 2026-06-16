@@ -94,6 +94,10 @@ jobs:
         uses: DeterminateSystems/magic-nix-cache-action@6221693898146dc97e38ad0e013488a16477a4c4
         continue-on-error: true
 
+      - name: Setup sccache (Linux / macOS)
+        if: runner.os != 'Windows'
+        uses: mozilla-actions/sccache-action@9e326eb2ae5f1e032b43f327b8b1998c1b16c557 # v0.0.10
+
       - name: Install pnpm (Windows)
         if: runner.os == 'Windows'
         uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda
@@ -115,7 +119,13 @@ jobs:
         working-directory: ${{ github.workspace }}
 
       - name: Build UI
-        run: nix develop --command moon run server-ui:build
+        run: >
+          nix develop
+          -k CARGO_BUILD_RUSTC_WRAPPER
+          -k SCCACHE_GHA_ENABLED
+          -k ACTIONS_CACHE_URL
+          -k ACTIONS_RUNTIME_TOKEN
+          --command moon run server-ui:build
         if: runner.os != 'Windows'
 
       - name: Build UI (Windows)

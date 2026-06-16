@@ -31,8 +31,6 @@ tasks:
 
   test:
     command: "cargo test --package chobits-server"
-    deps:
-      - ~:build
 
   test-pg:
     command: "cargo test --package chobits-server"

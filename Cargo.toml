@@ -139,7 +139,6 @@ hyper = "1.8.1"
 tracing-test = "0.2.6"
 # download start
 reqwest = { version = "0.12.28", default-features = false }
-indicatif = "0.17.11"
 include_dir = "0.7.4"
 sha2 = "0.10.9"
 hex = "0.4.3"
@@ -147,13 +146,10 @@ hex = "0.4.3"
 # dev start
 tower = "0.5.3"
 cucumber = "0.23.0"
+mockito = "1.7.2"
 # dev end
 
 [profile.dev]
-
-[profile.test]
-# speed up test case (special for llm) 
-opt-level = 1
 
 [profile.release]
 opt-level = 3

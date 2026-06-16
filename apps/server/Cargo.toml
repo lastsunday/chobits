@@ -56,6 +56,9 @@ futures-util = { workspace = true }
 jiff = { workspace = true }
 # download end
 
+[dev-dependencies]
+mockito = { workspace = true }
+
 [build-dependencies]
 # llm start
 bindgen_cuda = { workspace = true, optional = true }
