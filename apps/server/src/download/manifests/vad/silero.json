@@ -1,4 +1,5 @@
 {
+  "config": { "category": "vad", "model": "silero" },
   "default_variant": "default",
   "variants": {
     "default": {

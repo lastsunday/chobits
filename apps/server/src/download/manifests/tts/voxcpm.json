@@ -1,4 +1,5 @@
 {
+  "config": { "category": "tts", "model": "voxcpm" },
   "default_variant": "0.5b",
   "variants": {
     "0.5b": {

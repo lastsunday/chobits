@@ -1,4 +1,5 @@
 {
+  "config": { "category": "llm", "model": "qwen3" },
   "default_variant": "1.7b",
   "variants": {
     "0.6b": {

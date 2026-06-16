@@ -19,7 +19,16 @@ const DEFAULT_MIRRORS: &[&str] = &["https://hf-mirror.com"];
 const MANIFESTS_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/download/manifests");
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
+struct ConfigMeta {
+    category: String,
+    #[serde(rename = "model")]
+    model_name: String,
+}
+
+#[derive(Deserialize)]
 struct ModelEntry {
+    config: Option<ConfigMeta>,
     default_variant: Option<String>,
     variants: HashMap<String, Variant>,
 }
@@ -531,6 +540,350 @@ fn resolve_variants<'a>(
 
 fn dir_name<'a>(dir: &'a Dir<'a>) -> &'a str {
     dir.path().file_name().unwrap().to_str().unwrap()
+}
+
+struct ModelInfo {
+    display: String,
+    toml_model: String,
+    default_variant: String,
+    variants: Vec<String>,
+}
+
+fn find_config() -> Option<PathBuf> {
+    if let Ok(path) = std::env::var("CHOBITS_CONFIG") {
+        let p = PathBuf::from(&path);
+        if p.exists() {
+            return Some(p);
+        }
+    }
+    let candidates = [
+        PathBuf::from("application.toml"),
+        PathBuf::from("application-example.toml"),
+    ];
+    for p in &candidates {
+        if p.exists() {
+            return Some(p.clone());
+        }
+    }
+    Some(PathBuf::from("application.toml"))
+}
+
+fn load_selections(path: &Path) -> HashMap<String, String> {
+    let content = match std::fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(_) => return HashMap::new(),
+    };
+    let root: toml::Value = match content.parse() {
+        Ok(v) => v,
+        Err(_) => return HashMap::new(),
+    };
+    let mut map = HashMap::new();
+    if let Some(global) = root.get("global").and_then(|v| v.as_table()) {
+        for (key, val) in global {
+            if (key.ends_with("_model") || key.ends_with("_variant") || key.ends_with("_path"))
+                && let Some(s) = val.as_str()
+            {
+                map.insert(key.clone(), s.to_string());
+            }
+        }
+    }
+    map
+}
+
+fn upsert_config(path: &Path, updates: &[(&str, &str)]) -> Result<(), Box<dyn std::error::Error>> {
+    let content = std::fs::read_to_string(path).unwrap_or_default();
+    let mut lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
+    let mut updated = std::collections::HashSet::new();
+    let mut in_global = false;
+    let mut i = 0;
+
+    while i < lines.len() {
+        let trimmed = lines[i].trim().to_string();
+        if trimmed.starts_with('[') {
+            in_global = trimmed.trim_end() == "[global]";
+            i += 1;
+            continue;
+        }
+        if in_global && trimmed.contains('=') && !trimmed.starts_with('#') {
+            if let Some(eq_pos) = trimmed.find('=') {
+                let key = trimmed[..eq_pos].trim().to_string();
+                if let Some(idx) = updates.iter().position(|(k, _)| *k == key.as_str()) {
+                    lines[i] = format!("{key} = \"{}\"", updates[idx].1);
+                    updated.insert(key);
+                }
+            }
+        }
+        i += 1;
+    }
+
+    let has_global = lines.iter().any(|l| l.trim().trim_end() == "[global]");
+    if !updates.is_empty() && updated.len() < updates.len() {
+        let insert_pos = if has_global {
+            lines.iter().position(|l| l.trim().trim_end() == "[global]").unwrap() + 1
+        } else {
+            lines.len()
+        };
+        if !has_global {
+            lines.insert(insert_pos, "[global]".into());
+        }
+        let mut offset = if has_global { 0 } else { 1 };
+        for (key, val) in updates {
+            if !updated.contains(*key) {
+                lines.insert(insert_pos + offset, format!("{key} = \"{val}\""));
+                offset += 1;
+            }
+        }
+    } else if updated.is_empty() && !updates.is_empty() {
+        lines.push(String::new());
+        lines.push("[global]".into());
+        for (key, val) in updates {
+            lines.push(format!("{key} = \"{val}\""));
+        }
+    }
+
+    std::fs::write(path, lines.join("\n") + "\n")?;
+    Ok(())
+}
+
+pub async fn run_wizard(
+    data_dir: &Path,
+    quiet: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut catalog: Vec<(String, Vec<ModelInfo>)> = Vec::new();
+    for cat_dir in MANIFESTS.dirs() {
+        let cat_name = dir_name(cat_dir).to_string();
+        let mut models = Vec::new();
+        for file_entry in cat_dir.files() {
+            if file_entry.path().extension().is_none_or(|e| e != "json") {
+                continue;
+            }
+            let Ok(entry) = serde_json::from_slice::<ModelEntry>(file_entry.contents()) else {
+                continue;
+            };
+            let display = file_entry.path().file_stem().unwrap().to_str().unwrap().to_string();
+            let toml_model = entry.config.as_ref().map(|c| c.model_name.clone()).unwrap_or_else(|| display.clone());
+            let default_variant = entry.default_variant.unwrap_or_else(|| "default".into());
+            let variants: Vec<String> = entry.variants.keys().cloned().collect();
+            models.push(ModelInfo { display, toml_model, default_variant, variants });
+        }
+        if !models.is_empty() {
+            catalog.push((cat_name, models));
+        }
+    }
+
+    // Find config & load existing selections
+    let config_path = find_config();
+    if let Some(ref p) = config_path {
+        if p.exists() {
+            println!("\nFound config: {}", p.display());
+        } else {
+            println!("\nConfig file: {} (will create)", p.display());
+        }
+    }
+    let existing = config_path.as_ref().map(|p| load_selections(p)).unwrap_or_default();
+    let mut show_existing = !existing.is_empty();
+
+    // Selection state: category → (manifest_name, toml_model, variant)
+    let mut selections: HashMap<String, (String, String, String)> = HashMap::new();
+    let cat_names: Vec<String> = catalog.iter().map(|(c, _)| c.clone()).collect();
+
+    // Pre-populate from existing config
+    for (key, val) in &existing {
+        if let Some(cat) = key.strip_suffix("_model") {
+            if let Some(model_info) = catalog.iter().find(|(c, _)| c == cat).and_then(|(_, models)| {
+                models.iter().find(|m| m.toml_model == *val)
+            }) {
+                let variant = existing.get(&format!("{cat}_variant")).cloned().unwrap_or_else(|| model_info.default_variant.clone());
+                selections.insert(cat.to_string(), (model_info.display.clone(), model_info.toml_model.clone(), variant));
+            }
+        }
+    }
+
+    // Display catalog
+    println!("\nAvailable models:\n");
+    for (cat_name, models) in &catalog {
+        println!("  {cat_name}:");
+        for m in models {
+            let selected = selections.contains_key(cat_name);
+            let sel = if selected { " [SELECTED]" } else { "" };
+            println!("    {} (config model: {}){}", m.display, m.toml_model, sel);
+            for v in &m.variants {
+                let def = if *v == m.default_variant { " (default)" } else { "" };
+                println!("      - {v}{def}");
+            }
+        }
+    }
+
+    // Selection loop
+    loop {
+        if show_existing {
+            show_existing = false;
+            show_selections(&selections, &existing, &catalog);
+        }
+
+        let input = prompt_category(&cat_names)?;
+        if input == "done" {
+            break;
+        }
+        if input == "show" {
+            show_selections(&selections, &existing, &catalog);
+            continue;
+        }
+
+        let cat = input;
+        let models = &catalog.iter().find(|(c, _)| c == &cat).unwrap().1;
+        let model_names: Vec<String> = models.iter().map(|m| m.display.clone()).collect();
+        let display = prompt_choice("  Select model", &model_names)?;
+        let entry = models.iter().find(|m| m.display == display).unwrap();
+
+        let var = if entry.variants.len() > 1 {
+            let old_var = existing.get(&format!("{cat}_variant")).map(|s| s.as_str());
+            let default = old_var.unwrap_or(&entry.default_variant);
+            prompt_choice_default("  Select variant", default, &entry.variants)?
+        } else {
+            entry.default_variant.clone()
+        };
+
+        selections.insert(cat.clone(), (entry.display.clone(), entry.toml_model.clone(), var.clone()));
+        println!("  ✓ Added {}/{} ({})", cat, entry.display, var);
+    }
+
+    // Final summary
+    println!("\n── Selections ──");
+    for (cat_name, models) in &catalog {
+        if let Some((_, toml_model, var)) = selections.get(cat_name) {
+            let path = format!("data/{cat_name}/model/{}/{}", 
+                models.iter().find(|m| m.toml_model == *toml_model).map(|m| m.display.as_str()).unwrap_or(toml_model),
+                var);
+            println!("  {cat_name}:  model={toml_model}  variant={var}  path={path}");
+        } else {
+            println!("  {cat_name}:  (not selected)");
+        }
+    }
+
+    // Collect update lines
+    let mut updates: Vec<(&str, &str)> = Vec::new();
+    // Maintain ordering: tts, asr, llm, vad
+    for cat in &["tts", "asr", "llm", "vad"] {
+        if let Some((_, toml_model, var)) = selections.get(*cat) {
+            let model_entry = catalog.iter().find(|(c, _)| c == cat).and_then(|(_, ms)| ms.iter().find(|m| m.toml_model == *toml_model));
+            let has_variants = model_entry.map(|m| m.variants.len() > 1).unwrap_or(false);
+            let model_key = format!("{cat}_model");
+            updates.push((Box::leak(model_key.into_boxed_str()), Box::leak(toml_model.clone().into_boxed_str())));
+            if has_variants {
+                let var_key = format!("{cat}_variant");
+                updates.push((Box::leak(var_key.into_boxed_str()), Box::leak(var.clone().into_boxed_str())));
+            }
+            let path = format!("data/{cat}/model/{}/{}",
+                model_entry.map(|m| m.display.as_str()).unwrap_or(toml_model),
+                var);
+            let path_key = format!("{cat}_path");
+            updates.push((Box::leak(path_key.into_boxed_str()), Box::leak(path.into_boxed_str())));
+        }
+    }
+
+    if confirm("\nWrite to config file?")? {
+        let path = config_path.as_ref().map(|p| p.as_path()).unwrap_or(Path::new("application.toml"));
+        upsert_config(path, &updates)?;
+        println!("✓ Written to {}", path.display());
+    }
+
+    if !selections.is_empty() && confirm("Download all selected models?")? {
+        let mir: Vec<String> = Vec::new();
+        for (cat, (display, _, var)) in &selections {
+            println!("\n--- Downloading {cat}/{display}/{var} ---");
+            if let Err(e) = run(
+                Some(cat), Some(display.as_str()), Some(var.as_str()),
+                data_dir, quiet, &mir, None, false, None,
+            ).await {
+                eprintln!("  FAIL: {e}");
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn show_selections(
+    selections: &HashMap<String, (String, String, String)>,
+    existing: &HashMap<String, String>,
+    catalog: &[(String, Vec<ModelInfo>)],
+) {
+    println!("\nCurrent selections:");
+    for (cat_name, models) in catalog {
+        let label = format!("  {cat_name}:");
+        if let Some((display, toml_model, var)) = selections.get(cat_name) {
+            let old_variant = existing.get(&format!("{cat_name}_variant"));
+            let old_model = existing.get(&format!("{cat_name}_model"));
+            let status = if old_model.map_or(true, |m| m != toml_model) {
+                " (new)".to_string()
+            } else if old_variant.map_or(true, |v| v != var) {
+                format!(" (changed, was: {})", old_variant.unwrap_or(&String::new()))
+            } else if *var == *models.iter().find(|m| m.display == *display).map(|m| &m.default_variant).unwrap_or(&String::new()) {
+                " (default, unchanged)".to_string()
+            } else {
+                " (unchanged)".to_string()
+            };
+            println!("{label} {display} → {var}{status}");
+        } else {
+            println!("{label} (not selected)");
+        }
+    }
+}
+
+fn confirm(question: &str) -> Result<bool, Box<dyn std::error::Error>> {
+    loop {
+        eprint!("{question} [y/N]: ");
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        match input.trim().to_lowercase().as_str() {
+            "y" | "yes" => return Ok(true),
+            "n" | "no" | "" => return Ok(false),
+            _ => eprintln!("Please answer y or n."),
+        }
+    }
+}
+
+fn prompt_category(valid: &[String]) -> Result<String, Box<dyn std::error::Error>> {
+    loop {
+        eprint!("Select category (or 'show'/'done') [{}]: ", valid.join("/"));
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        let input = input.trim().to_lowercase();
+        if input == "done" || input == "show" || valid.iter().any(|v| v == &input) {
+            return Ok(input);
+        }
+        eprintln!("Invalid. Choose from: {}, or 'show'/'done'", valid.join(", "));
+    }
+}
+
+fn prompt_choice(question: &str, valid: &[String]) -> Result<String, Box<dyn std::error::Error>> {
+    loop {
+        eprint!("{question} [{}]: ", valid.join("/"));
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        let input = input.trim().to_lowercase();
+        if valid.iter().any(|v| v == &input) {
+            return Ok(input);
+        }
+        eprintln!("Invalid choice. Choose from: {}", valid.join(", "));
+    }
+}
+
+fn prompt_choice_default(question: &str, default: &str, valid: &[String]) -> Result<String, Box<dyn std::error::Error>> {
+    loop {
+        eprint!("{question} [{}] (default: {default}): ", valid.join("/"));
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        let input = input.trim().to_lowercase();
+        if input.is_empty() {
+            return Ok(default.to_string());
+        }
+        if valid.iter().any(|v| v == &input) {
+            return Ok(input);
+        }
+        eprintln!("Invalid choice. Choose from: {}", valid.join(", "));
+    }
 }
 
 fn config_to_targets(

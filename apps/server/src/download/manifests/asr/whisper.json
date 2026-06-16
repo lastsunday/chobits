@@ -1,4 +1,5 @@
 {
+  "config": { "category": "asr", "model": "whisper" },
   "default_variant": "small",
   "variants": {
     "tiny": {

@@ -162,6 +162,10 @@ pub enum Commands {
         /// When set, only downloads models enabled in the config.
         #[arg(short, long)]
         config: Option<PathBuf>,
+
+        /// Run interactive download wizard
+        #[arg(short, long)]
+        wizard: bool,
     },
     /// List available models and their variants
     List {

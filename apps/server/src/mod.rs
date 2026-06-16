@@ -31,19 +31,25 @@ pub fn run() -> Result<(), Box<dyn Error>> {
             overrides,
             write_checksums,
             config,
+            wizard,
         }) => {
-            let rt = tokio::runtime::Runtime::new()?;
-            rt.block_on(download::run(
-                category.as_deref(),
-                model.as_deref(),
-                variant.as_deref(),
-                data_dir,
-                *quiet,
-                mirror,
-                overrides.as_deref(),
-                *write_checksums,
-                config.as_ref(),
-            ))
+            if *wizard {
+                let rt = tokio::runtime::Runtime::new()?;
+                rt.block_on(download::run_wizard(data_dir, *quiet))
+            } else {
+                let rt = tokio::runtime::Runtime::new()?;
+                rt.block_on(download::run(
+                    category.as_deref(),
+                    model.as_deref(),
+                    variant.as_deref(),
+                    data_dir,
+                    *quiet,
+                    mirror,
+                    overrides.as_deref(),
+                    *write_checksums,
+                    config.as_ref(),
+                ))
+            }
         }
         Some(Commands::List { category, json }) => {
             download::list(category.as_deref(), *json);
