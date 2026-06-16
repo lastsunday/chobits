@@ -15,7 +15,7 @@ use crate::{
     server::Server,
 };
 mod clap;
-mod download;
+mod downloader;
 mod server;
 
 pub fn run() -> Result<(), Box<dyn Error>> {
@@ -35,7 +35,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
             },
         }) => {
             let rt = tokio::runtime::Runtime::new()?;
-            rt.block_on(download::run(
+            rt.block_on(downloader::run(
                 category.as_deref(),
                 model.as_deref(),
                 variant.as_deref(),
@@ -51,12 +51,12 @@ pub fn run() -> Result<(), Box<dyn Error>> {
             action: DownloaderAction::Wizard { data_dir, quiet },
         }) => {
             let rt = tokio::runtime::Runtime::new()?;
-            rt.block_on(download::run_wizard(data_dir, *quiet))
+            rt.block_on(downloader::run_wizard(data_dir, *quiet))
         }
         Some(Commands::Downloader {
             action: DownloaderAction::List { category, json },
         }) => {
-            download::list(category.as_deref(), *json);
+            downloader::list(category.as_deref(), *json);
             Ok(())
         }
         None => run_with_args(&cli.serve),

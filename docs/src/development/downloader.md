@@ -5,7 +5,7 @@
 ## 目录结构
 
 ```
-apps/server/src/download/
+apps/server/src/downloader/
 ├── manifests/           # 编译时嵌入的 manifest JSON
 │   ├── asr/             # 语音识别
 │   │   ├── qwen3.json

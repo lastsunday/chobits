@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use api::config::{AsrModel, Config as AppConfig, LlmModel, TtsModel, VadModel};
+use dialoguer::Select;
 use include_dir::{Dir, include_dir};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -13,10 +14,10 @@ use tokio::task::JoinSet;
 
 const MAX_CONCURRENT_DOWNLOADS: usize = 4;
 
-static MANIFESTS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/src/download/manifests");
+static MANIFESTS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/src/downloader/manifests");
 
 const DEFAULT_MIRRORS: &[&str] = &["https://hf-mirror.com"];
-const MANIFESTS_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/download/manifests");
+const MANIFESTS_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/downloader/manifests");
 
 #[derive(Deserialize)]
 #[allow(dead_code)]
@@ -678,7 +679,6 @@ pub async fn run_wizard(
         }
     }
     let existing = config_path.as_ref().map(|p| load_selections(p)).unwrap_or_default();
-    let mut show_existing = !existing.is_empty();
 
     // Selection state: category → (manifest_name, toml_model, variant)
     let mut selections: HashMap<String, (String, String, String)> = HashMap::new();
@@ -712,31 +712,38 @@ pub async fn run_wizard(
     }
 
     // Selection loop
+    let mut cat_items = cat_names.clone();
+    cat_items.push("done".into());
     loop {
-        if show_existing {
-            show_existing = false;
-            show_selections(&selections, &existing, &catalog);
-        }
-
-        let input = prompt_category(&cat_names)?;
+        let idx = Select::new()
+            .with_prompt("Select category")
+            .items(&cat_items)
+            .interact()?;
+        let input = &cat_items[idx];
         if input == "done" {
             break;
         }
-        if input == "show" {
-            show_selections(&selections, &existing, &catalog);
-            continue;
-        }
 
-        let cat = input;
+        let cat = input.clone();
         let models = &catalog.iter().find(|(c, _)| c == &cat).unwrap().1;
         let model_names: Vec<String> = models.iter().map(|m| m.display.clone()).collect();
-        let display = prompt_choice("  Select model", &model_names)?;
-        let entry = models.iter().find(|m| m.display == display).unwrap();
+        let model_idx = Select::new()
+            .with_prompt("Select model")
+            .items(&model_names)
+            .interact()?;
+        let display = &model_names[model_idx];
+        let entry = models.iter().find(|m| m.display == *display).unwrap();
 
         let var = if entry.variants.len() > 1 {
             let old_var = existing.get(&format!("{cat}_variant")).map(|s| s.as_str());
             let default = old_var.unwrap_or(&entry.default_variant);
-            prompt_choice_default("  Select variant", default, &entry.variants)?
+            let default_idx = entry.variants.iter().position(|v| v == default).unwrap_or(0);
+            let var_idx = Select::new()
+                .with_prompt("Select variant")
+                .items(&entry.variants)
+                .default(default_idx)
+                .interact()?;
+            entry.variants[var_idx].clone()
         } else {
             entry.default_variant.clone()
         };
@@ -801,33 +808,6 @@ pub async fn run_wizard(
     Ok(())
 }
 
-fn show_selections(
-    selections: &HashMap<String, (String, String, String)>,
-    existing: &HashMap<String, String>,
-    catalog: &[(String, Vec<ModelInfo>)],
-) {
-    println!("\nCurrent selections:");
-    for (cat_name, models) in catalog {
-        let label = format!("  {cat_name}:");
-        if let Some((display, toml_model, var)) = selections.get(cat_name) {
-            let old_variant = existing.get(&format!("{cat_name}_variant"));
-            let old_model = existing.get(&format!("{cat_name}_model"));
-            let status = if old_model.map_or(true, |m| m != toml_model) {
-                " (new)".to_string()
-            } else if old_variant.map_or(true, |v| v != var) {
-                format!(" (changed, was: {})", old_variant.unwrap_or(&String::new()))
-            } else if *var == *models.iter().find(|m| m.display == *display).map(|m| &m.default_variant).unwrap_or(&String::new()) {
-                " (default, unchanged)".to_string()
-            } else {
-                " (unchanged)".to_string()
-            };
-            println!("{label} {display} → {var}{status}");
-        } else {
-            println!("{label} (not selected)");
-        }
-    }
-}
-
 fn confirm(question: &str) -> Result<bool, Box<dyn std::error::Error>> {
     loop {
         eprint!("{question} [y/N]: ");
@@ -838,48 +818,6 @@ fn confirm(question: &str) -> Result<bool, Box<dyn std::error::Error>> {
             "n" | "no" | "" => return Ok(false),
             _ => eprintln!("Please answer y or n."),
         }
-    }
-}
-
-fn prompt_category(valid: &[String]) -> Result<String, Box<dyn std::error::Error>> {
-    loop {
-        eprint!("Select category (or 'show'/'done') [{}]: ", valid.join("/"));
-        let mut input = String::new();
-        std::io::stdin().read_line(&mut input)?;
-        let input = input.trim().to_lowercase();
-        if input == "done" || input == "show" || valid.iter().any(|v| v == &input) {
-            return Ok(input);
-        }
-        eprintln!("Invalid. Choose from: {}, or 'show'/'done'", valid.join(", "));
-    }
-}
-
-fn prompt_choice(question: &str, valid: &[String]) -> Result<String, Box<dyn std::error::Error>> {
-    loop {
-        eprint!("{question} [{}]: ", valid.join("/"));
-        let mut input = String::new();
-        std::io::stdin().read_line(&mut input)?;
-        let input = input.trim().to_lowercase();
-        if valid.iter().any(|v| v == &input) {
-            return Ok(input);
-        }
-        eprintln!("Invalid choice. Choose from: {}", valid.join(", "));
-    }
-}
-
-fn prompt_choice_default(question: &str, default: &str, valid: &[String]) -> Result<String, Box<dyn std::error::Error>> {
-    loop {
-        eprint!("{question} [{}] (default: {default}): ", valid.join("/"));
-        let mut input = String::new();
-        std::io::stdin().read_line(&mut input)?;
-        let input = input.trim().to_lowercase();
-        if input.is_empty() {
-            return Ok(default.to_string());
-        }
-        if valid.iter().any(|v| v == &input) {
-            return Ok(input);
-        }
-        eprintln!("Invalid choice. Choose from: {}", valid.join(", "));
     }
 }
 
