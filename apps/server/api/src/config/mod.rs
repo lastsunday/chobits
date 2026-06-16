@@ -126,9 +126,12 @@ pub struct Config {
     #[serde(default = "default_vad_model")]
     pub vad_model: Option<VadModel>,
 
-    /// default: data/vad/model/onnx-community/silero-vad/
+    /// default: data/vad/model/silero/default/
     #[serde(default = "default_vad_path")]
     pub vad_path: Option<String>,
+
+    #[serde(default)]
+    pub vad_variant: Option<String>,
 
     /// default: 4
     #[serde(default = "default_vad_num_threads")]
@@ -138,9 +141,12 @@ pub struct Config {
     #[serde(default = "default_tts_model")]
     pub tts_model: Option<TtsModel>,
 
-    /// default: data/tts/model/openbmb/VoxCPM-0.5B/
+    /// default: data/tts/model/voxcpm/0.5b/
     #[serde(default = "default_tts_path")]
     pub tts_path: Option<String>,
+
+    #[serde(default)]
+    pub tts_variant: Option<String>,
 
     /// default: 一定被灰太狼给吃了，我已经为他准备好了花圈了
     #[serde(default = "default_tts_reference_prompt_text")]
@@ -150,21 +156,31 @@ pub struct Config {
     #[serde(default = "default_tts_reference_prompt_wav_path")]
     pub tts_reference_prompt_wav_path: Option<String>,
 
+    /// pocket-tts 等模型的特有配置
+    #[serde(default)]
+    pub tts_options: Option<serde_json::Value>,
+
     /// default: qwen3
     #[serde(default = "default_asr_model")]
     pub asr_model: Option<AsrModel>,
 
-    /// default: data/asr/model/Qwen/Qwen3-ASR-0.6B/
+    /// default: data/asr/model/qwen3/default/
     #[serde(default = "default_asr_path")]
     pub asr_path: Option<String>,
+
+    #[serde(default)]
+    pub asr_variant: Option<String>,
 
     /// default: qwen3
     #[serde(default = "default_llm_model")]
     pub llm_model: Option<LlmModel>,
 
-    /// default: data/llm/model/unsloth/Qwen3-1.7B-GGUF/
+    /// default: data/llm/model/qwen3/1.7b/
     #[serde(default = "default_llm_path")]
     pub llm_path: Option<String>,
+
+    #[serde(default)]
+    pub llm_variant: Option<String>,
 
     /// default: 16000
     #[serde(default = "default_audio_input_sample_rate")]
@@ -365,11 +381,11 @@ fn default_auth_client_secret() -> Option<String> {
 }
 
 fn default_tts_model() -> Option<TtsModel> {
-    Some(TtsModel::Voxcpm)
+    Some(TtsModel::PocketTts)
 }
 
 fn default_tts_path() -> Option<String> {
-    Some(String::from("data/tts/model/openbmb/VoxCPM-0.5B/"))
+    Some(String::from("data/tts/model/voxcpm/0.5b/"))
 }
 
 fn default_tts_reference_prompt_text() -> Option<String> {
@@ -385,7 +401,7 @@ fn default_asr_model() -> Option<AsrModel> {
 }
 
 fn default_asr_path() -> Option<String> {
-    Some(String::from("data/asr/model/Qwen/Qwen3-ASR-0.6B/"))
+    Some(String::from("data/asr/model/qwen3/default/"))
 }
 
 fn default_llm_model() -> Option<LlmModel> {
@@ -393,7 +409,7 @@ fn default_llm_model() -> Option<LlmModel> {
 }
 
 fn default_llm_path() -> Option<String> {
-    Some(String::from("data/llm/model/unsloth/Qwen3-1.7B-GGUF/"))
+    Some(String::from("data/llm/model/qwen3/1.7b/"))
 }
 
 fn default_audio_input_sample_rate() -> Option<u32> {
@@ -451,7 +467,7 @@ fn default_vad_model() -> Option<VadModel> {
 }
 
 fn default_vad_path() -> Option<String> {
-    Some(String::from("data/vad/model/onnx-community/silero-vad/"))
+    Some(String::from("data/vad/model/silero/default/"))
 }
 
 fn default_vad_num_threads() -> Option<i32> {
@@ -592,6 +608,88 @@ impl Config {
     pub fn check(&self) -> Result<(), Error> {
         check(self)
     }
+
+    pub fn derive_tts_path(&self) -> Option<String> {
+        if self.tts_path.is_some() {
+            return self.tts_path.clone();
+        }
+        let variant = self.tts_variant.clone().unwrap_or_else(|| {
+            match self.tts_model.clone().unwrap_or_default() {
+                TtsModel::PocketTts => "default".into(),
+                TtsModel::Voxcpm => "0.5b".into(),
+                TtsModel::Mute => String::new(),
+            }
+        });
+        if variant.is_empty() {
+            return None;
+        }
+        let model = match self.tts_model.clone().unwrap_or_default() {
+            TtsModel::PocketTts => "pocket-tts",
+            TtsModel::Voxcpm => "voxcpm",
+            TtsModel::Mute => return None,
+        };
+        Some(format!("data/tts/model/{model}/{variant}/"))
+    }
+
+    pub fn derive_asr_path(&self) -> Option<String> {
+        if self.asr_path.is_some() {
+            return self.asr_path.clone();
+        }
+        let variant = self.asr_variant.clone().unwrap_or_else(|| {
+            match self.asr_model.clone().unwrap_or_default() {
+                AsrModel::Qwen3 => "default".into(),
+                AsrModel::Whisper => "small".into(),
+                AsrModel::Void => String::new(),
+            }
+        });
+        if variant.is_empty() {
+            return None;
+        }
+        let model = match self.asr_model.clone().unwrap_or_default() {
+            AsrModel::Qwen3 => "qwen3",
+            AsrModel::Whisper => "whisper",
+            AsrModel::Void => return None,
+        };
+        Some(format!("data/asr/model/{model}/{variant}/"))
+    }
+
+    pub fn derive_llm_path(&self) -> Option<String> {
+        if self.llm_path.is_some() {
+            return self.llm_path.clone();
+        }
+        let variant = self.llm_variant.clone().unwrap_or_else(|| {
+            match self.llm_model.clone().unwrap_or_default() {
+                LlmModel::Qwen3 => "1.7b".into(),
+                _ => String::new(),
+            }
+        });
+        if variant.is_empty() {
+            return None;
+        }
+        match self.llm_model.clone().unwrap_or_default() {
+            LlmModel::Qwen3 => Some(format!("data/llm/model/qwen3/{variant}/")),
+            _ => None,
+        }
+    }
+
+    pub fn derive_vad_path(&self) -> Option<String> {
+        if self.vad_path.is_some() {
+            return self.vad_path.clone();
+        }
+        let variant = self.vad_variant.clone().unwrap_or_else(|| {
+            match self.vad_model.clone().unwrap_or_default() {
+                VadModel::Silero => "default".into(),
+                _ => String::new(),
+            }
+        });
+        if variant.is_empty() {
+            return None;
+        }
+        match self.vad_model.clone().unwrap_or_default() {
+            VadModel::Silero => Some(format!("data/vad/model/silero/{variant}/")),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -630,6 +728,7 @@ pub enum AsrModel {
 #[serde(rename_all = "lowercase")]
 pub enum TtsModel {
     #[default]
+    PocketTts,
     Voxcpm,
     Mute,
 }

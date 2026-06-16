@@ -1,6 +1,7 @@
 pub mod model;
 
 use self::model::mute::TtsMute;
+use self::model::pocket_tts::TtsPocketTTS;
 use self::model::voxcpm::TtsVoxCPM;
 use crate::config;
 use crate::common::ModelError;
@@ -75,6 +76,9 @@ impl TtsFactory {
         audio_config: &AudioConfig,
     ) -> Result<Box<dyn Tts>, anyhow::Error> {
         match tts_config.model.clone().expect("tts model is empty") {
+            config::TtsModel::PocketTts => Ok(Box::new(
+                TtsPocketTTS::new(tts_config, audio_config).await?,
+            )),
             config::TtsModel::Voxcpm => Ok(Box::new(
                 TtsVoxCPM::new(
                     &tts_config.path.clone().expect("tts path is empty"),

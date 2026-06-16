@@ -1,0 +1,24 @@
+{
+  "default_variant": "default",
+  "variants": {
+    "default": {
+      "files": [
+        {
+          "url": "https://huggingface.co/kyutai/pocket-tts/resolve/main/tts_b6369a24.safetensors",
+          "path": "tts/model/pocket-tts/default/tts_b6369a24.safetensors",
+          "sha256": null
+        },
+        {
+          "url": "https://huggingface.co/kyutai/pocket-tts/resolve/main/tokenizer.model",
+          "path": "tts/model/pocket-tts/default/tokenizer.model",
+          "sha256": null
+        },
+        {
+          "url": "https://raw.githubusercontent.com/babybirdprd/pocket-tts/main/crates/pocket-tts/config/b6369a24.yaml",
+          "path": "tts/model/pocket-tts/default/b6369a24.yaml",
+          "sha256": null
+        }
+      ]
+    }
+  }
+}

@@ -41,7 +41,7 @@ You can find user development documentation on [here](/docs/src/development/READ
 ```shell
 pnpm i
 pnpm exec nx run @chobits/server-ui:build
-./apps/server/script/download_model.sh
+chobits-server download
 # using cuda: pnpm nx run chobits-server:run --features cuda
 pnpm nx run chobits-server:run
 ```

@@ -5,7 +5,7 @@
 ```shell
 pnpm i
 pnpm exec nx run @chobits/server-ui:build
-./apps/server/script/download_model.sh
+chobits-server download
 # using cuda: pnpm nx run chobits-server:dev_cuda
 pnpm nx run chobits-server:dev
 ```

@@ -1,0 +1,24 @@
+{
+  "default_variant": "default",
+  "variants": {
+    "default": {
+      "files": [
+        {
+          "url": "https://huggingface.co/Qwen/Qwen3-ASR-0.6B/resolve/5eb144179a02acc5e5ba31e748d22b0cf3e303b0/model.safetensors",
+          "path": "asr/model/qwen3/default/model.safetensors",
+          "sha256": null
+        },
+        {
+          "url": "https://huggingface.co/Qwen/Qwen3-ASR-0.6B/resolve/5eb144179a02acc5e5ba31e748d22b0cf3e303b0/vocab.json",
+          "path": "asr/model/qwen3/default/vocab.json",
+          "sha256": null
+        },
+        {
+          "url": "https://huggingface.co/Qwen/Qwen3-ASR-0.6B/resolve/5eb144179a02acc5e5ba31e748d22b0cf3e303b0/merges.txt",
+          "path": "asr/model/qwen3/default/merges.txt",
+          "sha256": null
+        }
+      ]
+    }
+  }
+}

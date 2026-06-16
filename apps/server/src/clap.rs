@@ -2,19 +2,13 @@
 
 use std::{path::PathBuf, time::Duration};
 
-use clap::{ArgAction, Parser};
+use clap::{ArgAction, Parser, Subcommand};
 use figment::{Figment, value::Value};
 use framework::utils::sys::available_parallelism;
 
-/// Commandline arguments
-#[derive(Parser, Debug)]
-#[clap(
-	about,
-	long_about = None,
-	name = framework::name(),
-	version = framework::version(),
-)]
-pub struct Args {
+/// Commandline arguments for the server
+#[derive(Parser, Debug, Clone)]
+pub struct ServeArgs {
     #[arg(short, long)]
     /// Path to the config TOML file (optional)
     pub config: Option<Vec<PathBuf>>,
@@ -96,7 +90,7 @@ pub struct Args {
     pub gc_muzzy: Option<bool>,
 }
 
-impl Args {
+impl ServeArgs {
     pub(crate) fn runtime_config(&self) -> framework::runtime::RuntimeConfig {
         framework::runtime::RuntimeConfig {
             worker_threads: self.worker_threads,
@@ -115,14 +109,79 @@ impl Args {
     }
 }
 
+/// Top-level CLI
+#[derive(Parser, Debug)]
+#[clap(
+	about,
+	long_about = None,
+	name = framework::name(),
+	version = framework::version(),
+)]
+pub struct Cli {
+    #[command(subcommand)]
+    pub command: Option<Commands>,
+
+    #[command(flatten)]
+    pub serve: ServeArgs,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum Commands {
+    /// Download AI models to the local data directory
+    Download {
+        /// Category: tts, asr, llm, vad, reference (default: all)
+        category: Option<String>,
+
+        /// Model name (e.g., pocket-tts, whisper, qwen3)
+        model: Option<String>,
+
+        /// Variant name (e.g., 0.5B, tiny, small, large-v3)
+        variant: Option<String>,
+
+        /// Base data directory
+        #[arg(long, default_value = "data")]
+        data_dir: PathBuf,
+
+        /// Suppress progress output
+        #[arg(long)]
+        quiet: bool,
+
+        /// Custom mirror domains (replaces default hf-mirror.com)
+        #[arg(long)]
+        mirror: Vec<String>,
+
+        /// Path or URL to a JSON file overriding download URLs
+        #[arg(long = "override")]
+        overrides: Option<String>,
+
+        /// Download and write sha256 checksums back to manifest files
+        #[arg(long)]
+        write_checksums: bool,
+
+        /// Path to the application config TOML file.
+        /// When set, only downloads models enabled in the config.
+        #[arg(short, long)]
+        config: Option<PathBuf>,
+    },
+    /// List available models and their variants
+    List {
+        /// Category filter: tts, asr, llm, vad, reference
+        category: Option<String>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+}
+
 /// Parse commandline arguments into structured data
 #[must_use]
-pub(crate) fn parse() -> Args {
-    Args::parse()
+pub(crate) fn parse() -> Cli {
+    Cli::parse()
 }
 
 /// Synthesize any command line options with configuration file options.
-pub(crate) fn update(mut config: Figment, args: &Args) -> Result<Figment, anyhow::Error> {
+pub(crate) fn update(mut config: Figment, args: &ServeArgs) -> Result<Figment, anyhow::Error> {
     // All other individual overrides can go last in case we have options which
     // set multiple conf items at once and the user still needs granular overrides.
     for option in &args.option {

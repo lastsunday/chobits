@@ -110,6 +110,8 @@ qwen-asr = { workspace = true }
 # vad start
 earshot = { workspace = true }
 # vad end
+# tts start
+pocket-tts = { workspace = true }
 # tts end
 # mcp start
 rmcp = { workspace = true, features = [

@@ -83,7 +83,7 @@
 
 # This item is undocumented. Please contribute documentation for it.
 #
-#vad_path = data/vad/model/onnx-community/silero-vad/
+#vad_path = data/vad/model/silero/default/
 
 # This item is undocumented. Please contribute documentation for it.
 #
@@ -95,7 +95,7 @@
 
 # This item is undocumented. Please contribute documentation for it.
 #
-#tts_path = data/tts/model/openbmb/VoxCPM-0.5B/
+#tts_path = data/tts/model/voxcpm/0.5b/
 
 # This item is undocumented. Please contribute documentation for it.
 #
@@ -105,13 +105,17 @@
 #
 #tts_reference_prompt_wav_path = data/tts/reference/voice_05.wav
 
+# pocket-tts 等模型的特有配置
+#
+#tts_options = false
+
 # This item is undocumented. Please contribute documentation for it.
 #
 #asr_model = qwen3
 
 # This item is undocumented. Please contribute documentation for it.
 #
-#asr_path = data/asr/model/Qwen/Qwen3-ASR-0.6B/
+#asr_path = data/asr/model/qwen3/default/
 
 # This item is undocumented. Please contribute documentation for it.
 #
@@ -119,7 +123,7 @@
 
 # This item is undocumented. Please contribute documentation for it.
 #
-#llm_path = data/llm/model/unsloth/Qwen3-1.7B-GGUF/
+#llm_path = data/llm/model/qwen3/1.7b/
 
 # This item is undocumented. Please contribute documentation for it.
 #

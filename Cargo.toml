@@ -124,6 +124,8 @@ rand = "0.10.0"
 rand_distr = "0.6.0"
 qwen-asr = "0.3.0"
 # asr end
+# tts start
+pocket-tts = "0.6.2"
 # tts end
 # mcp start
 rmcp = "0.15.0"
@@ -135,6 +137,13 @@ ruma-client = "0.17.0"
 hyper = "1.8.1"
 # matrix end
 tracing-test = "0.2.6"
+# download start
+reqwest = { version = "0.12.28", default-features = false }
+indicatif = "0.17.11"
+include_dir = "0.7.4"
+sha2 = "0.10.9"
+hex = "0.4.3"
+# download end
 # dev start
 tower = "0.5.3"
 cucumber = "0.23.0"

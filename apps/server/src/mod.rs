@@ -10,16 +10,50 @@ use api::config::{
 use framework::config::auth::AuthConfig;
 use tracing::info;
 
-use crate::{clap::Args, server::Server};
+use crate::{
+    clap::{Commands, ServeArgs},
+    server::Server,
+};
 mod clap;
+mod download;
 mod server;
 
 pub fn run() -> Result<(), Box<dyn Error>> {
-    let args = clap::parse();
-    run_with_args(&args)
+    let cli = clap::parse();
+    match &cli.command {
+        Some(Commands::Download {
+            category,
+            model,
+            variant,
+            data_dir,
+            quiet,
+            mirror,
+            overrides,
+            write_checksums,
+            config,
+        }) => {
+            let rt = tokio::runtime::Runtime::new()?;
+            rt.block_on(download::run(
+                category.as_deref(),
+                model.as_deref(),
+                variant.as_deref(),
+                data_dir,
+                *quiet,
+                mirror,
+                overrides.as_deref(),
+                *write_checksums,
+                config.as_ref(),
+            ))
+        }
+        Some(Commands::List { category, json }) => {
+            download::list(category.as_deref(), *json);
+            Ok(())
+        }
+        None => run_with_args(&cli.serve),
+    }
 }
 
-pub fn run_with_args(args: &Args) -> Result<(), Box<dyn Error>> {
+pub fn run_with_args(args: &ServeArgs) -> Result<(), Box<dyn Error>> {
     framework::panic::init();
     framework::deadlock::spawn();
 
@@ -66,7 +100,8 @@ async fn async_main(server: &Arc<Server>) -> Result<(), anyhow::Error> {
     });
     let vad_config = Arc::new(VadConfig {
         model: config.vad_model.to_owned(),
-        path: config.vad_path.to_owned(),
+        variant: config.vad_variant.to_owned(),
+        path: config.vad_path.to_owned().or_else(|| config.derive_vad_path()),
         num_threads: config.vad_num_threads,
     });
     let audio_config = Arc::new(AudioConfig {
@@ -92,17 +127,21 @@ async fn async_main(server: &Arc<Server>) -> Result<(), anyhow::Error> {
     });
     let tts_config = Arc::new(TtsConfig {
         model: config.tts_model.to_owned(),
-        path: config.tts_path.to_owned(),
+        variant: config.tts_variant.to_owned(),
+        path: config.tts_path.to_owned().or_else(|| config.derive_tts_path()),
         reference_prompt_text: config.tts_reference_prompt_text.to_owned(),
         reference_prompt_wav_path: config.tts_reference_prompt_wav_path.to_owned(),
+        options: config.tts_options.clone(),
     });
     let asr_config = Arc::new(AsrConfig {
         model: config.asr_model.to_owned(),
-        path: config.asr_path.to_owned(),
+        variant: config.asr_variant.to_owned(),
+        path: config.asr_path.to_owned().or_else(|| config.derive_asr_path()),
     });
     let llm_config = Arc::new(LlmConfig {
         model: config.llm_model.to_owned(),
-        path: config.llm_path.to_owned(),
+        variant: config.llm_variant.to_owned(),
+        path: config.llm_path.to_owned().or_else(|| config.derive_llm_path()),
     });
     let matrix_config = Arc::new(MatrixConfig {
         enable: config.matrix_enable,
