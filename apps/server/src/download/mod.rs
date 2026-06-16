@@ -89,35 +89,34 @@ pub async fn run(
         None => None,
     };
 
-    let config_targets: Option<Vec<(String, String, Option<String>)>> =
-        match config_path {
-            Some(cfg_path) => {
-                let figment = AppConfig::load(std::slice::from_ref(cfg_path))?;
-                let cfg = AppConfig::new(&figment)?;
-                let targets = config_to_targets(&cfg);
-                if !quiet {
-                    eprintln!(
-                        "Config selects {} model(s)",
-                        targets.len()
-                    );
-                    for (cat, m, var) in &targets {
-                        if let Some(v) = var {
-                            eprintln!("  {cat}/{m} (variant: {v})");
-                        } else {
-                            eprintln!("  {cat}/{m} (default variant)");
-                        }
-                    }
-                }
-                if targets.is_empty() {
-                    if !quiet {
-                        eprintln!("Nothing to download");
-                    }
-                    return Ok(());
-                }
-                Some(targets)
+    let cfg_path = config_path
+        .map(|p| p.clone())
+        .or_else(|| find_config().filter(|p| p.exists()));
+
+    let figment = match &cfg_path {
+        Some(p) => AppConfig::load(std::slice::from_ref(p))?,
+        None => AppConfig::load(&[] as &[std::path::PathBuf])?,
+    };
+    let cfg = AppConfig::new(&figment)?;
+    let targets = config_to_targets(&cfg);
+
+    if targets.is_empty() {
+        if !quiet {
+            eprintln!("No enabled models in configuration. Nothing to download.");
+        }
+        return Ok(());
+    }
+
+    if !quiet {
+        eprintln!("Config selects {} model(s)", targets.len());
+        for (cat, m, var) in &targets {
+            if let Some(v) = var {
+                eprintln!("  {cat}/{m} (variant: {v})");
+            } else {
+                eprintln!("  {cat}/{m} (default variant)");
             }
-            None => None,
-        };
+        }
+    }
 
     let mut report_files = Vec::new();
 
@@ -144,10 +143,9 @@ pub async fn run(
                 continue;
             }
 
-            if let Some(ref targets) = config_targets
-                && !targets
-                    .iter()
-                    .any(|(c, m, _)| c == cat_name && m == model_name)
+            if !targets
+                .iter()
+                .any(|(c, m, _)| c == cat_name && m == model_name)
             {
                 continue;
             }
@@ -155,12 +153,10 @@ pub async fn run(
             let entry: ModelEntry = serde_json::from_slice(file_entry.contents())?;
 
             let effective_variant = variant.or_else(|| {
-                config_targets.as_ref().and_then(|targets| {
-                    targets
-                        .iter()
-                        .find(|(c, m, _)| c == cat_name && m == model_name)
-                        .and_then(|(_, _, v)| v.as_deref())
-                })
+                targets
+                    .iter()
+                    .find(|(c, m, _)| c == cat_name && m == model_name)
+                    .and_then(|(_, _, v)| v.as_deref())
             });
             let variants = resolve_variants(&entry, effective_variant);
             let manifest_rel = file_entry.path().to_path_buf();

@@ -9,7 +9,7 @@
   - [UserManual]()
 - [Development](./development/README.md)
   - [Server](./development/server.md)
-  - [Download](./development/download.md)
+  - [Downloader](./development/downloader.md)
   - [Server-ui]()
   - [Esp32](./development/esp32.md)
   - [App](./development/app.md)

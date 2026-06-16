@@ -1,6 +1,6 @@
-# 模型下载
+# 模型下载器
 
-`chobits download` 子系统负责 AI 模型文件的下载与管理。所有模型元数据以 JSON manifest 形式编译到二进制中，运行时无外部依赖。
+`chobits downloader` 子系统负责 AI 模型文件的下载与管理。所有模型元数据以 JSON manifest 形式编译到二进制中，运行时无外部依赖。
 
 ## 目录结构
 
@@ -63,10 +63,23 @@ apps/server/src/download/
 
 ## CLI 命令
 
-### 下载
+### 下载器
 
 ```shell
-chobits download [category] [model] [variant] [options]
+chobits downloader <COMMAND>
+```
+
+| 子命令 | 说明 |
+|--------|------|
+| `install` | 下载 AI 模型到本地数据目录 |
+| `wizard` | 交互式向导模式 |
+
+运行 `chobits downloader`（无子命令）时，自动显示帮助信息。
+
+#### install
+
+```shell
+chobits downloader install [category] [model] [variant] [options]
 ```
 
 | 参数 | 说明 |
@@ -79,29 +92,50 @@ chobits download [category] [model] [variant] [options]
 | `--mirror <url>` | 自定义镜像域名，可多次指定，替换内置的 `hf-mirror.com` |
 | `--override <path>` | 覆盖文件路径或 URL，JSON 格式 |
 | `--write-checksums` | 下载后把 SHA256 写回 manifest JSON |
-| `-c, --config <path>` | 读取应用配置，仅下载配置中启用的模型 |
-| `-w, --wizard` | 交互式向导模式 |
+| `-c, --config <path>` | 显式指定配置文件（可选），缺省时自动查找 `application.toml` |
 
 **示例：**
 
 ```shell
-# 下载所有模型
-chobits download
+# 下载当前配置（自动查找 application.toml）所需的模型
+chobits downloader install
 
-# 仅下载 TTS VoxCPM 1.5b
-chobits download tts voxcpm 1.5b
+# 下载当前配置所需模型，仅限 tts 分类
+chobits downloader install tts
 
-# 读取配置，仅下载配置中指定的模型
-chobits download --config application.toml
+# 无配置文件时，使用默认配置（PocketTts + Qwen3×2）
+chobits downloader install
+
+# 显式指定配置文件
+chobits downloader install --config my-config.toml
 
 # 使用自定义镜像
-chobits download --mirror https://my-mirror.example.com
+chobits downloader install --mirror https://my-mirror.example.com
+```
+
+#### wizard
+
+```shell
+chobits downloader wizard [options]
+```
+
+| 参数 | 说明 |
+|------|------|
+| `--data-dir <path>` | 数据目录，默认 `data` |
+| `--quiet` | 静默模式，不输出进度 |
+
+**Moon task：**
+
+```shell
+moon run server:downloader                # 等价于 chobits downloader install
+moon run server:downloader -- vad         # 仅下载 VAD
+moon run server:downloader -- tts voxcpm  # 仅下载 TTS VoxCPM
 ```
 
 ### 列出模型
 
 ```shell
-chobits list [category] [--json]
+chobits downloader list [category] [--json]
 ```
 
 以树形结构列出所有可用模型及其变体：
@@ -113,6 +147,13 @@ tts
   └── voxcpm
       ├── 0.5b (default)
       └── 1.5b
+```
+
+**Moon task：**
+
+```shell
+moon run server:list
+moon run server:list -- --json   # JSON 格式输出
 ```
 
 ## 下载工作流
@@ -183,7 +224,18 @@ tts
 
 ### config 文件查找
 
-查找顺序：`CHOBITS_CONFIG` 环境变量 → 当前目录 `application.toml` → 兜底 `application.toml`。
+`downloader` 命令与服务器共享同一套配置查找逻辑：
+
+- `CHOBITS_CONFIG` 环境变量 → 当前目录 `application.toml` → 兜底 `application.toml`
+
+无配置文件时，使用 `AppConfig` 的默认值：
+
+| 模块 | 默认模型 | 说明 |
+|------|----------|------|
+| TTS | PocketTts（默认变体） | 下载 `pocket-tts` |
+| ASR | Qwen3（默认变体） | 下载 `qwen3` |
+| LLM | Qwen3（默认变体） | 下载 `qwen3` |
+| VAD | Earshot | 默认配置中跳过，不下载 |
 
 ### load_selections / upsert_config
 
@@ -211,7 +263,7 @@ tts
 
 ## 交互式向导
 
-`chobits download --wizard` 提供交互式选择流程：
+`chobits downloader wizard` 提供交互式选择流程：
 
 1. **查找配置**：定位 `application.toml`，读取已有选择
 2. **展示目录**：按分类列出所有可用模型及其变体

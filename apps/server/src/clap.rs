@@ -127,8 +127,17 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
+    /// Download AI models
+    Downloader {
+        #[command(subcommand)]
+        action: DownloaderAction,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum DownloaderAction {
     /// Download AI models to the local data directory
-    Download {
+    Install {
         /// Category: tts, asr, llm, vad, reference (default: all)
         category: Option<String>,
 
@@ -162,10 +171,16 @@ pub enum Commands {
         /// When set, only downloads models enabled in the config.
         #[arg(short, long)]
         config: Option<PathBuf>,
+    },
+    /// Interactive download wizard
+    Wizard {
+        /// Base data directory
+        #[arg(long, default_value = "data")]
+        data_dir: PathBuf,
 
-        /// Run interactive download wizard
-        #[arg(short, long)]
-        wizard: bool,
+        /// Suppress progress output
+        #[arg(long)]
+        quiet: bool,
     },
     /// List available models and their variants
     List {
