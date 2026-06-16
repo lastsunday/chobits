@@ -87,6 +87,10 @@
 
 # This item is undocumented. Please contribute documentation for it.
 #
+#vad_variant = false
+
+# This item is undocumented. Please contribute documentation for it.
+#
 #vad_num_threads = 4
 
 # This item is undocumented. Please contribute documentation for it.
@@ -96,6 +100,10 @@
 # This item is undocumented. Please contribute documentation for it.
 #
 #tts_path = data/tts/model/voxcpm/0.5b/
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#tts_variant = false
 
 # This item is undocumented. Please contribute documentation for it.
 #
@@ -119,11 +127,19 @@
 
 # This item is undocumented. Please contribute documentation for it.
 #
+#asr_variant = false
+
+# This item is undocumented. Please contribute documentation for it.
+#
 #llm_model = qwen3
 
 # This item is undocumented. Please contribute documentation for it.
 #
 #llm_path = data/llm/model/qwen3/1.7b/
+
+# This item is undocumented. Please contribute documentation for it.
+#
+#llm_variant = false
 
 # This item is undocumented. Please contribute documentation for it.
 #

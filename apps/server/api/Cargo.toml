@@ -79,7 +79,6 @@ opus-rs = { workspace = true }
 tokio-stream = { workspace = true }
 tokio-util = { workspace = true }
 futures = { workspace = true }
-openssl = { workspace = true, features = ["vendored"] }
 async-trait = { workspace = true }
 # audio start
 symphonia = { workspace = true }
@@ -127,9 +126,8 @@ sse-stream = { workspace = true }
 ruma = { workspace = true, features = ["client-api-c", "rand"] }
 ruma-client = { workspace = true, features = [
   "client-api",
-  "hyper-native-tls",
+  "reqwest-rustls-webpki-roots",
 ] }
-hyper = { workspace = true }
 # matrix end
 
 tracing-test = { workspace = true }

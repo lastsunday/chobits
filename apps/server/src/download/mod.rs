@@ -549,23 +549,19 @@ struct ModelInfo {
     variants: Vec<String>,
 }
 
-fn find_config() -> Option<PathBuf> {
-    if let Ok(path) = std::env::var("CHOBITS_CONFIG") {
+fn find_config_inner(chobits_config: Option<String>) -> Option<PathBuf> {
+    if let Some(path) = chobits_config {
         let p = PathBuf::from(&path);
         if p.exists() {
             return Some(p);
         }
     }
-    let candidates = [
-        PathBuf::from("application.toml"),
-        PathBuf::from("application-example.toml"),
-    ];
-    for p in &candidates {
-        if p.exists() {
-            return Some(p.clone());
-        }
-    }
-    Some(PathBuf::from("application.toml"))
+    let p = PathBuf::from("application.toml");
+    Some(if p.exists() { p } else { PathBuf::from("application.toml") })
+}
+
+fn find_config() -> Option<PathBuf> {
+    find_config_inner(std::env::var("CHOBITS_CONFIG").ok())
 }
 
 fn load_selections(path: &Path) -> HashMap<String, String> {
@@ -573,17 +569,22 @@ fn load_selections(path: &Path) -> HashMap<String, String> {
         Ok(c) => c,
         Err(_) => return HashMap::new(),
     };
-    let root: toml::Value = match content.parse() {
-        Ok(v) => v,
-        Err(_) => return HashMap::new(),
-    };
     let mut map = HashMap::new();
-    if let Some(global) = root.get("global").and_then(|v| v.as_table()) {
-        for (key, val) in global {
-            if (key.ends_with("_model") || key.ends_with("_variant") || key.ends_with("_path"))
-                && let Some(s) = val.as_str()
-            {
-                map.insert(key.clone(), s.to_string());
+    let mut in_global = false;
+    for line in content.lines() {
+        let line = line.trim();
+        if line.starts_with('[') {
+            in_global = line.trim_end() == "[global]";
+            continue;
+        }
+        if !in_global || !line.contains('=') || line.starts_with('#') {
+            continue;
+        }
+        if let Some(eq_pos) = line.find('=') {
+            let key = line[..eq_pos].trim();
+            let val = line[eq_pos + 1..].trim().trim_matches('"');
+            if key.ends_with("_model") || key.ends_with("_variant") || key.ends_with("_path") {
+                map.insert(key.to_string(), val.to_string());
             }
         }
     }
@@ -1084,6 +1085,9 @@ mod tests {
         let t = config_to_targets(&make_cfg(serde_json::json!({
             "tts_model": "voxcpm",
             "tts_variant": "1.5b",
+            "asr_model": "void",
+            "llm_model": "echo",
+            "vad_model": "void",
         })));
         assert_eq!(t.len(), 1);
         assert_eq!(t[0], ("tts".into(), "voxcpm".into(), Some("1.5b".into())));
@@ -1234,28 +1238,24 @@ mod tests {
         let dir = test_dir("fc_env");
         let p = dir.join("my.toml");
         fs::write(&p, "").unwrap();
-        std::env::set_var("CHOBITS_CONFIG", &p);
-        let r = find_config();
-        std::env::remove_var("CHOBITS_CONFIG");
+        let r = find_config_inner(Some(p.to_str().unwrap().into()));
         assert_eq!(r, Some(p));
     }
 
     #[test]
     fn test_find_config_finds_application_toml() {
         let dir = test_dir("fc_app");
-        std::env::remove_var("CHOBITS_CONFIG");
-        fs::write(dir.join("application.toml"), "").unwrap();
         with_cwd(&dir, || {
-            assert_eq!(find_config(), Some(dir.join("application.toml")));
+            fs::write("application.toml", "").unwrap();
+            assert_eq!(find_config_inner(None), Some(PathBuf::from("application.toml")));
         });
     }
 
     #[test]
     fn test_find_config_fallback() {
         let dir = test_dir("fc_fb");
-        std::env::remove_var("CHOBITS_CONFIG");
         with_cwd(&dir, || {
-            assert_eq!(find_config(), Some(PathBuf::from("application.toml")));
+            assert_eq!(find_config_inner(None), Some(PathBuf::from("application.toml")));
         });
     }
 
@@ -1280,7 +1280,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_try_download_ok() {
-        let mut srv = mockito::Server::new();
+        let mut srv = mockito::Server::new_async().await;
         let body = b"hello";
         let m = srv
             .mock("GET", "/f.bin")
@@ -1304,7 +1304,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_try_download_sha_mismatch() {
-        let mut srv = mockito::Server::new();
+        let mut srv = mockito::Server::new_async().await;
         let m = srv
             .mock("GET", "/f.bin")
             .with_status(200)
@@ -1331,20 +1331,17 @@ mod tests {
 
     #[tokio::test]
     async fn test_try_download_conn_refused() {
-        let srv = mockito::Server::new();
-        let url = format!("{}/f.bin", srv.url());
-        drop(srv);
-
+        let client = Client::builder().no_proxy().build().unwrap();
         let dir = test_dir("tdl_conn");
-        let r = try_download_url(&Client::new(), &url, &dir.join("f.bin"), None).await;
-        assert!(r.is_err());
+        let r = try_download_url(&client, "http://127.0.0.1:18634/f.bin", &dir.join("f.bin"), None).await;
+        assert!(r.is_err(), "expected error, got {:?}", r);
     }
 
     // ── download_file (mockito) ──
 
     #[tokio::test]
     async fn test_download_cached() {
-        let mut srv = mockito::Server::new();
+        let mut srv = mockito::Server::new_async().await;
         let body = b"cached";
         let m = srv
             .mock("GET", "/f.bin")
@@ -1367,7 +1364,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_download_re_download_on_sha_mismatch() {
-        let mut srv = mockito::Server::new();
+        let mut srv = mockito::Server::new_async().await;
         let correct = b"correct";
         let m = srv
             .mock("GET", "/f.bin")
@@ -1396,7 +1393,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_download_fresh() {
-        let mut srv = mockito::Server::new();
+        let mut srv = mockito::Server::new_async().await;
         let body = b"fresh";
         let m = srv
             .mock("GET", "/f.bin")

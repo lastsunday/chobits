@@ -65,7 +65,7 @@ pub async fn start(
     Ok(())
 }
 
-type HttpClient = ruma_client::http_client::HyperNativeTls;
+type HttpClient = ruma_client::http_client::Reqwest;
 type MatrixClient = ruma_client::Client<HttpClient>;
 
 /// The bot.
