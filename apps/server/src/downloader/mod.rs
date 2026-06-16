@@ -809,16 +809,10 @@ pub async fn run_wizard(
 }
 
 fn confirm(question: &str) -> Result<bool, Box<dyn std::error::Error>> {
-    loop {
-        eprint!("{question} [y/N]: ");
-        let mut input = String::new();
-        std::io::stdin().read_line(&mut input)?;
-        match input.trim().to_lowercase().as_str() {
-            "y" | "yes" => return Ok(true),
-            "n" | "no" | "" => return Ok(false),
-            _ => eprintln!("Please answer y or n."),
-        }
-    }
+    Ok(dialoguer::Confirm::new()
+        .with_prompt(question)
+        .default(false)
+        .interact()?)
 }
 
 fn config_to_targets(
