@@ -1,0 +1,235 @@
+# 模型下载
+
+`chobits download` 子系统负责 AI 模型文件的下载与管理。所有模型元数据以 JSON manifest 形式编译到二进制中，运行时无外部依赖。
+
+## 目录结构
+
+```
+apps/server/src/download/
+├── manifests/           # 编译时嵌入的 manifest JSON
+│   ├── asr/             # 语音识别
+│   │   ├── qwen3.json
+│   │   └── whisper.json
+│   ├── llm/             # 大语言模型
+│   │   └── qwen3.json
+│   ├── reference/       # 参考音频
+│   │   └── audio.json
+│   ├── tts/             # 语音合成
+│   │   ├── pocket-tts.json
+│   │   └── voxcpm.json
+│   └── vad/             # 语音活动检测
+│       └── silero.json
+├── mod.rs               # 业务逻辑（932 行）
+└── tests.rs             # 单元测试（486 行，33 个用例）
+```
+
+## Manifest 文件格式
+
+每个 JSON 文件描述一个模型的所有变体与文件清单。
+
+```json
+{
+  "config": { "category": "tts", "model": "voxcpm" },
+  "default_variant": "0.5b",
+  "variants": {
+    "0.5b": {
+      "files": [
+        {
+          "url": "https://huggingface.co/openbmb/VoxCPM-0.5B/resolve/.../config.json",
+          "path": "tts/model/voxcpm/0.5b/config.json",
+          "sha256": null
+        }
+      ]
+    }
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `config.category` | string | 分类名，与配置文件中的 `{cat}_model` 对应 |
+| `config.model` | string | 模型名，与配置文件中的 `{cat}_model` 的值对应 |
+| `default_variant` | string / null | 默认变体，`--variant` 和配置均未指定时使用 |
+| `variants` | object | 变体名 → 文件列表 |
+| `files[].url` | string | Hugging Face 或其它源的下载 URL |
+| `files[].path` | string | 相对数据目录的存储路径 |
+| `files[].sha256` | string / null | 可选的 SHA256 校验值，`null` 表示跳过校验 |
+
+### 路径推导规则
+
+`path` 字段统一使用 `{category}/model/{model}/{variant}/{file}` 格式，全小写。例如 TTS VoxCPM 0.5b 的配置文件路径为 `tts/model/voxcpm/0.5b/config.json`。
+
+配置中的 `*_path` 项（如 `tts_path`）现在为可选项。当缺省时，系统根据 `{model}+{variant}` 自动推导路径。
+
+## CLI 命令
+
+### 下载
+
+```shell
+chobits download [category] [model] [variant] [options]
+```
+
+| 参数 | 说明 |
+|------|------|
+| `category` | 分类：`tts`, `asr`, `llm`, `vad`, `reference`；缺省为全部 |
+| `model` | 模型名，如 `qwen3`, `voxcpm`, `whisper` |
+| `variant` | 变体名，如 `0.5b`, `1.7b`, `tiny`, `default` |
+| `--data-dir <path>` | 数据目录，默认 `data` |
+| `--quiet` | 静默模式，不输出进度 |
+| `--mirror <url>` | 自定义镜像域名，可多次指定，替换内置的 `hf-mirror.com` |
+| `--override <path>` | 覆盖文件路径或 URL，JSON 格式 |
+| `--write-checksums` | 下载后把 SHA256 写回 manifest JSON |
+| `-c, --config <path>` | 读取应用配置，仅下载配置中启用的模型 |
+| `-w, --wizard` | 交互式向导模式 |
+
+**示例：**
+
+```shell
+# 下载所有模型
+chobits download
+
+# 仅下载 TTS VoxCPM 1.5b
+chobits download tts voxcpm 1.5b
+
+# 读取配置，仅下载配置中指定的模型
+chobits download --config application.toml
+
+# 使用自定义镜像
+chobits download --mirror https://my-mirror.example.com
+```
+
+### 列出模型
+
+```shell
+chobits list [category] [--json]
+```
+
+以树形结构列出所有可用模型及其变体：
+
+```
+tts
+  ├── pocket-tts
+  │   └── default (default)
+  └── voxcpm
+      ├── 0.5b (default)
+      └── 1.5b
+```
+
+## 下载工作流
+
+### 请求方式
+
+基于 `reqwest` + `rustls-tls`，无需链接 OpenSSL，纯 Rust TLS 栈。不依赖 `hf-hub` 库。
+
+### 镜像回退
+
+对于 Hugging Face URL，自动添加镜像候选：
+
+1. 原始 URL
+2. 在 domain 处替换为镜像域名（默认 `hf-mirror.com`）
+
+镜像列表可通过 `--mirror` 参数完全替换。非 `huggingface.co` 的 URL 不经过镜像处理。
+
+### 并发控制
+
+通过 `tokio::sync::Semaphore` 限制最多 **4** 个并发下载，使用 `JoinSet` 有序收集结果。
+
+### 下载流程
+
+```
+客户端 → 检查本地文件（SHA256 匹配则跳过）
+       → 创建父目录
+       → 生成候选 URL 列表（原始 + 镜像）
+       → 依次尝试候选 URL（.tmp 文件写入）
+       → SHA256 校验
+       → 原子重命名 .tmp → 目标文件
+       → 返回 (大小, SHA256)
+```
+
+### 缓存与校验
+
+- 本地文件存在时，计算其 SHA256：
+  - 匹配 → 跳过（缓存命中）
+  - 不匹配 → 删除后重新下载
+- `sha256: null` 表示跳过校验
+- `--write-checksums` 将下载后的真实 SHA256 写回 manifest 文件
+
+### 下载报告
+
+每次下载完成后，在数据目录生成 `download-report.json`，包含完成时间、基础路径和每个文件的状态：
+
+```json
+{
+  "completed_at": "2026-06-16T12:00:00Z",
+  "base_dir": "data",
+  "files": [
+    { "path": "tts/model/voxcpm/0.5b/config.json", "size": 1024, "sha256": "abc...", "status": "downloaded" }
+  ]
+}
+```
+
+## 配置集成
+
+### config_to_targets
+
+读取 `application.toml` 中的 `*_model` / `*_variant` 字段，将其转换为下载目标列表。各模型枚举的对应关系：
+
+| 配置字段 | 可选值 | 下载目标 |
+|----------|--------|----------|
+| `tts_model` | `pocket-tts` / `voxcpm` / `mute` | `mute` 跳过 |
+| `asr_model` | `qwen3` / `whisper` / `void` | `void` 跳过 |
+| `llm_model` | `qwen3` / `echo` / `mini-cpm4` | `echo`/`mini-cpm4` 跳过 |
+| `vad_model` | `silero` / `earshot` / `void` | `earshot`/`void` 跳过 |
+
+### config 文件查找
+
+查找顺序：`CHOBITS_CONFIG` 环境变量 → 当前目录 `application.toml` → 兜底 `application.toml`。
+
+### load_selections / upsert_config
+
+- `load_selections`：解析 `application.toml` 的 `[global]` 段，提取 `*_model` / `*_variant` / `*_path` 键值对
+- `upsert_config`：将新的选择写入 `application.toml`，保留非 `[global]` 段
+
+## Override 系统
+
+`--override` 接受一个本地文件路径或 HTTP URL，JSON 格式：
+
+```json
+{
+  "tts/model/voxcpm/1.5b/config.json": {
+    "url": "http://localhost:8080/config.json",
+    "sha256": "abc123..."
+  },
+  "tts/model/voxcpm/1.5b/model.safetensors": {
+    "url": "http://localhost:8080/model.safetensors",
+    "sha256": null
+  }
+}
+```
+
+匹配规则：按 `path` 字段精确匹配。覆盖 `url`，可选覆盖 `sha256`（`null` 表示不校验）。
+
+## 交互式向导
+
+`chobits download --wizard` 提供交互式选择流程：
+
+1. **查找配置**：定位 `application.toml`，读取已有选择
+2. **展示目录**：按分类列出所有可用模型及其变体
+3. **循环选择**：用户输入分类名 → 选择模型 → 选择变体
+4. **预览**：显示最终选择集及对应的配置项
+5. **写入配置**：将选择写入 `application.toml`
+6. **自动下载**：按分类顺序逐一执行下载
+
+支持 `done` 结束选择、`show` 查看当前选择、交互式确认。
+
+## 架构决策
+
+| 决策 | 选择 | 理由 |
+|------|------|------|
+| TLS 栈 | rustls | 纯 Rust，无需链接 OpenSSL，消除构建瓶颈 |
+| 运行时依赖 | 无 | Manifest 通过 `include_dir!` 编译时嵌入，二进制自包含 |
+| 模型发现 | JSON manifest | 灵活可扩展，新增模型只需添加 JSON 文件 |
+| 下载库 | reqwest | 功能齐全，支持流式下载、代理、TLS |
+| 并发控制 | Semaphore + JoinSet | 简洁的异步并发模式 |
+| 缓存策略 | SHA256 校验 | 避免重复下载，保证数据完整性 |
+| 路径推导 | 自动 fallback | `*_path` 可缺省，减少配置量 |
