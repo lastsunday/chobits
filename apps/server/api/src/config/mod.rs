@@ -126,7 +126,7 @@ pub struct Config {
     #[serde(default = "default_vad_model")]
     pub vad_model: Option<VadModel>,
 
-    /// default: data/vad/model/silero/default/
+    /// default: auto-derived from model+variant
     #[serde(default = "default_vad_path")]
     pub vad_path: Option<String>,
 
@@ -141,7 +141,7 @@ pub struct Config {
     #[serde(default = "default_tts_model")]
     pub tts_model: Option<TtsModel>,
 
-    /// default: data/tts/model/voxcpm/0.5b/
+    /// default: auto-derived from model+variant
     #[serde(default = "default_tts_path")]
     pub tts_path: Option<String>,
 
@@ -164,7 +164,7 @@ pub struct Config {
     #[serde(default = "default_asr_model")]
     pub asr_model: Option<AsrModel>,
 
-    /// default: data/asr/model/qwen3/default/
+    /// default: auto-derived from model+variant
     #[serde(default = "default_asr_path")]
     pub asr_path: Option<String>,
 
@@ -175,7 +175,7 @@ pub struct Config {
     #[serde(default = "default_llm_model")]
     pub llm_model: Option<LlmModel>,
 
-    /// default: data/llm/model/qwen3/1.7b/
+    /// default: auto-derived from model+variant
     #[serde(default = "default_llm_path")]
     pub llm_path: Option<String>,
 
@@ -385,7 +385,7 @@ fn default_tts_model() -> Option<TtsModel> {
 }
 
 fn default_tts_path() -> Option<String> {
-    Some(String::from("data/tts/model/voxcpm/0.5b/"))
+    None
 }
 
 fn default_tts_reference_prompt_text() -> Option<String> {
@@ -401,7 +401,7 @@ fn default_asr_model() -> Option<AsrModel> {
 }
 
 fn default_asr_path() -> Option<String> {
-    Some(String::from("data/asr/model/qwen3/default/"))
+    None
 }
 
 fn default_llm_model() -> Option<LlmModel> {
@@ -409,7 +409,7 @@ fn default_llm_model() -> Option<LlmModel> {
 }
 
 fn default_llm_path() -> Option<String> {
-    Some(String::from("data/llm/model/qwen3/1.7b/"))
+    None
 }
 
 fn default_audio_input_sample_rate() -> Option<u32> {
@@ -467,7 +467,7 @@ fn default_vad_model() -> Option<VadModel> {
 }
 
 fn default_vad_path() -> Option<String> {
-    Some(String::from("data/vad/model/silero/default/"))
+    None
 }
 
 fn default_vad_num_threads() -> Option<i32> {

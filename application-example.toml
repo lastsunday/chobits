@@ -83,7 +83,7 @@
 
 # This item is undocumented. Please contribute documentation for it.
 #
-#vad_path = data/vad/model/silero/default/
+#vad_path = auto-derived from model+variant
 
 # This item is undocumented. Please contribute documentation for it.
 #
@@ -99,7 +99,7 @@
 
 # This item is undocumented. Please contribute documentation for it.
 #
-#tts_path = data/tts/model/voxcpm/0.5b/
+#tts_path = auto-derived from model+variant
 
 # This item is undocumented. Please contribute documentation for it.
 #
@@ -123,7 +123,7 @@
 
 # This item is undocumented. Please contribute documentation for it.
 #
-#asr_path = data/asr/model/qwen3/default/
+#asr_path = auto-derived from model+variant
 
 # This item is undocumented. Please contribute documentation for it.
 #
@@ -135,7 +135,7 @@
 
 # This item is undocumented. Please contribute documentation for it.
 #
-#llm_path = data/llm/model/qwen3/1.7b/
+#llm_path = auto-derived from model+variant
 
 # This item is undocumented. Please contribute documentation for it.
 #
