@@ -59,6 +59,7 @@
         devShells = {
           default = pkgs.mkShell {
             packages = with pkgs; [
+              git
               rustToolchain
               nodejs
               pnpm
@@ -107,6 +108,7 @@
 
           server = pkgs.mkShell {
             packages = with pkgs; [
+              git
               rustToolchain
               pkg-config
               protobuf
@@ -127,6 +129,7 @@
 
           frontend = pkgs.mkShell {
             packages = with pkgs; [
+              git
               nodejs
               pnpm
             ];
