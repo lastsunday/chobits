@@ -5,8 +5,8 @@ use std::sync::Arc;
 
 use api::config::{AsrModel, Config as AppConfig, LlmModel, TtsModel, VadModel};
 use dialoguer::Select;
-use indicatif::{ProgressBar, ProgressStyle};
 use include_dir::{Dir, include_dir};
+use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
@@ -92,7 +92,7 @@ pub async fn run(
     };
 
     let cfg_path = config_path
-        .map(|p| p.clone())
+        .cloned()
         .or_else(|| find_config().filter(|p| p.exists()));
 
     let figment = match &cfg_path {
@@ -174,13 +174,14 @@ pub async fn run(
                 for file in &v.files {
                     let dest = data_dir.join(&file.path);
 
-                    let (file_url, file_sha256) = match override_map
-                        .as_ref()
-                        .and_then(|m| m.get(&file.path))
-                    {
-                        Some(ov) => (ov.url.clone(), ov.sha256.clone().or_else(|| file.sha256.clone())),
-                        None => (file.url.clone(), file.sha256.clone()),
-                    };
+                    let (file_url, file_sha256) =
+                        match override_map.as_ref().and_then(|m| m.get(&file.path)) {
+                            Some(ov) => (
+                                ov.url.clone(),
+                                ov.sha256.clone().or_else(|| file.sha256.clone()),
+                            ),
+                            None => (file.url.clone(), file.sha256.clone()),
+                        };
 
                     let cl = client.clone();
                     let mir = mirrors.to_vec();
@@ -190,9 +191,16 @@ pub async fn run(
 
                     set.spawn(async move {
                         let _permit = sem.acquire_owned().await.unwrap();
-                        let result = download_file(&cl, &file_url, &dest, file_sha256.as_deref(), &mir, quiet)
-                            .await
-                            .map_err(|e| format!("{e}"));
+                        let result = download_file(
+                            &cl,
+                            &file_url,
+                            &dest,
+                            file_sha256.as_deref(),
+                            &mir,
+                            quiet,
+                        )
+                        .await
+                        .map_err(|e| format!("{e}"));
                         (fpath, man, result)
                     });
                 }
@@ -588,7 +596,11 @@ fn find_config_inner(chobits_config: Option<String>) -> Option<PathBuf> {
         }
     }
     let p = PathBuf::from("application.toml");
-    Some(if p.exists() { p } else { PathBuf::from("application.toml") })
+    Some(if p.exists() {
+        p
+    } else {
+        PathBuf::from("application.toml")
+    })
 }
 
 fn find_config() -> Option<PathBuf> {
@@ -636,13 +648,14 @@ fn upsert_config(path: &Path, updates: &[(&str, &str)]) -> Result<(), Box<dyn st
             i += 1;
             continue;
         }
-        if in_global && trimmed.contains('=') && !trimmed.starts_with('#') {
-            if let Some(eq_pos) = trimmed.find('=') {
-                let key = trimmed[..eq_pos].trim().to_string();
-                if let Some(idx) = updates.iter().position(|(k, _)| *k == key.as_str()) {
-                    lines[i] = format!("{key} = \"{}\"", updates[idx].1);
-                    updated.insert(key);
-                }
+        if in_global
+            && !trimmed.starts_with('#')
+            && let Some(eq_pos) = trimmed.find('=')
+        {
+            let key = trimmed[..eq_pos].trim().to_string();
+            if let Some(idx) = updates.iter().position(|(k, _)| *k == key.as_str()) {
+                lines[i] = format!("{key} = \"{}\"", updates[idx].1);
+                updated.insert(key);
             }
         }
         i += 1;
@@ -651,7 +664,11 @@ fn upsert_config(path: &Path, updates: &[(&str, &str)]) -> Result<(), Box<dyn st
     let has_global = lines.iter().any(|l| l.trim().trim_end() == "[global]");
     if !updates.is_empty() && updated.len() < updates.len() {
         let insert_pos = if has_global {
-            lines.iter().position(|l| l.trim().trim_end() == "[global]").unwrap() + 1
+            lines
+                .iter()
+                .position(|l| l.trim().trim_end() == "[global]")
+                .unwrap()
+                + 1
         } else {
             lines.len()
         };
@@ -677,10 +694,7 @@ fn upsert_config(path: &Path, updates: &[(&str, &str)]) -> Result<(), Box<dyn st
     Ok(())
 }
 
-pub async fn run_wizard(
-    data_dir: &Path,
-    quiet: bool,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn run_wizard(data_dir: &Path, quiet: bool) -> Result<(), Box<dyn std::error::Error>> {
     let mut catalog: Vec<(String, Vec<ModelInfo>)> = Vec::new();
     for cat_dir in MANIFESTS.dirs() {
         let cat_name = dir_name(cat_dir).to_string();
@@ -692,11 +706,26 @@ pub async fn run_wizard(
             let Ok(entry) = serde_json::from_slice::<ModelEntry>(file_entry.contents()) else {
                 continue;
             };
-            let display = file_entry.path().file_stem().unwrap().to_str().unwrap().to_string();
-            let toml_model = entry.config.as_ref().map(|c| c.model_name.clone()).unwrap_or_else(|| display.clone());
+            let display = file_entry
+                .path()
+                .file_stem()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_string();
+            let toml_model = entry
+                .config
+                .as_ref()
+                .map(|c| c.model_name.clone())
+                .unwrap_or_else(|| display.clone());
             let default_variant = entry.default_variant.unwrap_or_else(|| "default".into());
             let variants: Vec<String> = entry.variants.keys().cloned().collect();
-            models.push(ModelInfo { display, toml_model, default_variant, variants });
+            models.push(ModelInfo {
+                display,
+                toml_model,
+                default_variant,
+                variants,
+            });
         }
         if !models.is_empty() {
             catalog.push((cat_name, models));
@@ -712,7 +741,10 @@ pub async fn run_wizard(
             println!("\nConfig file: {} (will create)", p.display());
         }
     }
-    let existing = config_path.as_ref().map(|p| load_selections(p)).unwrap_or_default();
+    let existing = config_path
+        .as_ref()
+        .map(|p| load_selections(p))
+        .unwrap_or_default();
 
     // Selection state: category → (manifest_name, toml_model, variant)
     let mut selections: HashMap<String, (String, String, String)> = HashMap::new();
@@ -720,13 +752,24 @@ pub async fn run_wizard(
 
     // Pre-populate from existing config
     for (key, val) in &existing {
-        if let Some(cat) = key.strip_suffix("_model") {
-            if let Some(model_info) = catalog.iter().find(|(c, _)| c == cat).and_then(|(_, models)| {
-                models.iter().find(|m| m.toml_model == *val)
-            }) {
-                let variant = existing.get(&format!("{cat}_variant")).cloned().unwrap_or_else(|| model_info.default_variant.clone());
-                selections.insert(cat.to_string(), (model_info.display.clone(), model_info.toml_model.clone(), variant));
-            }
+        if let Some(cat) = key.strip_suffix("_model")
+            && let Some(model_info) = catalog
+                .iter()
+                .find(|(c, _)| c == cat)
+                .and_then(|(_, models)| models.iter().find(|m| m.toml_model == *val))
+        {
+            let variant = existing
+                .get(&format!("{cat}_variant"))
+                .cloned()
+                .unwrap_or_else(|| model_info.default_variant.clone());
+            selections.insert(
+                cat.to_string(),
+                (
+                    model_info.display.clone(),
+                    model_info.toml_model.clone(),
+                    variant,
+                ),
+            );
         }
     }
 
@@ -739,7 +782,11 @@ pub async fn run_wizard(
             let sel = if selected { " [SELECTED]" } else { "" };
             println!("    {} (config model: {}){}", m.display, m.toml_model, sel);
             for v in &m.variants {
-                let def = if *v == m.default_variant { " (default)" } else { "" };
+                let def = if *v == m.default_variant {
+                    " (default)"
+                } else {
+                    ""
+                };
                 println!("      - {v}{def}");
             }
         }
@@ -771,7 +818,11 @@ pub async fn run_wizard(
         let var = if entry.variants.len() > 1 {
             let old_var = existing.get(&format!("{cat}_variant")).map(|s| s.as_str());
             let default = old_var.unwrap_or(&entry.default_variant);
-            let default_idx = entry.variants.iter().position(|v| v == default).unwrap_or(0);
+            let default_idx = entry
+                .variants
+                .iter()
+                .position(|v| v == default)
+                .unwrap_or(0);
             let var_idx = Select::new()
                 .with_prompt("Select variant")
                 .items(&entry.variants)
@@ -782,7 +833,10 @@ pub async fn run_wizard(
             entry.default_variant.clone()
         };
 
-        selections.insert(cat.clone(), (entry.display.clone(), entry.toml_model.clone(), var.clone()));
+        selections.insert(
+            cat.clone(),
+            (entry.display.clone(), entry.toml_model.clone(), var.clone()),
+        );
         println!("  ✓ Added {}/{} ({})", cat, entry.display, var);
     }
 
@@ -790,9 +844,15 @@ pub async fn run_wizard(
     println!("\n── Selections ──");
     for (cat_name, models) in &catalog {
         if let Some((_, toml_model, var)) = selections.get(cat_name) {
-            let path = format!("data/{cat_name}/model/{}/{}", 
-                models.iter().find(|m| m.toml_model == *toml_model).map(|m| m.display.as_str()).unwrap_or(toml_model),
-                var);
+            let path = format!(
+                "data/{cat_name}/model/{}/{}",
+                models
+                    .iter()
+                    .find(|m| m.toml_model == *toml_model)
+                    .map(|m| m.display.as_str())
+                    .unwrap_or(toml_model),
+                var
+            );
             println!("  {cat_name}:  model={toml_model}  variant={var}  path={path}");
         } else {
             println!("  {cat_name}:  (not selected)");
@@ -804,24 +864,42 @@ pub async fn run_wizard(
     // Maintain ordering: tts, asr, llm, vad
     for cat in &["tts", "asr", "llm", "vad"] {
         if let Some((_, toml_model, var)) = selections.get(*cat) {
-            let model_entry = catalog.iter().find(|(c, _)| c == cat).and_then(|(_, ms)| ms.iter().find(|m| m.toml_model == *toml_model));
+            let model_entry = catalog
+                .iter()
+                .find(|(c, _)| c == cat)
+                .and_then(|(_, ms)| ms.iter().find(|m| m.toml_model == *toml_model));
             let has_variants = model_entry.map(|m| m.variants.len() > 1).unwrap_or(false);
             let model_key = format!("{cat}_model");
-            updates.push((Box::leak(model_key.into_boxed_str()), Box::leak(toml_model.clone().into_boxed_str())));
+            updates.push((
+                Box::leak(model_key.into_boxed_str()),
+                Box::leak(toml_model.clone().into_boxed_str()),
+            ));
             if has_variants {
                 let var_key = format!("{cat}_variant");
-                updates.push((Box::leak(var_key.into_boxed_str()), Box::leak(var.clone().into_boxed_str())));
+                updates.push((
+                    Box::leak(var_key.into_boxed_str()),
+                    Box::leak(var.clone().into_boxed_str()),
+                ));
             }
-            let path = format!("data/{cat}/model/{}/{}",
-                model_entry.map(|m| m.display.as_str()).unwrap_or(toml_model),
-                var);
+            let path = format!(
+                "data/{cat}/model/{}/{}",
+                model_entry
+                    .map(|m| m.display.as_str())
+                    .unwrap_or(toml_model),
+                var
+            );
             let path_key = format!("{cat}_path");
-            updates.push((Box::leak(path_key.into_boxed_str()), Box::leak(path.into_boxed_str())));
+            updates.push((
+                Box::leak(path_key.into_boxed_str()),
+                Box::leak(path.into_boxed_str()),
+            ));
         }
     }
 
     if confirm("\nWrite to config file?")? {
-        let path = config_path.as_ref().map(|p| p.as_path()).unwrap_or(Path::new("application.toml"));
+        let path = config_path
+            .as_deref()
+            .unwrap_or(Path::new("application.toml"));
         upsert_config(path, &updates)?;
         println!("✓ Written to {}", path.display());
     }
@@ -831,9 +909,18 @@ pub async fn run_wizard(
         for (cat, (display, _, var)) in &selections {
             println!("\n--- Downloading {cat}/{display}/{var} ---");
             if let Err(e) = run(
-                Some(cat), Some(display.as_str()), Some(var.as_str()),
-                data_dir, quiet, &mir, None, false, None,
-            ).await {
+                Some(cat),
+                Some(display.as_str()),
+                Some(var.as_str()),
+                data_dir,
+                quiet,
+                &mir,
+                None,
+                false,
+                None,
+            )
+            .await
+            {
                 eprintln!("  FAIL: {e}");
             }
         }
@@ -849,14 +936,16 @@ fn confirm(question: &str) -> Result<bool, Box<dyn std::error::Error>> {
         .interact()?)
 }
 
-fn config_to_targets(
-    config: &AppConfig,
-) -> Vec<(String, String, Option<String>)> {
+fn config_to_targets(config: &AppConfig) -> Vec<(String, String, Option<String>)> {
     let mut targets = Vec::new();
 
     match config.tts_model.clone().unwrap_or_default() {
         TtsModel::PocketTts => {
-            targets.push(("tts".into(), "pocket-tts".into(), config.tts_variant.clone()));
+            targets.push((
+                "tts".into(),
+                "pocket-tts".into(),
+                config.tts_variant.clone(),
+            ));
         }
         TtsModel::Voxcpm => {
             targets.push(("tts".into(), "voxcpm".into(), config.tts_variant.clone()));

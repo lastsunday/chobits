@@ -30,7 +30,7 @@ tracing-error = "0.2.1"
 # log end
 strum = "0.27"
 strum_macros = "0.27"
-toml = "1.1.2+spec-1.1.0"
+toml = "1.1.2"
 syn = "2.0.117"
 quote = "1.0.45"
 proc-macro2 = "1.0.106"

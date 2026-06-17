@@ -71,6 +71,7 @@ application-dev.toml
 logs/
 /apps/server/data/
 /data/
+/apps/server-ui-e2e/playwright-report/
 
 # Lix / Nix
 .nix-direnv/

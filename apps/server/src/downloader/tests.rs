@@ -17,13 +17,14 @@ fn sha256_of(data: &[u8]) -> String {
 }
 
 fn make_file(path: &str, url: &str) -> FileEntry {
-    FileEntry { path: path.into(), url: url.into(), sha256: None }
+    FileEntry {
+        path: path.into(),
+        url: url.into(),
+        sha256: None,
+    }
 }
 
-fn make_entry(
-    files: Vec<(&str, Vec<FileEntry>)>,
-    default_variant: Option<&str>,
-) -> ModelEntry {
+fn make_entry(files: Vec<(&str, Vec<FileEntry>)>, default_variant: Option<&str>) -> ModelEntry {
     ModelEntry {
         config: None,
         default_variant: default_variant.map(|s| s.into()),
@@ -113,8 +114,7 @@ fn test_resolve_variants_no_default_gives_all() {
 
 #[test]
 fn test_resolve_variants_unknown_empty() {
-    let entry =
-        make_entry(vec![("a", vec![make_file("f1", "u1")])], Some("a"));
+    let entry = make_entry(vec![("a", vec![make_file("f1", "u1")])], Some("a"));
     let r = resolve_variants(&entry, Some("unknown"));
     assert!(r.is_empty());
 }
@@ -219,7 +219,11 @@ fn test_set_sha256_no_match() {
 fn test_load_selections_valid() {
     let dir = test_dir("load_sel");
     let p = dir.join("c.toml");
-    fs::write(&p, "[global]\ntts_model = \"voxcpm\"\ntts_variant = \"1.5b\"\n").unwrap();
+    fs::write(
+        &p,
+        "[global]\ntts_model = \"voxcpm\"\ntts_variant = \"1.5b\"\n",
+    )
+    .unwrap();
     let m = load_selections(&p);
     assert_eq!(m.get("tts_model").unwrap(), "voxcpm");
     assert_eq!(m.get("tts_variant").unwrap(), "1.5b");
@@ -313,7 +317,10 @@ fn test_find_config_finds_application_toml() {
     let dir = test_dir("fc_app");
     with_cwd(&dir, || {
         fs::write("application.toml", "").unwrap();
-        assert_eq!(find_config_inner(None), Some(PathBuf::from("application.toml")));
+        assert_eq!(
+            find_config_inner(None),
+            Some(PathBuf::from("application.toml"))
+        );
     });
 }
 
@@ -321,7 +328,10 @@ fn test_find_config_finds_application_toml() {
 fn test_find_config_fallback() {
     let dir = test_dir("fc_fb");
     with_cwd(&dir, || {
-        assert_eq!(find_config_inner(None), Some(PathBuf::from("application.toml")));
+        assert_eq!(
+            find_config_inner(None),
+            Some(PathBuf::from("application.toml"))
+        );
     });
 }
 
@@ -400,7 +410,14 @@ async fn test_try_download_sha_mismatch() {
 async fn test_try_download_conn_refused() {
     let client = Client::builder().no_proxy().build().unwrap();
     let dir = test_dir("tdl_conn");
-    let r = try_download_url(&client, "http://127.0.0.1:18634/f.bin", &dir.join("f.bin"), None, true).await;
+    let r = try_download_url(
+        &client,
+        "http://127.0.0.1:18634/f.bin",
+        &dir.join("f.bin"),
+        None,
+        true,
+    )
+    .await;
     assert!(r.is_err(), "expected error, got {:?}", r);
 }
 
@@ -422,9 +439,15 @@ async fn test_download_cached() {
     let sha = sha256_of(body);
     fs::write(&dest, body).unwrap();
 
-    let r =
-        download_file(&Client::new(), &format!("{}/f.bin", srv.url()), &dest, Some(&sha), &[], true)
-            .await;
+    let r = download_file(
+        &Client::new(),
+        &format!("{}/f.bin", srv.url()),
+        &dest,
+        Some(&sha),
+        &[],
+        true,
+    )
+    .await;
     assert!(r.is_ok());
     m.assert();
 }
