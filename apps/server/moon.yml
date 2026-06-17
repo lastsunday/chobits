@@ -59,15 +59,21 @@ tasks:
 
   downloader:
     command: "cargo run --package chobits-server -- downloader --help"
+    deps:
+      - ~:build
     options:
       cache: false
 
   downloader-install:
     command: "cargo run --package chobits-server -- downloader install"
+    deps:
+      - ~:build
     options:
       cache: false
 
   downloader-list:
     command: "cargo run --package chobits-server -- downloader list"
+    deps:
+      - ~:build
     options:
       cache: false
