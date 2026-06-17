@@ -96,7 +96,7 @@ jobs:
 
       - name: Setup sccache (Linux / macOS)
         if: runner.os != 'Windows'
-        uses: mozilla-actions/sccache-action@9e326eb2ae5f1e032b43f327b8b1998c1b16c557 # v0.0.10
+        uses: mozilla-actions/sccache-action@9e7fa8a12102821edf02ca5dbea1acd0f89a2696
 
       - name: Install pnpm (Windows)
         if: runner.os == 'Windows'
