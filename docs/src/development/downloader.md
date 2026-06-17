@@ -73,6 +73,8 @@ chobits downloader <COMMAND>
 |--------|------|
 | `install` | 下载 AI 模型到本地数据目录 |
 | `wizard` | 交互式向导模式 |
+| `list` | 列出所有可用模型及其变体 |
+| `update-checksums` | 计算已下载文件的 SHA256 并写回 manifest JSON |
 
 运行 `chobits downloader`（无子命令）时，自动显示帮助信息。
 
@@ -91,7 +93,7 @@ chobits downloader install [category] [model] [variant] [options]
 | `--quiet` | 静默模式，不输出进度 |
 | `--mirror <url>` | 自定义镜像域名，可多次指定，替换内置的 `hf-mirror.com` |
 | `--override <path>` | 覆盖文件路径或 URL，JSON 格式 |
-| `--write-checksums` | 下载后把 SHA256 写回 manifest JSON |
+| `--all` | 下载所有 manifests 中的所有文件（忽略配置文件） |
 | `-c, --config <path>` | 显式指定配置文件（可选），缺省时自动查找 `application.toml` |
 
 **示例：**
@@ -111,6 +113,9 @@ chobits downloader install --config my-config.toml
 
 # 使用自定义镜像
 chobits downloader install --mirror https://my-mirror.example.com
+
+# 下载所有 manifests 中的所有文件（忽略配置文件）
+chobits downloader install --all
 ```
 
 #### wizard
@@ -124,12 +129,25 @@ chobits downloader wizard [options]
 | `--data-dir <path>` | 数据目录，默认 `data` |
 | `--quiet` | 静默模式，不输出进度 |
 
-**Moon task：**
+#### update-checksums
 
 ```shell
-moon run server:downloader                # 等价于 chobits downloader install
-moon run server:downloader -- vad         # 仅下载 VAD
-moon run server:downloader -- tts voxcpm  # 仅下载 TTS VoxCPM
+chobits downloader update-checksums [options]
+```
+
+| 参数 | 说明 |
+|------|------|
+| `--data-dir <path>` | 数据目录，默认 `data` |
+| `--quiet` | 静默模式，不输出进度 |
+
+扫描 `data_dir` 中已下载的文件，计算 SHA256 并写回 manifest JSON。优先读取 `download-report.json` 中缓存的 SHA，避免重新读取大文件。
+
+```shell
+# 更新默认数据目录中的文件 SHA
+chobits downloader update-checksums
+
+# 指定数据目录
+chobits downloader update-checksums --data-dir /path/to/models
 ```
 
 ### 列出模型
@@ -149,11 +167,15 @@ tts
       └── 1.5b
 ```
 
-**Moon task：**
+**Moon tasks：**
 
 ```shell
-moon run server:list
-moon run server:list -- --json   # JSON 格式输出
+moon run server:downloader                # 等价于 chobits downloader install
+moon run server:downloader -- vad         # 仅下载 VAD
+moon run server:downloader -- tts voxcpm  # 仅下载 TTS VoxCPM
+moon run server:downloader-list           # 列出所有可用模型
+moon run server:downloader-list -- --json # JSON 格式输出
+moon run server:download-all-and-checksums # 下载所有模型并更新 SHA
 ```
 
 ## 下载工作流
@@ -193,11 +215,11 @@ moon run server:list -- --json   # JSON 格式输出
   - 匹配 → 跳过（缓存命中）
   - 不匹配 → 删除后重新下载
 - `sha256: null` 表示跳过校验
-- `--write-checksums` 将下载后的真实 SHA256 写回 manifest 文件
+- `downloader update-checksums` 将已下载文件的真实 SHA256 写回 manifest 文件
 
 ### 下载报告
 
-每次下载完成后，在数据目录生成 `download-report.json`，包含完成时间、基础路径和每个文件的状态：
+每次下载完成后，在数据目录生成 `download-report.json`，包含完成时间、基础路径和每个文件的状态。`update-checksums` 优先读取此报告中的 SHA 缓存，避免重新读取大文件：
 
 ```json
 {
