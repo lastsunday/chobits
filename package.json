@@ -4,9 +4,6 @@
   "license": "MIT",
   "scripts": {},
   "private": true,
-  "pnpm": {
-    "onlyBuiltDependencies": ["@swc/core"]
-  },
   "dependencies": {
     "@mantine/core": "9.2.1",
     "@mantine/hooks": "9.2.1",
