@@ -1,13 +1,16 @@
 {
-  "config": { "category": "vad", "model": "silero" },
+  "config": {
+    "category": "vad",
+    "model": "silero"
+  },
   "default_variant": "default",
   "variants": {
     "default": {
       "files": [
         {
-          "url": "https://huggingface.co/onnx-community/silero-vad/resolve/ddc9a7e80d6758f6fc795a1e8a04b798eb929d3a/onnx/model.onnx",
           "path": "vad/model/silero/default/model.onnx",
-          "sha256": null
+          "sha256": "a4a068cd6cf1ea8355b84327595838ca748ec29a25bc91fc82e6c299ccdc5808",
+          "url": "https://huggingface.co/onnx-community/silero-vad/resolve/ddc9a7e80d6758f6fc795a1e8a04b798eb929d3a/onnx/model.onnx"
         }
       ]
     }

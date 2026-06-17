@@ -1,52 +1,55 @@
 {
-  "config": { "category": "tts", "model": "voxcpm" },
+  "config": {
+    "category": "tts",
+    "model": "voxcpm"
+  },
   "default_variant": "0.5b",
   "variants": {
     "0.5b": {
       "files": [
         {
-          "url": "https://huggingface.co/openbmb/VoxCPM-0.5B/resolve/f67d35a3848e0bec0fdb8c33e6fc92cf293ee72f/config.json",
           "path": "tts/model/voxcpm/0.5b/config.json",
-          "sha256": null
+          "sha256": "3e4c4501e1b712e18f302b69944c6b82cf374098ad0e1a991506e55416dbc947",
+          "url": "https://huggingface.co/openbmb/VoxCPM-0.5B/resolve/f67d35a3848e0bec0fdb8c33e6fc92cf293ee72f/config.json"
         },
         {
-          "url": "https://huggingface.co/openbmb/VoxCPM-0.5B/resolve/f67d35a3848e0bec0fdb8c33e6fc92cf293ee72f/pytorch_model.bin",
           "path": "tts/model/voxcpm/0.5b/pytorch_model.bin",
-          "sha256": null
+          "sha256": "62cee3da3fa803a7eb7a8fa47318ab9a6d88abe17b9d51062852f6ac86b52e3a",
+          "url": "https://huggingface.co/openbmb/VoxCPM-0.5B/resolve/f67d35a3848e0bec0fdb8c33e6fc92cf293ee72f/pytorch_model.bin"
         },
         {
-          "url": "https://huggingface.co/openbmb/VoxCPM-0.5B/resolve/f67d35a3848e0bec0fdb8c33e6fc92cf293ee72f/tokenizer.json",
           "path": "tts/model/voxcpm/0.5b/tokenizer.json",
-          "sha256": null
+          "sha256": "63443666e076f48a575030d4861e5bdbf64b71632b48e75d4e867c46dd980aa5",
+          "url": "https://huggingface.co/openbmb/VoxCPM-0.5B/resolve/f67d35a3848e0bec0fdb8c33e6fc92cf293ee72f/tokenizer.json"
         },
         {
-          "url": "https://huggingface.co/openbmb/VoxCPM-0.5B/resolve/f67d35a3848e0bec0fdb8c33e6fc92cf293ee72f/audiovae.pth",
           "path": "tts/model/voxcpm/0.5b/audiovae.pth",
-          "sha256": null
+          "sha256": "5b93f34c771281679b0ff93be3d1c1681eb1f301c3892e701db8f10a725b20a9",
+          "url": "https://huggingface.co/openbmb/VoxCPM-0.5B/resolve/f67d35a3848e0bec0fdb8c33e6fc92cf293ee72f/audiovae.pth"
         }
       ]
     },
     "1.5b": {
       "files": [
         {
-          "url": "https://huggingface.co/openbmb/VoxCPM1.5/resolve/21c5944939d8750786d45603a313ba4e382313a8/config.json",
           "path": "tts/model/voxcpm/1.5b/config.json",
-          "sha256": null
+          "sha256": null,
+          "url": "https://huggingface.co/openbmb/VoxCPM1.5/resolve/21c5944939d8750786d45603a313ba4e382313a8/config.json"
         },
         {
-          "url": "https://huggingface.co/openbmb/VoxCPM1.5/resolve/21c5944939d8750786d45603a313ba4e382313a8/model.safetensors",
           "path": "tts/model/voxcpm/1.5b/model.safetensors",
-          "sha256": null
+          "sha256": null,
+          "url": "https://huggingface.co/openbmb/VoxCPM1.5/resolve/21c5944939d8750786d45603a313ba4e382313a8/model.safetensors"
         },
         {
-          "url": "https://huggingface.co/openbmb/VoxCPM1.5/resolve/21c5944939d8750786d45603a313ba4e382313a8/tokenizer.json",
           "path": "tts/model/voxcpm/1.5b/tokenizer.json",
-          "sha256": null
+          "sha256": null,
+          "url": "https://huggingface.co/openbmb/VoxCPM1.5/resolve/21c5944939d8750786d45603a313ba4e382313a8/tokenizer.json"
         },
         {
-          "url": "https://huggingface.co/openbmb/VoxCPM1.5/resolve/21c5944939d8750786d45603a313ba4e382313a8/audiovae.pth",
           "path": "tts/model/voxcpm/1.5b/audiovae.pth",
-          "sha256": null
+          "sha256": null,
+          "url": "https://huggingface.co/openbmb/VoxCPM1.5/resolve/21c5944939d8750786d45603a313ba4e382313a8/audiovae.pth"
         }
       ]
     }

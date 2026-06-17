@@ -163,14 +163,14 @@ pub enum DownloaderAction {
         #[arg(long = "override")]
         overrides: Option<String>,
 
-        /// Download and write sha256 checksums back to manifest files
-        #[arg(long)]
-        write_checksums: bool,
-
         /// Path to the application config TOML file.
         /// When set, only downloads models enabled in the config.
         #[arg(short, long)]
         config: Option<PathBuf>,
+
+        /// Download all files from all manifests (ignores config)
+        #[arg(long)]
+        all: bool,
     },
     /// Interactive download wizard
     Wizard {
@@ -190,6 +190,16 @@ pub enum DownloaderAction {
         /// Output as JSON
         #[arg(long)]
         json: bool,
+    },
+    /// Compute and write sha256 checksums for already-downloaded files
+    UpdateChecksums {
+        /// Base data directory
+        #[arg(long, default_value = "data")]
+        data_dir: PathBuf,
+
+        /// Suppress progress output
+        #[arg(long)]
+        quiet: bool,
     },
 }
 

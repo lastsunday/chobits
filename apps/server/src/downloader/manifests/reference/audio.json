@@ -1,13 +1,16 @@
 {
-  "config": { "category": "reference", "model": "audio" },
+  "config": {
+    "category": "reference",
+    "model": "audio"
+  },
   "default_variant": "default",
   "variants": {
     "default": {
       "files": [
         {
-          "url": "https://github.com/jhqxxx/aha/raw/3ba4de8a7dd578b809fa4676f865a438abba91ab/assets/audio/voice_05.wav",
           "path": "tts/reference/voice_05.wav",
-          "sha256": null
+          "sha256": "2614110791c5fd6bcc0d1a5276226d23233864ff5f6739bd820fe80b7a116fbe",
+          "url": "https://github.com/jhqxxx/aha/raw/3ba4de8a7dd578b809fa4676f865a438abba91ab/assets/audio/voice_05.wav"
         }
       ]
     }

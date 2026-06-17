@@ -57,14 +57,14 @@ struct OverrideEntry {
 
 type OverrideMap = HashMap<String, OverrideEntry>;
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 struct Report {
     completed_at: String,
     base_dir: String,
     files: Vec<ReportFile>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 struct ReportFile {
     path: String,
     size: u64,
@@ -81,8 +81,8 @@ pub async fn run(
     quiet: bool,
     mirrors: &[String],
     overrides: Option<&str>,
-    write_checksums: bool,
     config_path: Option<&PathBuf>,
+    all: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let client = Client::new();
 
@@ -91,40 +91,43 @@ pub async fn run(
         None => None,
     };
 
-    let cfg_path = config_path
-        .cloned()
-        .or_else(|| find_config().filter(|p| p.exists()));
+    let targets = if !all {
+        let cfg_path = config_path
+            .cloned()
+            .or_else(|| find_config().filter(|p| p.exists()));
 
-    let figment = match &cfg_path {
-        Some(p) => AppConfig::load(std::slice::from_ref(p))?,
-        None => AppConfig::load(&[] as &[std::path::PathBuf])?,
-    };
-    let cfg = AppConfig::new(&figment)?;
-    let targets = config_to_targets(&cfg);
+        let figment = match &cfg_path {
+            Some(p) => AppConfig::load(std::slice::from_ref(p))?,
+            None => AppConfig::load(&[] as &[std::path::PathBuf])?,
+        };
+        let cfg = AppConfig::new(&figment)?;
+        let t = config_to_targets(&cfg);
 
-    if targets.is_empty() {
-        if !quiet {
-            eprintln!("No enabled models in configuration. Nothing to download.");
-        }
-        return Ok(());
-    }
-
-    if !quiet {
-        eprintln!("Config selects {} model(s)", targets.len());
-        for (cat, m, var) in &targets {
-            if let Some(v) = var {
-                eprintln!("  {cat}/{m} (variant: {v})");
-            } else {
-                eprintln!("  {cat}/{m} (default variant)");
+        if t.is_empty() {
+            if !quiet {
+                eprintln!("No enabled models in configuration. Nothing to download.");
             }
+            return Ok(());
         }
-        eprintln!();
-    }
+
+        if !quiet {
+            eprintln!("Config selects {} model(s)", t.len());
+            for (cat, m, var) in &t {
+                if let Some(v) = var {
+                    eprintln!("  {cat}/{m} (variant: {v})");
+                } else {
+                    eprintln!("  {cat}/{m} (default variant)");
+                }
+            }
+            eprintln!();
+        }
+
+        t
+    } else {
+        Vec::new()
+    };
 
     let mut report_files = Vec::new();
-
-    // (manifest_rel_path, file.path, sha256) for write_checksums
-    let mut sha_updates: Vec<(PathBuf, String, String)> = Vec::new();
 
     for cat_dir in MANIFESTS.dirs() {
         let cat_name = dir_name(cat_dir);
@@ -146,23 +149,27 @@ pub async fn run(
                 continue;
             }
 
-            if !targets
-                .iter()
-                .any(|(c, m, _)| c == cat_name && m == model_name)
+            if !all
+                && !targets
+                    .iter()
+                    .any(|(c, m, _)| c == cat_name && m == model_name)
             {
                 continue;
             }
 
             let entry: ModelEntry = serde_json::from_slice(file_entry.contents())?;
 
-            let effective_variant = variant.or_else(|| {
-                targets
-                    .iter()
-                    .find(|(c, m, _)| c == cat_name && m == model_name)
-                    .and_then(|(_, _, v)| v.as_deref())
-            });
-            let variants = resolve_variants(&entry, effective_variant);
-            let manifest_rel = file_entry.path().to_path_buf();
+            let variants: HashMap<&str, &Variant> = if all {
+                entry.variants.iter().map(|(k, v)| (k.as_str(), v)).collect()
+            } else {
+                let effective_variant = variant.or_else(|| {
+                    targets
+                        .iter()
+                        .find(|(c, m, _)| c == cat_name && m == model_name)
+                        .and_then(|(_, _, v)| v.as_deref())
+                });
+                resolve_variants(&entry, effective_variant)
+            };
             for (v_name, v) in &variants {
                 if !quiet {
                     eprintln!("[{cat_name}/{model_name}/{v_name}]");
@@ -186,7 +193,6 @@ pub async fn run(
                     let cl = client.clone();
                     let mir = mirrors.to_vec();
                     let fpath = file.path.clone();
-                    let man = manifest_rel.clone();
                     let sem = sem.clone();
 
                     set.spawn(async move {
@@ -201,12 +207,12 @@ pub async fn run(
                         )
                         .await
                         .map_err(|e| format!("{e}"));
-                        (fpath, man, result)
+                        (fpath, result)
                     });
                 }
 
                 while let Some(res) = set.join_next().await {
-                    let (fpath, man, result) = res?;
+                    let (fpath, result) = res?;
                     match result {
                         Ok((size, sha256)) => {
                             report_files.push(ReportFile {
@@ -215,7 +221,6 @@ pub async fn run(
                                 sha256: sha256.clone(),
                                 status: "ok".into(),
                             });
-                            sha_updates.push((man, fpath, sha256));
                         }
                         Err(msg) => {
                             if !quiet {
@@ -237,10 +242,6 @@ pub async fn run(
     let total = report_files.len();
     let ok = report_files.iter().filter(|f| f.status == "ok").count();
     let failed = total - ok;
-
-    if write_checksums && !sha_updates.is_empty() {
-        write_checksums_to_manifests(&sha_updates)?;
-    }
 
     if !quiet {
         eprintln!(
@@ -916,8 +917,8 @@ pub async fn run_wizard(data_dir: &Path, quiet: bool) -> Result<(), Box<dyn std:
                 quiet,
                 &mir,
                 None,
-                false,
                 None,
+                false,
             )
             .await
             {
@@ -979,6 +980,73 @@ fn config_to_targets(config: &AppConfig) -> Vec<(String, String, Option<String>)
     }
 
     targets
+}
+
+pub fn update_checksums(
+    data_dir: &Path,
+    quiet: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let report_sha: HashMap<String, String> = std::fs::read(data_dir.join("download-report.json"))
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<Report>(&bytes).ok())
+        .map(|r| r.files.into_iter().filter(|f| f.status == "ok").map(|f| (f.path, f.sha256)).collect())
+        .unwrap_or_default();
+
+    let mut sha_updates: Vec<(PathBuf, String, String)> = Vec::new();
+
+    for cat_dir in MANIFESTS.dirs() {
+        let _cat_name = dir_name(cat_dir);
+        for file_entry in cat_dir.files() {
+            if file_entry.path().extension().is_none_or(|e| e != "json") {
+                continue;
+            }
+
+            let _model_name = file_entry.path().file_stem().unwrap().to_str().unwrap();
+            let entry: ModelEntry = serde_json::from_slice(file_entry.contents())?;
+            let variants = resolve_variants(&entry, None);
+            let manifest_rel = file_entry.path().to_path_buf();
+
+            for v in variants.values() {
+                for file in &v.files {
+                    let dest = data_dir.join(&file.path);
+                    if !dest.exists() {
+                        if !quiet {
+                            eprintln!("  SKIP (not found): {}", dest.display());
+                        }
+                        continue;
+                    }
+
+                    let sha = match report_sha.get(&file.path) {
+                        Some(s) => s.clone(),
+                        None => {
+                            let (_size, sha) = sha256_file(&dest)?;
+                            sha
+                        }
+                    };
+
+                    if !quiet {
+                        eprintln!("  {:<60} {}", dest.display(), sha);
+                    }
+                    sha_updates
+                        .push((manifest_rel.clone(), file.path.clone(), sha));
+                }
+            }
+        }
+    }
+
+    if sha_updates.is_empty() {
+        if !quiet {
+            eprintln!("No downloaded files found in {}", data_dir.display());
+        }
+        return Ok(());
+    }
+
+    write_checksums_to_manifests(&sha_updates)?;
+    if !quiet {
+        eprintln!("Updated {} file(s) in manifests", sha_updates.len());
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

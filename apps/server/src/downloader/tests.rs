@@ -335,6 +335,82 @@ fn test_find_config_fallback() {
     });
 }
 
+// ── write_checksums_to_manifests ──
+
+#[test]
+fn test_write_checksums_integration() {
+    let base = Path::new(MANIFESTS_DIR);
+    if !base.exists() {
+        eprintln!("  SKIP: MANIFESTS_DIR ({}) does not exist", base.display());
+        return;
+    }
+
+    let rel = PathBuf::from("_test_write_checksums.json");
+    let full = base.join(&rel);
+    let _ = std::fs::remove_file(&full);
+
+    let original = serde_json::json!({
+        "files": [
+            {"path": "data/test.bin", "url": "http://example.com/test.bin", "sha256": null}
+        ]
+    });
+    std::fs::write(&full, serde_json::to_string_pretty(&original).unwrap()).unwrap();
+
+    let updates = vec![
+        (rel.clone(), "data/test.bin".into(), "test_sha_value".into()),
+    ];
+
+    let result = write_checksums_to_manifests(&updates);
+    assert!(result.is_ok(), "write_checksums_to_manifests failed: {result:?}");
+
+    let updated: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&full).unwrap()).unwrap();
+    assert_eq!(updated["files"][0]["sha256"], "test_sha_value");
+
+    let _ = std::fs::remove_file(&full);
+}
+
+// ── update_checksums ──
+
+#[test]
+fn test_update_checksums_updates_manifest() {
+    let base = Path::new(MANIFESTS_DIR);
+    if !base.exists() {
+        eprintln!("  SKIP: MANIFESTS_DIR ({}) does not exist", base.display());
+        return;
+    }
+
+    // Use a real embedded manifest: reference/audio.json has one file entry
+    let manifest_rel = PathBuf::from("reference/audio.json");
+    let manifest_path = base.join(&manifest_rel);
+    let original_content = std::fs::read_to_string(&manifest_path).unwrap();
+
+    let data_dir = test_dir("update_cksum");
+
+    // The manifest has file.path = "tts/reference/voice_05.wav"
+    let file_rel = "tts/reference/voice_05.wav";
+    let content = b"test content for update_checksums";
+    let abs_file = data_dir.join(file_rel);
+    std::fs::create_dir_all(abs_file.parent().unwrap()).unwrap();
+    std::fs::write(&abs_file, content).unwrap();
+
+    let result = update_checksums(&data_dir, true);
+    assert!(result.is_ok(), "update_checksums failed: {result:?}");
+
+    // Verify the real manifest was updated
+    let updated: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&manifest_path).unwrap()).unwrap();
+    let expected_sha = sha256_of(content);
+    assert_eq!(
+        updated["variants"]["default"]["files"][0]["sha256"],
+        expected_sha,
+        "SHA256 was not written correctly"
+    );
+
+    // Restore original manifest content
+    std::fs::write(&manifest_path, &original_content).unwrap();
+}
+
 // ── load_overrides ──
 
 #[tokio::test]

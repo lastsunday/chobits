@@ -31,8 +31,8 @@ pub fn run() -> Result<(), Box<dyn Error>> {
                     quiet,
                     mirror,
                     overrides,
-                    write_checksums,
                     config,
+                    all,
                 },
         }) => {
             let rt = tokio::runtime::Runtime::new()?;
@@ -44,8 +44,8 @@ pub fn run() -> Result<(), Box<dyn Error>> {
                 *quiet,
                 mirror,
                 overrides.as_deref(),
-                *write_checksums,
                 config.as_ref(),
+                *all,
             ))
         }
         Some(Commands::Downloader {
@@ -60,6 +60,10 @@ pub fn run() -> Result<(), Box<dyn Error>> {
             downloader::list(category.as_deref(), *json);
             Ok(())
         }
+        Some(Commands::Downloader {
+            action:
+                DownloaderAction::UpdateChecksums { data_dir, quiet },
+        }) => downloader::update_checksums(data_dir, *quiet),
         None => run_with_args(&cli.serve),
     }
 }
