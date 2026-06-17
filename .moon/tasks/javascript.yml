@@ -13,3 +13,5 @@ tasks:
     options:
       cache: true
       mutex: 'pnpm-install'
+    env:
+      MOON_LOG: debug
