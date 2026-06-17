@@ -1,8 +1,6 @@
 pub mod model;
 
 use self::model::mute::TtsMute;
-use self::model::pocket_tts::TtsPocketTTS;
-use self::model::voxcpm::TtsVoxCPM;
 use crate::config;
 use crate::common::ModelError;
 use crate::config::audio::AudioConfig;
@@ -73,29 +71,9 @@ impl TtsFactory {
 
     pub async fn create_model(
         tts_config: &TtsConfig,
-        audio_config: &AudioConfig,
+        _audio_config: &AudioConfig,
     ) -> Result<Box<dyn Tts>, anyhow::Error> {
         match tts_config.model.clone().expect("tts model is empty") {
-            config::TtsModel::PocketTts => Ok(Box::new(
-                TtsPocketTTS::new(tts_config, audio_config).await?,
-            )),
-            config::TtsModel::Voxcpm => Ok(Box::new(
-                TtsVoxCPM::new(
-                    &tts_config.path.clone().expect("tts path is empty"),
-                    audio_config
-                        .output_sample_rate
-                        .expect("tts output sample rate is empty"),
-                    audio_config
-                        .output_channel
-                        .expect("tts output channel is empty"),
-                    audio_config
-                        .output_frame_duration
-                        .expect("tts output frame duration is empty"),
-                    tts_config.reference_prompt_text.clone(),
-                    tts_config.reference_prompt_wav_path.clone(),
-                )
-                .await?,
-            )),
             config::TtsModel::Mute => Ok(Box::new(TtsMute::new().await?)),
         }
     }

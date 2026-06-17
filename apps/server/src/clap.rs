@@ -141,7 +141,7 @@ pub enum DownloaderAction {
         /// Category: tts, asr, llm, vad, reference (default: all)
         category: Option<String>,
 
-        /// Model name (e.g., pocket-tts, whisper, qwen3)
+        /// Model name (e.g., qwen3, silero)
         model: Option<String>,
 
         /// Variant name (e.g., 0.5B, tiny, small, large-v3)

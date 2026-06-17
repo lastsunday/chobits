@@ -128,9 +128,8 @@ fn make_cfg(v: serde_json::Value) -> api::config::Config {
 #[test]
 fn test_config_to_targets_defaults() {
     let t = config_to_targets(&make_cfg(serde_json::json!({})));
-    // defaults: tts=PocketTts, asr=Qwen3, llm=Qwen3, vad=Earshot
-    assert_eq!(t.len(), 3);
-    assert!(t.contains(&("tts".into(), "pocket-tts".into(), None)));
+    // defaults: tts=Mute, asr=Qwen3, llm=Qwen3, vad=Earshot
+    assert_eq!(t.len(), 2);
     assert!(t.contains(&("asr".into(), "qwen3".into(), None)));
     assert!(t.contains(&("llm".into(), "qwen3".into(), None)));
 }
@@ -147,16 +146,14 @@ fn test_config_to_targets_all_quiet() {
 }
 
 #[test]
-fn test_config_to_targets_variant() {
+fn test_config_to_targets_mute() {
     let t = config_to_targets(&make_cfg(serde_json::json!({
-        "tts_model": "voxcpm",
-        "tts_variant": "1.5b",
+        "tts_model": "mute",
         "asr_model": "void",
         "llm_model": "echo",
         "vad_model": "void",
     })));
-    assert_eq!(t.len(), 1);
-    assert_eq!(t[0], ("tts".into(), "voxcpm".into(), Some("1.5b".into())));
+    assert!(t.is_empty());
 }
 
 #[test]
@@ -221,12 +218,11 @@ fn test_load_selections_valid() {
     let p = dir.join("c.toml");
     fs::write(
         &p,
-        "[global]\ntts_model = \"voxcpm\"\ntts_variant = \"1.5b\"\n",
+        "[global]\ntts_model = \"mute\"\n",
     )
     .unwrap();
     let m = load_selections(&p);
-    assert_eq!(m.get("tts_model").unwrap(), "voxcpm");
-    assert_eq!(m.get("tts_variant").unwrap(), "1.5b");
+    assert_eq!(m.get("tts_model").unwrap(), "mute");
 }
 
 #[test]
@@ -251,10 +247,9 @@ fn test_load_selections_empty() {
 fn test_upsert_config_new() {
     let dir = test_dir("upsert_new");
     let p = dir.join("c.toml");
-    upsert_config(&p, &[("tts_model", "voxcpm")]).unwrap();
+    upsert_config(&p, &[("tts_model", "mute")]).unwrap();
     let c = fs::read_to_string(&p).unwrap();
-    assert!(c.contains("[global]"));
-    assert!(c.contains("tts_model = \"voxcpm\""));
+    assert!(c.contains("tts_model = \"mute\""));
 }
 
 #[test]

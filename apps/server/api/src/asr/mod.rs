@@ -6,7 +6,6 @@ use crate::{
     config::{AsrModel, asr::AsrConfig},
 };
 use async_trait::async_trait;
-use model::whisper::AsrWhisper;
 use std::sync::{Arc, OnceLock};
 use tokio::sync::Mutex;
 
@@ -57,13 +56,9 @@ impl AsrFactory {
     pub fn create_model(config: &AsrConfig) -> Box<dyn Asr> {
         let model = config.model.clone().expect("asr model is empty");
         match model {
-            AsrModel::Qwen3 | AsrModel::Whisper => {
+            AsrModel::Qwen3 => {
                 let path = config.path.clone().expect("asr path is empty").to_string();
-                if model == AsrModel::Qwen3 {
-                    Box::new(AsrQwen3::new(path).unwrap())
-                } else {
-                    Box::new(AsrWhisper::new(path).unwrap())
-                }
+                Box::new(AsrQwen3::new(path).unwrap())
             }
             AsrModel::Void => Box::new(AsrVoid::new().unwrap()),
         }

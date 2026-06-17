@@ -381,7 +381,7 @@ fn default_auth_client_secret() -> Option<String> {
 }
 
 fn default_tts_model() -> Option<TtsModel> {
-    Some(TtsModel::PocketTts)
+    Some(TtsModel::Mute)
 }
 
 fn default_tts_path() -> Option<String> {
@@ -613,44 +613,22 @@ impl Config {
         if self.tts_path.is_some() {
             return self.tts_path.clone();
         }
-        let variant = self.tts_variant.clone().unwrap_or_else(|| {
-            match self.tts_model.clone().unwrap_or_default() {
-                TtsModel::PocketTts => "default".into(),
-                TtsModel::Voxcpm => "0.5b".into(),
-                TtsModel::Mute => String::new(),
-            }
-        });
-        if variant.is_empty() {
-            return None;
-        }
-        let model = match self.tts_model.clone().unwrap_or_default() {
-            TtsModel::PocketTts => "pocket-tts",
-            TtsModel::Voxcpm => "voxcpm",
-            TtsModel::Mute => return None,
-        };
-        Some(format!("data/tts/model/{model}/{variant}/"))
+        let _ = self.tts_variant.clone().unwrap_or_default();
+        let _ = self.tts_model.clone().unwrap_or_default();
+        None
     }
 
     pub fn derive_asr_path(&self) -> Option<String> {
         if self.asr_path.is_some() {
             return self.asr_path.clone();
         }
-        let variant = self.asr_variant.clone().unwrap_or_else(|| {
-            match self.asr_model.clone().unwrap_or_default() {
-                AsrModel::Qwen3 => "default".into(),
-                AsrModel::Whisper => "small".into(),
-                AsrModel::Void => String::new(),
+        match self.asr_model.clone().unwrap_or_default() {
+            AsrModel::Qwen3 => {
+                let variant = self.asr_variant.clone().unwrap_or_else(|| "default".into());
+                Some(format!("data/asr/model/qwen3/{variant}/"))
             }
-        });
-        if variant.is_empty() {
-            return None;
+            AsrModel::Void => None,
         }
-        let model = match self.asr_model.clone().unwrap_or_default() {
-            AsrModel::Qwen3 => "qwen3",
-            AsrModel::Whisper => "whisper",
-            AsrModel::Void => return None,
-        };
-        Some(format!("data/asr/model/{model}/{variant}/"))
     }
 
     pub fn derive_llm_path(&self) -> Option<String> {
@@ -720,7 +698,6 @@ pub enum VadModel {
 pub enum AsrModel {
     #[default]
     Qwen3,
-    Whisper,
     Void,
 }
 
@@ -728,8 +705,6 @@ pub enum AsrModel {
 #[serde(rename_all = "lowercase")]
 pub enum TtsModel {
     #[default]
-    PocketTts,
-    Voxcpm,
     Mute,
 }
 
@@ -738,6 +713,5 @@ pub enum TtsModel {
 pub enum LlmModel {
     #[default]
     Qwen3,
-    MiniCPM4,
     Echo,
 }

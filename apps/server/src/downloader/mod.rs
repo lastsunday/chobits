@@ -3,7 +3,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use api::config::{AsrModel, Config as AppConfig, LlmModel, TtsModel, VadModel};
+use api::config::{AsrModel, Config as AppConfig, LlmModel, VadModel};
 use dialoguer::Select;
 use include_dir::{Dir, include_dir};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -940,35 +940,20 @@ fn confirm(question: &str) -> Result<bool, Box<dyn std::error::Error>> {
 fn config_to_targets(config: &AppConfig) -> Vec<(String, String, Option<String>)> {
     let mut targets = Vec::new();
 
-    match config.tts_model.clone().unwrap_or_default() {
-        TtsModel::PocketTts => {
-            targets.push((
-                "tts".into(),
-                "pocket-tts".into(),
-                config.tts_variant.clone(),
-            ));
-        }
-        TtsModel::Voxcpm => {
-            targets.push(("tts".into(), "voxcpm".into(), config.tts_variant.clone()));
-        }
-        TtsModel::Mute => {}
-    }
+    let _ = config.tts_model.clone().unwrap_or_default();
+    let _ = config.tts_variant.clone();
 
     match config.asr_model.clone().unwrap_or_default() {
         AsrModel::Qwen3 => {
             targets.push(("asr".into(), "qwen3".into(), config.asr_variant.clone()));
         }
-        AsrModel::Whisper => {
-            targets.push(("asr".into(), "whisper".into(), config.asr_variant.clone()));
-        }
-        AsrModel::Void => {}
+        _ => {}
     }
 
     match config.llm_model.clone().unwrap_or_default() {
         LlmModel::Qwen3 => {
             targets.push(("llm".into(), "qwen3".into(), config.llm_variant.clone()));
         }
-        LlmModel::MiniCPM4 => {}
         LlmModel::Echo => {}
     }
 

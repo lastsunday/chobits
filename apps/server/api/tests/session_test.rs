@@ -1398,11 +1398,9 @@ async fn create_session()
             }))
         )
             .with_tts(Arc::new(TtsFactory::create_model(&TtsConfig {
-                model: Some(TtsModel::Voxcpm),
-                path: Some(String::from("data/tts/model/openbmb/VoxCPM-0.5B/")),
+                model: Some(TtsModel::Mute),
                 ..Default::default()
-                }
-            , &audio_config).await.unwrap()))
+            }, &audio_config).await.unwrap()))
         .with_mcp_host(Arc::new(Mutex::new(mcp_host)))
         .with_config(Arc::new(SessionConfig {
             close_connection_no_voice_time: Some(3000),

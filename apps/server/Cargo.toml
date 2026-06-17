@@ -34,7 +34,6 @@ intel-mkl-src = { workspace = true, features = [
   "mkl-static-lp64-iomp",
 ], optional = true }
 accelerate-src = { workspace = true, optional = true }
-aha = { workspace = true }
 # llm end
 clap = { workspace = true, features = [
   "derive",
@@ -74,5 +73,4 @@ cuda = [
   "candle-nn/cuda",
   "candle-transformers/cuda",
   "dep:bindgen_cuda",
-  "aha/cuda",
 ]

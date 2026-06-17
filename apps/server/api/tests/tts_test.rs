@@ -23,20 +23,11 @@ async fn test_tts_default() -> anyhow::Result<()> {
     let size = MONO_20MS;
     TtsFactory::init(
         Arc::new(TtsConfig {
-            model: Some(TtsModel::Voxcpm),
-            path: Some(String::from("data/tts/model/openbmb/VoxCPM-0.5B/")),
-            reference_prompt_text: Some(String::from(
-                "一定被灰太狼给吃了，我已经为他准备好了花圈了",
-            )),
-            reference_prompt_wav_path: Some(String::from("file://data/tts/reference/voice_05.wav")),
+            model: Some(TtsModel::Mute),
+            ..Default::default()
         }),
         Arc::new(AudioConfig {
-            input_sample_rate: Some(16000),
-            input_frame_duration: Some(20_u64),
-            input_channel: Some(1),
-            output_sample_rate: Some(16000),
-            output_channel: Some(1),
-            output_frame_duration: Some(20_u64),
+            ..Default::default()
         }),
     )
     .await?;

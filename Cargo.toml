@@ -107,8 +107,6 @@ fancy-regex = "0.17.0"
 intel-mkl-src = "0.8.1"
 accelerate-src = "0.3.2"
 rig-core = "0.30.0"
-aha = "0.1.8"
-aha_openai_dive = "1.4.0"
 bindgen_cuda = "=0.1.5"
 # llm end
 # vad start
@@ -121,7 +119,6 @@ rand_distr = "0.6.0"
 qwen-asr = "0.3.0"
 # asr end
 # tts start
-pocket-tts = "0.6.2"
 # tts end
 # mcp start
 rmcp = "0.15.0"
