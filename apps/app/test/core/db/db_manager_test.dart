@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:app/core/db/db_changelog.dart';
 import 'package:app/core/db/db_manager.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:path/path.dart' as p;
 
 void main() {
   test('Should create database with changelog', () async {
