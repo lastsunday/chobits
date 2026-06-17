@@ -4,7 +4,7 @@ tags: ['e2e', 'playwright']
 
 tasks:
   install-playwright:
-    command: 'pnpm exec playwright install --with-deps'
+    command: 'pnpm exec playwright install'
     options:
       cache: false
       mutex: 'playwright-install'
