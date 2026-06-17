@@ -1,9 +1,6 @@
 language: "dart"
 tags: ["mobile", "flutter"]
 
-env:
-  PUB_CACHE: "$HOME/.pub-cache"
-
 tasks:
   analyze:
     command: "flutter analyze"

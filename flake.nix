@@ -95,6 +95,15 @@
               chmod +x /tmp/nix-xcrun-wrapper/xcrun
               export PATH="/tmp/nix-xcrun-wrapper:$PATH"
 
+              # Ensure PUB_CACHE is writable (HOME may be missing in CI)
+              if [ -z "$PUB_CACHE" ]; then
+                if [ -n "$HOME" ]; then
+                  export PUB_CACHE="$HOME/.pub-cache"
+                else
+                  export PUB_CACHE="/tmp/.pub-cache"
+                fi
+              fi
+
               echo "✦ chobits devShell (${system})"
               echo "  Rust: $(rustc --version)"
               echo "  Node: $(node --version)"
