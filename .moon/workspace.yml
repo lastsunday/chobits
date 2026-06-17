@@ -9,3 +9,6 @@ vcs:
 
 pipeline:
   cacheLifetime: '7 days'
+
+env:
+  PUB_CACHE: "$HOME/.pub-cache"
