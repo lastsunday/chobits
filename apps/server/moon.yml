@@ -31,6 +31,8 @@ tasks:
 
   test:
     command: "cargo test --package chobits-server"
+    deps:
+      - ~:build
 
   test-pg:
     command: "cargo test --package chobits-server"
@@ -41,18 +43,24 @@ tasks:
 
   run:
     command: "cargo run --package chobits-server -- --config=application.toml"
+    deps:
+      - ~:build
     options:
       persistent: true
       cache: false
 
   dev:
     command: "cargo run --package chobits-server -- --config=application-dev.toml"
+    deps:
+      - ~:build
     options:
       persistent: true
       cache: false
 
   dev-minimal:
     command: 'cargo run --package chobits-server -- -O "vad_model=''void''" -O "asr_model=''void''" -O "tts_model=''mute''" -O "llm_model=''echo''"'
+    deps:
+      - ~:build
     options:
       persistent: true
       cache: false
