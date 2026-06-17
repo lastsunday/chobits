@@ -49,6 +49,7 @@ jobs:
       - name: Moon CI pipeline (affected)
         run: >
           nix develop
+          --ignore-env
           -k CARGO_BUILD_RUSTC_WRAPPER
           -k SCCACHE_GHA_ENABLED
           -k ACTIONS_CACHE_URL
@@ -61,6 +62,7 @@ jobs:
       - name: PostgreSQL tests
         run: >
           nix develop
+          --ignore-env
           -k CARGO_BUILD_RUSTC_WRAPPER
           -k SCCACHE_GHA_ENABLED
           -k ACTIONS_CACHE_URL
