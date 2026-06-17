@@ -1,5 +1,35 @@
 # App
 
+## 环境要求
+
+### 前置依赖
+
+| 工具 | 说明 | 安装方式 |
+|------|------|----------|
+| Xcode | iOS/macOS 构建 | App Store 下载，运行 `sudo xcode-select --switch /Applications/Xcode.app` |
+| Android Studio | Android SDK 管理 | [官网下载](https://developer.android.com/studio)，首次启动时安装 SDK（API 34/35） |
+| Chrome | Web 调试 | 已安装则 `flutter run -d chrome` 可用 |
+
+### Nix 开发环境
+
+进入项目根目录后直接用 `nix develop`，Flutter 工具链已包含在内：
+
+```shell
+nix develop
+flutter test
+flutter analyze
+flutter build apk
+flutter doctor
+```
+
+### 首次使用
+
+1. 安装前置依赖（Xcode、Android Studio、Chrome）
+2. 进入 Nix shell：`nix develop`
+3. 接受 Android 许可证：`flutter doctor --android-licenses`
+4. 安装项目依赖：`flutter pub get`
+5. 运行 `flutter doctor` 确认环境就绪
+
 > [!WARNING]
 > App not implement any chobits feature right now,just make a basic framework.
 

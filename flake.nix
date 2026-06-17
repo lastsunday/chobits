@@ -2,7 +2,7 @@
   description = "chobits monorepo development environment";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/3e41b24abd260e8f71dbe2f5737d24122f972158";
     flake-utils.url = "github:numtide/flake-utils";
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
@@ -71,6 +71,10 @@
               lefthook
               protobuf
               sccache
+              flutter
+              jdk17
+              cmake
+              ninja
             ];
 
             buildInputs = with pkgs; [
@@ -80,13 +84,16 @@
               openblas
             ] ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
               pkgs.libiconv
-              pkgs.darwin.apple_sdk.frameworks.Security
-              pkgs.darwin.apple_sdk.frameworks.SystemConfiguration
-              pkgs.darwin.apple_sdk.frameworks.CoreFoundation
-              pkgs.darwin.apple_sdk.frameworks.Accelerate
             ];
 
             shellHook = ''
+              # macOS native xcrun wrapper — override Nix xcbuild's xcrun
+              # which breaks Flutter's codesign invocation.
+              mkdir -p /tmp/nix-xcrun-wrapper
+              printf '%s\n' '#!/bin/sh' 'unset DEVELOPER_DIR SDKROOT' 'exec /usr/bin/xcrun "$@"' > /tmp/nix-xcrun-wrapper/xcrun
+              chmod +x /tmp/nix-xcrun-wrapper/xcrun
+              export PATH="/tmp/nix-xcrun-wrapper:$PATH"
+
               echo "✦ chobits devShell (${system})"
               echo "  Rust: $(rustc --version)"
               echo "  Node: $(node --version)"
@@ -112,10 +119,6 @@
               openblas
             ] ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
               pkgs.libiconv
-              pkgs.darwin.apple_sdk.frameworks.Security
-              pkgs.darwin.apple_sdk.frameworks.SystemConfiguration
-              pkgs.darwin.apple_sdk.frameworks.CoreFoundation
-              pkgs.darwin.apple_sdk.frameworks.Accelerate
             ];
             shellHook = ''
               export CARGO_BUILD_RUSTC_WRAPPER=sccache
