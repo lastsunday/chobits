@@ -1,0 +1,29 @@
+{
+  "config": {
+    "category": "tts",
+    "model": "pocket_tts"
+  },
+  "default_variant": "default",
+  "variants": {
+    "default": {
+      "archives": [
+        {
+          "path": "tts/model/pocket/default/",
+          "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-pocket-tts-int8-2026-01-26.tar.bz2",
+          "sha256": null,
+          "extract": [
+            "encoder.onnx",
+            "decoder.int8.onnx",
+            "lm_flow.int8.onnx",
+            "lm_main.int8.onnx",
+            "text_conditioner.onnx",
+            "vocab.json",
+            "token_scores.json",
+            "test_wavs/bria.wav"
+          ]
+        }
+      ],
+      "files": []
+    }
+  }
+}

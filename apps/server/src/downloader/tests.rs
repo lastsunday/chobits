@@ -30,7 +30,7 @@ fn make_entry(files: Vec<(&str, Vec<FileEntry>)>, default_variant: Option<&str>)
         default_variant: default_variant.map(|s| s.into()),
         variants: files
             .into_iter()
-            .map(|(k, v)| (k.into(), Variant { files: v }))
+            .map(|(k, v)| (k.into(), Variant { files: v, archives: vec![] }))
             .collect(),
     }
 }

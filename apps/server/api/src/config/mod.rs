@@ -613,9 +613,13 @@ impl Config {
         if self.tts_path.is_some() {
             return self.tts_path.clone();
         }
-        let _ = self.tts_variant.clone().unwrap_or_default();
-        let _ = self.tts_model.clone().unwrap_or_default();
-        None
+        match self.tts_model.clone().unwrap_or_default() {
+            TtsModel::PocketTts => {
+                let variant = self.tts_variant.clone().unwrap_or_else(|| "default".into());
+                Some(format!("data/tts/model/pocket/{variant}/"))
+            }
+            TtsModel::Mute => None,
+        }
     }
 
     pub fn derive_asr_path(&self) -> Option<String> {
@@ -706,6 +710,7 @@ pub enum AsrModel {
 pub enum TtsModel {
     #[default]
     Mute,
+    PocketTts,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Default)]

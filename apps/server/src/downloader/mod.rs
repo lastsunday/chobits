@@ -1,9 +1,13 @@
 use std::collections::HashMap;
+use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use api::config::{AsrModel, Config as AppConfig, LlmModel, VadModel};
+use bzip2::read::BzDecoder;
+use tar::Archive;
+
+use api::config::{AsrModel, Config as AppConfig, LlmModel, TtsModel, VadModel};
 use dialoguer::Select;
 use include_dir::{Dir, include_dir};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -38,6 +42,17 @@ struct ModelEntry {
 #[derive(Deserialize)]
 struct Variant {
     files: Vec<FileEntry>,
+    #[serde(default)]
+    archives: Vec<ArchiveEntry>,
+}
+
+#[derive(Deserialize)]
+struct ArchiveEntry {
+    url: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    sha256: Option<String>,
+    path: String,
+    extract: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -228,6 +243,84 @@ pub async fn run(
                             }
                             report_files.push(ReportFile {
                                 path: fpath,
+                                size: 0,
+                                sha256: String::new(),
+                                status: format!("failed: {msg}"),
+                            });
+                        }
+                    }
+                }
+
+                for archive in &v.archives {
+                    let dest_dir = data_dir.join(&archive.path);
+                    let all_exist = archive.extract.iter().all(|f| dest_dir.join(f).exists());
+                    if all_exist {
+                        if !quiet {
+                            eprintln!("  ARCHIVE {}: all check files exist, skip", archive.path);
+                        }
+                        report_files.push(ReportFile {
+                            path: format!("{} (archive)", archive.path),
+                            size: 0,
+                            sha256: String::new(),
+                            status: "ok".into(),
+                        });
+                        continue;
+                    }
+
+                    if !quiet {
+                        eprintln!("  ARCHIVE {}: downloading ...", archive.path);
+                    }
+
+                    let archive_dest = dest_dir.with_file_name(format!(
+                        "{}.tar.bz2",
+                        dest_dir.file_name().unwrap_or_default().to_str().unwrap_or("model")
+                    ));
+
+                    let result = download_file(
+                        &client,
+                        &archive.url,
+                        &archive_dest,
+                        archive.sha256.as_deref(),
+                        mirrors,
+                        quiet,
+                    )
+                    .await;
+
+                    match result {
+                        Ok((size, sha256)) => {
+                            if !quiet {
+                                eprintln!("  ARCHIVE {}: extracting ...", archive.path);
+                            }
+                            match extract_tar_bz2(&archive_dest, &dest_dir, &archive.extract) {
+                                Ok(()) => {
+                                    let _ = std::fs::remove_file(&archive_dest);
+                                    report_files.push(ReportFile {
+                                        path: format!("{} (archive)", archive.path),
+                                        size,
+                                        sha256,
+                                        status: "ok".into(),
+                                    });
+                                }
+                                Err(e) => {
+                                    let msg = format!("extraction failed: {e}");
+                                    if !quiet {
+                                        eprintln!("  FAIL: {} ({msg})", archive.path);
+                                    }
+                                    report_files.push(ReportFile {
+                                        path: format!("{} (archive)", archive.path),
+                                        size: 0,
+                                        sha256: String::new(),
+                                        status: format!("failed: {msg}"),
+                                    });
+                                }
+                            }
+                        }
+                        Err(msg) => {
+                            if !quiet {
+                                eprintln!("  FAIL: {} archive ({msg})", archive.path);
+                            }
+                            report_files.push(ReportFile {
+                                path: format!("{} (archive)", archive.path),
                                 size: 0,
                                 sha256: String::new(),
                                 status: format!("failed: {msg}"),
@@ -499,6 +592,37 @@ fn sha256_file(path: &Path) -> Result<(u64, String), Box<dyn std::error::Error>>
     }
 
     Ok((total, hex::encode(hasher.finalize())))
+}
+
+fn extract_tar_bz2(
+    archive_path: &Path,
+    dest: &Path,
+    files: &[String],
+) -> Result<(), Box<dyn std::error::Error>> {
+    let file = File::open(archive_path)?;
+    let decoder = BzDecoder::new(file);
+    let mut archive = Archive::new(decoder);
+    std::fs::create_dir_all(dest)?;
+
+    for entry in archive.entries()? {
+        let mut entry = entry?;
+        let path = entry.path()?;
+        // Strip the top-level directory component (e.g. "sherpa-onnx-pocket-tts-int8-2026-01-26/encoder.onnx" -> "encoder.onnx")
+        let stripped: PathBuf = path.components().skip(1).collect();
+        if stripped.as_os_str().is_empty() {
+            continue;
+        }
+        if !files.iter().any(|f| stripped == Path::new(f)) {
+            continue;
+        }
+        let dest_path = dest.join(&stripped);
+        if let Some(parent) = dest_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        entry.unpack(&dest_path)?;
+    }
+
+    Ok(())
 }
 
 fn write_checksums_to_manifests(
@@ -940,8 +1064,12 @@ fn confirm(question: &str) -> Result<bool, Box<dyn std::error::Error>> {
 fn config_to_targets(config: &AppConfig) -> Vec<(String, String, Option<String>)> {
     let mut targets = Vec::new();
 
-    let _ = config.tts_model.clone().unwrap_or_default();
-    let _ = config.tts_variant.clone();
+    match config.tts_model.clone().unwrap_or_default() {
+        TtsModel::PocketTts => {
+            targets.push(("tts".into(), "pocket_tts".into(), config.tts_variant.clone()));
+        }
+        TtsModel::Mute => {}
+    }
 
     match config.asr_model.clone().unwrap_or_default() {
         AsrModel::Qwen3 => {

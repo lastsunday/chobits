@@ -72,6 +72,7 @@ logs/
 /apps/server/data/
 /data/
 /apps/server-ui-e2e/playwright-report/
+/apps/server/api/test_data
 
 # Lix / Nix
 .nix-direnv/

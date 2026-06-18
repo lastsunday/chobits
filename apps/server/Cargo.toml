@@ -55,6 +55,8 @@ futures-util = { workspace = true }
 jiff = { workspace = true }
 dialoguer = { workspace = true }
 indicatif = { workspace = true }
+tar = { workspace = true }
+bzip2 = { workspace = true }
 # download end
 
 [dev-dependencies]

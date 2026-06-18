@@ -38,6 +38,7 @@ impl Tts for TtsMute {
                             let data = TtsData {
                                 audio: None,
                                 text: text.to_string(),
+                                raw_pcm: None,
                             };
                             if let Err(e) = tx.send(Ok(data)).await {
                                 error!("output packet error = {}", e);

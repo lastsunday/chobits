@@ -119,6 +119,7 @@ rand_distr = "0.6.0"
 qwen-asr = "0.3.0"
 # asr end
 # tts start
+sherpa-onnx = "1.13.3"
 # tts end
 # mcp start
 rmcp = "0.15.0"
@@ -136,6 +137,8 @@ sha2 = "0.10.9"
 hex = "0.4.3"
 dialoguer = "0.11"
 indicatif = "0.17"
+tar = "0.4"
+bzip2 = "0.5"
 # download end
 # dev start
 tower = "0.5.3"

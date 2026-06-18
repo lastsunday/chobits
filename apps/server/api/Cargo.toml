@@ -108,6 +108,7 @@ qwen-asr = { workspace = true }
 earshot = { workspace = true }
 # vad end
 # tts start
+sherpa-onnx = { workspace = true }
 # tts end
 # mcp start
 rmcp = { workspace = true, features = [

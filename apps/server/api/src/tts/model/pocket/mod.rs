@@ -1,0 +1,255 @@
+use std::collections::HashMap;
+use std::pin::Pin;
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use futures::Stream;
+use sherpa_onnx::{
+    GenerationConfig, LinearResampler, OfflineTts, OfflineTtsConfig, OfflineTtsModelConfig,
+    OfflineTtsPocketModelConfig, Wave,
+};
+use tokio::sync::mpsc::channel;
+use tokio_stream::StreamExt;
+use tokio_stream::wrappers::ReceiverStream;
+use tracing::{debug, error};
+
+use crate::common::ModelError;
+use crate::config::audio::AudioConfig;
+use crate::config::tts::TtsConfig;
+use crate::tts::{encode_sample_to_tts_packet, Tts, TtsData, TtsError};
+
+pub struct TtsPocket {
+    tts: Arc<OfflineTts>,
+    reference_audio: Vec<f32>,
+    reference_sample_rate: i32,
+    output_sample_rate: u32,
+    output_channel: u32,
+    output_frame_duration: u64,
+    speed: f32,
+}
+
+impl TtsPocket {
+    pub async fn new(
+        tts_config: &TtsConfig,
+        audio_config: &AudioConfig,
+    ) -> Result<Self, anyhow::Error> {
+        let path = tts_config.path.as_deref().unwrap_or("data/tts/model/pocket/default/");
+        if !path.ends_with('/') {
+            return Err(anyhow::anyhow!("tts path must end with '/'"));
+        }
+
+        let opts = tts_config.options.as_ref();
+
+        let num_threads = opts
+            .and_then(|o| o.get("num_threads"))
+            .and_then(|v| v.as_i64())
+            .unwrap_or(2) as i32;
+
+        let debug = opts
+            .and_then(|o| o.get("debug"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        let voice_embedding_cache_capacity = opts
+            .and_then(|o| o.get("voice_embedding_cache_capacity"))
+            .and_then(|v| v.as_i64())
+            .unwrap_or(50) as i32;
+
+        let speed = opts
+            .and_then(|o| o.get("speed"))
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1.0) as f32;
+
+        let opt_path = |key: &str, default_name: &str| -> Option<String> {
+            opts.and_then(|o| o.get(key))
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+                .or_else(|| Some(format!("{path}{default_name}")))
+        };
+
+        let config = OfflineTtsConfig {
+            model: OfflineTtsModelConfig {
+                pocket: OfflineTtsPocketModelConfig {
+                    lm_flow: opt_path("lm_flow", "lm_flow.int8.onnx"),
+                    lm_main: opt_path("lm_main", "lm_main.int8.onnx"),
+                    encoder: opt_path("encoder", "encoder.onnx"),
+                    decoder: opt_path("decoder", "decoder.int8.onnx"),
+                    text_conditioner: opt_path("text_conditioner", "text_conditioner.onnx"),
+                    vocab_json: opt_path("vocab_json", "vocab.json"),
+                    token_scores_json: opt_path("token_scores_json", "token_scores.json"),
+                    voice_embedding_cache_capacity,
+                },
+                num_threads,
+                debug,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let tts = OfflineTts::create(&config)
+            .ok_or_else(|| anyhow::anyhow!("Failed to create OfflineTts"))?;
+
+        let output_sample_rate = audio_config
+            .output_sample_rate
+            .ok_or_else(|| anyhow::anyhow!("AudioConfig.output_sample_rate is required"))?;
+        let output_channel = audio_config
+            .output_channel
+            .ok_or_else(|| anyhow::anyhow!("AudioConfig.output_channel is required"))?;
+        let output_frame_duration = audio_config
+            .output_frame_duration
+            .ok_or_else(|| anyhow::anyhow!("AudioConfig.output_frame_duration is required"))?;
+
+        let (reference_audio, reference_sample_rate) =
+            if let Some(wav_path) = &tts_config.reference_prompt_wav_path {
+                match Wave::read(wav_path) {
+                    Some(wave) => {
+                        let samples = wave.samples().to_vec();
+                        let sr = wave.sample_rate();
+                        (samples, sr)
+                    }
+                    None => {
+                        error!("Failed to load reference audio: {wav_path}");
+                        (Vec::new(), output_sample_rate as i32)
+                    }
+                }
+            } else {
+                (Vec::new(), output_sample_rate as i32)
+            };
+
+        Ok(Self {
+            tts: Arc::new(tts),
+            reference_audio,
+            reference_sample_rate,
+            output_sample_rate,
+            output_channel,
+            output_frame_duration,
+            speed,
+        })
+    }
+}
+
+#[async_trait]
+impl Tts for TtsPocket {
+    async fn stream(
+        &self,
+        text_stream: Pin<
+            Box<dyn Stream<Item = core::result::Result<String, ModelError>> + Send + Sync>,
+        >,
+    ) -> Pin<Box<dyn Stream<Item = core::result::Result<TtsData, TtsError>> + Send + Sync>> {
+        let (tx, rx) = channel::<core::result::Result<TtsData, TtsError>>(10);
+
+        let tts = self.tts.clone();
+        let reference_audio = self.reference_audio.clone();
+        let reference_sample_rate = self.reference_sample_rate;
+        let output_sample_rate = self.output_sample_rate;
+        let output_channel = self.output_channel;
+        let output_frame_duration = self.output_frame_duration;
+        let speed = self.speed;
+
+        tokio::spawn(async move {
+            let mut pinned = text_stream;
+            while let Some(text_result) = pinned.next().await {
+                let text = match text_result {
+                    Ok(t) => t,
+                    Err(e) => {
+                        error!("[PocketTTS] text stream error = {}", e);
+                        let _ = tx.send(Err(TtsError::Text(e.to_string()))).await;
+                        break;
+                    }
+                };
+
+                debug!("[PocketTTS] generating audio for text = {}", text);
+
+                let tts_clone = tts.clone();
+                let text_clone = text.clone();
+                let reference_audio_clone = reference_audio.clone();
+                let result = tokio::task::spawn_blocking(move || {
+                    let mut extra = HashMap::new();
+                    extra.insert(
+                        "max_reference_audio_len".to_string(),
+                        serde_json::json!(10.0),
+                    );
+                    let gen_config = GenerationConfig {
+                        num_steps: 2,
+                        speed,
+                        reference_audio: if !reference_audio_clone.is_empty() {
+                            Some(reference_audio_clone)
+                        } else {
+                            None
+                        },
+                        reference_sample_rate,
+                        extra: Some(extra),
+                        ..Default::default()
+                    };
+                    let audio = tts_clone
+                        .generate_with_config(&text_clone, &gen_config, None::<fn(&[f32], f32) -> bool>);
+                    match audio {
+                        Some(a) => {
+                            let samples = a.samples().to_vec();
+                            let sr = a.sample_rate();
+                            Some((samples, sr))
+                        }
+                        None => None,
+                    }
+                })
+                .await;
+
+                let (pcm_samples, pcm_sample_rate) = match result {
+                    Ok(Some((s, sr))) => (s, sr),
+                    _ => {
+                        error!("[PocketTTS] generation failed for text = {}", text);
+                        continue;
+                    }
+                };
+
+                let encode_sr = output_sample_rate;
+                let (opus_pcm, opus_sr) = if pcm_sample_rate != encode_sr as i32 {
+                    let resampler = sherpa_onnx::LinearResampler::create(
+                        pcm_sample_rate,
+                        encode_sr as i32,
+                    )
+                    .expect("Failed to create resampler");
+                    let resampled = resampler.resample(&pcm_samples, true);
+                    (resampled, encode_sr as i32)
+                } else {
+                    (pcm_samples.clone(), pcm_sample_rate)
+                };
+
+                let mut encoder = match opus_rs::OpusEncoder::new(
+                    encode_sr as i32,
+                    output_channel as usize,
+                    opus_rs::Application::Audio,
+                ) {
+                    Ok(mut e) => {
+                        e.bitrate_bps = 64000;
+                        e
+                    }
+                    Err(e) => {
+                        error!("[PocketTTS] opus encoder creation error = {}", e);
+                        continue;
+                    }
+                };
+
+                let audio_packets = encode_sample_to_tts_packet(
+                    opus_pcm,
+                    &mut encoder,
+                    encode_sr,
+                    output_channel,
+                    output_frame_duration,
+                );
+
+                let data = TtsData {
+                    audio: Some(audio_packets),
+                    text: text.clone(),
+                    raw_pcm: Some((pcm_samples, pcm_sample_rate)),
+                };
+
+                if tx.send(Ok(data)).await.is_err() {
+                    break;
+                }
+            }
+        });
+
+        Box::pin(ReceiverStream::new(rx))
+    }
+}

@@ -1,6 +1,7 @@
 pub mod model;
 
 use self::model::mute::TtsMute;
+use self::model::pocket::TtsPocket;
 use crate::config;
 use crate::common::ModelError;
 use crate::config::audio::AudioConfig;
@@ -24,6 +25,7 @@ pub trait Tts: Send + Sync {
 pub struct TtsData {
     pub audio: Option<Vec<Vec<u8>>>,
     pub text: String,
+    pub raw_pcm: Option<(Vec<f32>, i32)>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -71,10 +73,13 @@ impl TtsFactory {
 
     pub async fn create_model(
         tts_config: &TtsConfig,
-        _audio_config: &AudioConfig,
+        audio_config: &AudioConfig,
     ) -> Result<Box<dyn Tts>, anyhow::Error> {
         match tts_config.model.clone().expect("tts model is empty") {
             config::TtsModel::Mute => Ok(Box::new(TtsMute::new().await?)),
+            config::TtsModel::PocketTts => {
+                Ok(Box::new(TtsPocket::new(tts_config, audio_config).await?))
+            }
         }
     }
 

@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::{sync::Arc, thread};
 
 use api::{
@@ -113,6 +114,93 @@ async fn test_tts_mute() -> anyhow::Result<()> {
     }
     let audio_len = audio.len();
     assert_eq!(0, audio_len);
+    Ok(())
+}
+
+#[tokio::test]
+#[traced_test]
+#[ignore]
+/// cargo test --test tts_test -- test_tts_pocket --ignored --nocapture
+/// 先下载模型和参考音频：
+///   cargo run --bin chobits-server -- downloader install tts pocket_tts default --all
+///   cargo run --bin chobits-server -- downloader install reference audio default --all
+async fn test_tts_pocket() -> anyhow::Result<()> {
+    let ws_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent().unwrap()
+        .parent().unwrap()
+        .parent().unwrap();
+
+    let model_path = ws_root
+        .join("data/tts/model/pocket/default/")
+        .to_string_lossy()
+        .into_owned();
+
+    let ref_wav = ws_root.join("data/tts/model/pocket/default/test_wavs/bria.wav");
+
+    let tts = TtsFactory::create_model(
+        &TtsConfig {
+            model: Some(TtsModel::PocketTts),
+            path: Some(model_path),
+            reference_prompt_wav_path: Some(ref_wav.to_string_lossy().into()),
+            ..Default::default()
+        },
+        &AudioConfig {
+            output_sample_rate: Some(16000),
+            output_channel: Some(1),
+            output_frame_duration: Some(20),
+            ..Default::default()
+        },
+    )
+    .await?;
+
+    let text = "Today as always, men fall into two groups: slaves and free men. Whoever \
+        does not have two-thirds of his day for himself, is a slave, whatever \
+        he may be: a statesman, a businessman, an official, or a scholar. \
+        Friends fell out often because life was changing so fast. The easiest \
+        thing in the world was to lose touch with someone.";
+    let text_stream = tts_stream(String::from(text));
+    let mut tts_stream = tts.stream(Box::pin(text_stream)).await;
+
+    let mut all_packets: Vec<Vec<u8>> = Vec::new();
+    let mut raw_pcm: Option<(Vec<f32>, i32)> = None;
+    while let Some(data) = tts_stream.next().await {
+        match data {
+            Ok(data) => {
+                info!("text: {}", data.text);
+                if let Some(packets) = data.audio {
+                    all_packets.extend(packets);
+                }
+                if raw_pcm.is_none() {
+                    raw_pcm = data.raw_pcm;
+                }
+            }
+            Err(e) => panic!("{:?}", e),
+        }
+    }
+
+    assert!(!all_packets.is_empty(), "Expected audio packets from PocketTTS");
+
+    // Save raw PCM (skip Opus)
+    if let Some((samples, sr)) = &raw_pcm {
+        std::fs::create_dir_all("./test_data")?;
+        let _ = wavers::write("./test_data/test_tts_pocket_raw.wav", samples, *sr, 1);
+        info!("raw PCM: {} samples at {}Hz", samples.len(), sr);
+    }
+
+    let decode_fs = 320; // 16000Hz * 1ch * 20ms / 1000
+    let mut decoder = opus_rs::OpusDecoder::new(16000, 1).unwrap();
+    let mut decoded = Vec::new();
+    for packet in &all_packets {
+        let mut samples = vec![0f32; decode_fs];
+        if let Ok(len) = decoder.decode(packet, decode_fs, &mut samples) {
+            decoded.extend_from_slice(&samples[..len]);
+        }
+    }
+    assert!(decoded.len() > 1000, "Decoded audio too short");
+    info!("decoded {} PCM samples", decoded.len());
+
+    std::fs::create_dir_all("./test_data")?;
+    let _ = wavers::write("./test_data/test_tts_pocket.wav", &decoded, 16000, 1);
     Ok(())
 }
 
