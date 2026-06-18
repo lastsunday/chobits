@@ -1,0 +1,27 @@
+{
+  "config": {
+    "category": "tts",
+    "model": "vits"
+  },
+  "default_variant": "melo-tts-zh_en",
+  "variants": {
+    "melo-tts-zh_en": {
+      "archives": [
+        {
+          "path": "tts/model/vits/melo-tts-zh_en/",
+          "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-melo-tts-zh_en.tar.bz2",
+          "sha256": null,
+          "extract": [
+            "model.onnx",
+            "tokens.txt",
+            "lexicon.txt",
+            "date.fst",
+            "number.fst",
+            "phone.fst"
+          ]
+        }
+      ],
+      "files": []
+    }
+  }
+}

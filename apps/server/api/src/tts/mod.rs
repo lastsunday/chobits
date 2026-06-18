@@ -2,6 +2,7 @@ pub mod model;
 
 use self::model::mute::TtsMute;
 use self::model::pocket::TtsPocket;
+use self::model::vits::TtsVits;
 use crate::common::ModelError;
 use crate::config;
 use crate::config::audio::AudioConfig;
@@ -79,6 +80,9 @@ impl TtsFactory {
             config::TtsModel::Mute => Ok(Box::new(TtsMute::new().await?)),
             config::TtsModel::PocketTts => {
                 Ok(Box::new(TtsPocket::new(tts_config, audio_config).await?))
+            }
+            config::TtsModel::Vits => {
+                Ok(Box::new(TtsVits::new(tts_config, audio_config).await?))
             }
         }
     }

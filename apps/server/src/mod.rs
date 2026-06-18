@@ -143,6 +143,7 @@ async fn async_main(server: &Arc<Server>) -> Result<(), anyhow::Error> {
         schema: config.ws_schema.to_owned(),
     });
     let tts_config = {
+        let data_dir = config.data_dir();
         let ref_variant = config
             .tts_reference_variant
             .as_deref()
@@ -150,7 +151,7 @@ async fn async_main(server: &Arc<Server>) -> Result<(), anyhow::Error> {
         let (ref_path, ref_text) = crate::downloader::resolve_reference_audio(ref_variant)
             .unwrap_or_else(|| {
                 (
-                    format!("data/tts/reference/{ref_variant}.wav"),
+                    format!("{data_dir}/tts/reference/{ref_variant}.wav"),
                     String::new(),
                 )
             });

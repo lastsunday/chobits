@@ -65,6 +65,14 @@ tasks:
       persistent: true
       cache: false
 
+  dev-lite:
+    command: 'cargo run --package chobits-server -- -O "data_dir=''../../data''" -O "vad_model=''void''" -O "asr_model=''void''" -O "tts_model=''vits''" -O "llm_model=''echo''"'
+    deps:
+      - ~:build
+    options:
+      persistent: true
+      cache: false
+
   downloader:
     command: "cargo run --package chobits-server -- downloader"
     deps:

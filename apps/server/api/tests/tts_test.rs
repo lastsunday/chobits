@@ -212,6 +212,92 @@ async fn test_tts_pocket() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+#[traced_test]
+#[ignore]
+/// cargo test --test tts_test -- test_tts_vits --ignored --nocapture
+/// 先下载模型：
+///   cargo run --bin chobits-server -- downloader install tts vits melo-tts-zh_en --all
+async fn test_tts_vits() -> anyhow::Result<()> {
+    let ws_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap();
+
+    let model_path = ws_root
+        .join("data/tts/model/vits/melo-tts-zh_en/")
+        .to_string_lossy()
+        .into_owned();
+
+    let tts = TtsFactory::create_model(
+        &TtsConfig {
+            model: Some(TtsModel::Vits),
+            path: Some(model_path),
+            ..Default::default()
+        },
+        &AudioConfig {
+            output_sample_rate: Some(16000),
+            output_channel: Some(1),
+            output_frame_duration: Some(20),
+            ..Default::default()
+        },
+    )
+    .await?;
+
+    let text = "对于有媒体报道称，“特朗普说，如果中国不在霍尔木兹海峡护航问题上提供协助，他将推迟访华”，林剑说，中方注意到美方已就媒体不实报道公开作出澄清，表示有关报道是完全错误的，强调访问与霍尔木兹海峡通航问题无关。
+,This is a 中英文的 text to speech 测试例子。";
+    let text_stream = tts_stream(String::from(text));
+    let mut tts_stream = tts.stream(Box::pin(text_stream)).await;
+
+    let mut all_packets: Vec<Vec<u8>> = Vec::new();
+    let mut raw_pcm: Option<(Vec<f32>, i32)> = None;
+    while let Some(data) = tts_stream.next().await {
+        match data {
+            Ok(data) => {
+                info!("text: {}", data.text);
+                if let Some(packets) = data.audio {
+                    all_packets.extend(packets);
+                }
+                if raw_pcm.is_none() {
+                    raw_pcm = data.raw_pcm;
+                }
+            }
+            Err(e) => panic!("{:?}", e),
+        }
+    }
+
+    assert!(
+        !all_packets.is_empty(),
+        "Expected audio packets from VitsTTS"
+    );
+
+    // Save raw PCM (skip Opus)
+    if let Some((samples, sr)) = &raw_pcm {
+        std::fs::create_dir_all("./test_data")?;
+        let _ = wavers::write("./test_data/test_tts_vits_raw.wav", samples, *sr, 1);
+        info!("raw PCM: {} samples at {}Hz", samples.len(), sr);
+    }
+
+    let decode_fs = 320; // 16000Hz * 1ch * 20ms / 1000
+    let mut decoder = opus_rs::OpusDecoder::new(16000, 1).unwrap();
+    let mut decoded = Vec::new();
+    for packet in &all_packets {
+        let mut samples = vec![0f32; decode_fs];
+        if let Ok(len) = decoder.decode(packet, decode_fs, &mut samples) {
+            decoded.extend_from_slice(&samples[..len]);
+        }
+    }
+    assert!(decoded.len() > 1000, "Decoded audio too short");
+    info!("decoded {} PCM samples", decoded.len());
+
+    std::fs::create_dir_all("./test_data")?;
+    let _ = wavers::write("./test_data/test_tts_vits.wav", &decoded, 16000, 1);
+    Ok(())
+}
+
 fn tts_stream(
     text: String,
 ) -> impl Stream<Item = core::result::Result<String, ModelError>> + Unpin + Send + 'static {

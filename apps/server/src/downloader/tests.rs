@@ -137,8 +137,9 @@ fn make_cfg(v: serde_json::Value) -> api::config::Config {
 #[test]
 fn test_config_to_targets_defaults() {
     let t = config_to_targets(&make_cfg(serde_json::json!({})));
-    // defaults: tts=Mute, asr=Qwen3, llm=Qwen3, vad=Earshot
-    assert_eq!(t.len(), 2);
+    // defaults: tts=Vits, asr=Qwen3, llm=Qwen3, vad=Earshot
+    assert_eq!(t.len(), 3);
+    assert!(t.contains(&("tts".into(), "vits".into(), None)));
     assert!(t.contains(&("asr".into(), "qwen3".into(), None)));
     assert!(t.contains(&("llm".into(), "qwen3".into(), None)));
 }

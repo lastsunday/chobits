@@ -60,6 +60,12 @@ pub struct Config {
     #[serde(default = "default_server_name")]
     pub server_name: String,
 
+    /// Base data directory for model files. All model paths are relative to this.
+    ///
+    /// default: data
+    #[serde(default = "default_data_dir")]
+    pub data_dir: Option<String>,
+
     /// The default address (IPv4 or IPv6) continuwuity will listen on.
     ///
     /// If you are using Docker or a container NAT networking setup, this must
@@ -338,6 +344,10 @@ fn default_server_name() -> String {
     String::from("localhost")
 }
 
+fn default_data_dir() -> Option<String> {
+    Some("data".into())
+}
+
 fn default_address() -> ListeningAddr {
     ListeningAddr {
         addrs: Right(vec![Ipv4Addr::LOCALHOST.into(), Ipv6Addr::LOCALHOST.into()]),
@@ -385,7 +395,7 @@ fn default_auth_client_secret() -> Option<String> {
 }
 
 fn default_tts_model() -> Option<TtsModel> {
-    Some(TtsModel::Mute)
+    Some(TtsModel::Vits)
 }
 
 fn default_tts_path() -> Option<String> {
@@ -609,14 +619,28 @@ impl Config {
         check(self)
     }
 
+    pub fn data_dir(&self) -> &str {
+        self.data_dir
+            .as_deref()
+            .unwrap_or("data")
+    }
+
     pub fn derive_tts_path(&self) -> Option<String> {
         if self.tts_path.is_some() {
             return self.tts_path.clone();
         }
+        let d = self.data_dir();
         match self.tts_model.clone().unwrap_or_default() {
             TtsModel::PocketTts => {
                 let variant = self.tts_variant.clone().unwrap_or_else(|| "default".into());
-                Some(format!("data/tts/model/pocket/{variant}/"))
+                Some(format!("{d}/tts/model/pocket/{variant}/"))
+            }
+            TtsModel::Vits => {
+                let variant = self
+                    .tts_variant
+                    .clone()
+                    .unwrap_or_else(|| "melo-tts-zh_en".into());
+                Some(format!("{d}/tts/model/vits/{variant}/"))
             }
             TtsModel::Mute => None,
         }
@@ -626,10 +650,11 @@ impl Config {
         if self.asr_path.is_some() {
             return self.asr_path.clone();
         }
+        let d = self.data_dir();
         match self.asr_model.clone().unwrap_or_default() {
             AsrModel::Qwen3 => {
                 let variant = self.asr_variant.clone().unwrap_or_else(|| "default".into());
-                Some(format!("data/asr/model/qwen3/{variant}/"))
+                Some(format!("{d}/asr/model/qwen3/{variant}/"))
             }
             AsrModel::Void => None,
         }
@@ -648,8 +673,9 @@ impl Config {
         if variant.is_empty() {
             return None;
         }
+        let d = self.data_dir();
         match self.llm_model.clone().unwrap_or_default() {
-            LlmModel::Qwen3 => Some(format!("data/llm/model/qwen3/{variant}/")),
+            LlmModel::Qwen3 => Some(format!("{d}/llm/model/qwen3/{variant}/")),
             _ => None,
         }
     }
@@ -667,8 +693,9 @@ impl Config {
         if variant.is_empty() {
             return None;
         }
+        let d = self.data_dir();
         match self.vad_model.clone().unwrap_or_default() {
-            VadModel::Silero => Some(format!("data/vad/model/silero/{variant}/")),
+            VadModel::Silero => Some(format!("{d}/vad/model/silero/{variant}/")),
             _ => None,
         }
     }
@@ -708,9 +735,10 @@ pub enum AsrModel {
 #[derive(Clone, Debug, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum TtsModel {
-    #[default]
     Mute,
     PocketTts,
+    #[default]
+    Vits,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Default)]

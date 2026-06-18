@@ -1085,6 +1085,13 @@ fn config_to_targets(config: &AppConfig) -> Vec<(String, String, Option<String>)
                 config.tts_variant.clone(),
             ));
         }
+        TtsModel::Vits => {
+            targets.push((
+                "tts".into(),
+                "vits".into(),
+                config.tts_variant.clone(),
+            ));
+        }
         TtsModel::Mute => {}
     }
 
