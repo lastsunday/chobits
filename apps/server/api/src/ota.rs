@@ -9,8 +9,8 @@ use framework::{data::valid::ValidJson, err, error::AppResult, id::gen_id};
 use std::net::SocketAddr;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
-use crate::ota_data::*;
 use crate::AppState;
+use crate::ota_data::*;
 
 use chrono::Local;
 use jiff::tz::TimeZone;

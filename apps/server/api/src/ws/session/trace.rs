@@ -78,7 +78,11 @@ impl TraceLog {
     }
 
     pub fn push_input(&self, detail: &str) {
-        self.push(Direction::Inbound, TraceKind::InboundFrame, detail.to_string());
+        self.push(
+            Direction::Inbound,
+            TraceKind::InboundFrame,
+            detail.to_string(),
+        );
     }
 
     pub fn entries(&self) -> Vec<TraceEntry> {

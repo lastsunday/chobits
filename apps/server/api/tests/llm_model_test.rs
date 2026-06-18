@@ -42,6 +42,7 @@ fn create_llm_config() -> LlmConfig {
     LlmConfig {
         model: Some(LlmModel::Qwen3),
         path: Some(String::from("data/llm/model/unsloth/Qwen3-1.7B-GGUF/")),
+        variant: None,
     }
 }
 

@@ -2,6 +2,7 @@ pub mod asr;
 pub mod auth;
 pub mod common;
 pub mod config;
+pub mod error;
 pub mod index;
 pub mod llm;
 pub mod matrix;
@@ -10,7 +11,6 @@ pub mod ota;
 pub mod ota_data;
 pub mod server;
 pub mod tts;
-pub mod error;
 pub mod util;
 pub mod vad;
 pub mod ws;
@@ -28,7 +28,9 @@ use axum::routing::get;
 use bytesize::ByteSize;
 use either::Either;
 use framework::config::auth::AuthConfig;
-use framework::error::{AppError, AppResult, critical_code::CriticalErrorCode, framework_code::FrameworkErrorCode};
+use framework::error::{
+    AppError, AppResult, critical_code::CriticalErrorCode, framework_code::FrameworkErrorCode,
+};
 use framework::trace::LatencyOnResponse;
 use futures::future::join_all;
 use migration::MigratorTrait;
@@ -67,8 +69,6 @@ use crate::config::ws::WsConfig;
 use crate::llm::LlmFactory;
 use crate::tts::TtsFactory;
 use crate::vad::VadFactory;
-
-
 
 #[allow(clippy::too_many_arguments)]
 pub async fn start(

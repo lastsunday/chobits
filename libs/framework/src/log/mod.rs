@@ -18,6 +18,6 @@ pub use tracing_core::{Event, Metadata};
 pub use tracing_subscriber::EnvFilter;
 
 pub struct Log {
-	pub reload: LogLevelReloadHandles,
-	pub capture: Arc<capture::State>,
+    pub reload: LogLevelReloadHandles,
+    pub capture: Arc<capture::State>,
 }

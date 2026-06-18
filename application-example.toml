@@ -107,11 +107,15 @@
 
 # This item is undocumented. Please contribute documentation for it.
 #
-#tts_reference_prompt_text = 一定被灰太狼给吃了，我已经为他准备好了花圈了
+#tts_reference_variant = xiyangyang
 
-# This item is undocumented. Please contribute documentation for it.
+# override the auto-derived prompt text from manifest
 #
-#tts_reference_prompt_wav_path = data/tts/reference/voice_05.wav
+#tts_reference_prompt_text = false
+
+# override the auto-derived prompt wav path from manifest
+#
+#tts_reference_prompt_wav_path = false
 
 # pocket-tts 等模型的特有配置
 #

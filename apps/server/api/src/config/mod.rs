@@ -148,12 +148,16 @@ pub struct Config {
     #[serde(default)]
     pub tts_variant: Option<String>,
 
-    /// default: 一定被灰太狼给吃了，我已经为他准备好了花圈了
-    #[serde(default = "default_tts_reference_prompt_text")]
+    /// default: xiyangyang
+    #[serde(default = "default_tts_reference_variant")]
+    pub tts_reference_variant: Option<String>,
+
+    /// override the auto-derived prompt text from manifest
+    #[serde(default)]
     pub tts_reference_prompt_text: Option<String>,
 
-    /// default: data/tts/reference/voice_05.wav
-    #[serde(default = "default_tts_reference_prompt_wav_path")]
+    /// override the auto-derived prompt wav path from manifest
+    #[serde(default)]
     pub tts_reference_prompt_wav_path: Option<String>,
 
     /// pocket-tts 等模型的特有配置
@@ -388,12 +392,8 @@ fn default_tts_path() -> Option<String> {
     None
 }
 
-fn default_tts_reference_prompt_text() -> Option<String> {
-    Some(String::from("一定被灰太狼给吃了，我已经为他准备好了花圈了"))
-}
-
-fn default_tts_reference_prompt_wav_path() -> Option<String> {
-    Some(String::from("data/tts/reference/voice_05.wav"))
+fn default_tts_reference_variant() -> Option<String> {
+    Some(String::from("xiyangyang"))
 }
 
 fn default_asr_model() -> Option<AsrModel> {

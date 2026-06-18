@@ -1387,6 +1387,7 @@ async fn create_session()
             Arc::new(Mutex::new(AsrFactory::create_model(&AsrConfig {
                 model: Some(AsrModel::Qwen3),
                 path: Some(String::from("data/asr/model/Qwen/Qwen3-ASR-0.6B/")),
+                variant: None,
             }))),
             audio_config.clone(),
         )))
@@ -1395,6 +1396,7 @@ async fn create_session()
            Arc::new( LlmFactory::create_model(&LlmConfig {
                 model: Some(LlmModel::Qwen3),
                 path: Some(String::from("data/llm/model/unsloth/Qwen3-1.7B-GGUF/")),
+                variant: None,
             }))
         )
             .with_tts(Arc::new(TtsFactory::create_model(&TtsConfig {
@@ -1487,12 +1489,9 @@ fn get_audio() -> Vec<Vec<u8>> {
     // write(fp, &pcm_data, sr, 1);
 
     const ENCODE_SAMPLE_RATE: u32 = 16000;
-    let mut encoder = opus_rs::OpusEncoder::new(
-        ENCODE_SAMPLE_RATE as i32,
-        1,
-        opus_rs::Application::Audio,
-    )
-    .unwrap();
+    let mut encoder =
+        opus_rs::OpusEncoder::new(ENCODE_SAMPLE_RATE as i32, 1, opus_rs::Application::Audio)
+            .unwrap();
 
     // 16000Hz * 1 channel * 20 ms / 1000 = 320
     const MONO_20MS: usize = ENCODE_SAMPLE_RATE as usize * 20 / 1000;
@@ -1510,7 +1509,9 @@ fn get_audio() -> Vec<Vec<u8>> {
         let start = n * size;
         let end = cmp::min((n + 1) * size, len);
         let mut packet = vec![0u8; 4000];
-        let encoded_len = encoder.encode(&pcm_data[start..end], size, &mut packet).unwrap();
+        let encoded_len = encoder
+            .encode(&pcm_data[start..end], size, &mut packet)
+            .unwrap();
         packet.truncate(encoded_len);
         audio.push(packet);
     }

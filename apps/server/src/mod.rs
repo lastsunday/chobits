@@ -61,8 +61,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
             Ok(())
         }
         Some(Commands::Downloader {
-            action:
-                DownloaderAction::UpdateChecksums { data_dir, quiet },
+            action: DownloaderAction::UpdateChecksums { data_dir, quiet },
         }) => downloader::update_checksums(data_dir, *quiet),
         None => run_with_args(&cli.serve),
     }
@@ -143,17 +142,35 @@ async fn async_main(server: &Arc<Server>) -> Result<(), anyhow::Error> {
     let ws_config = Arc::new(WsConfig {
         schema: config.ws_schema.to_owned(),
     });
-    let tts_config = Arc::new(TtsConfig {
-        model: config.tts_model.to_owned(),
-        variant: config.tts_variant.to_owned(),
-        path: config
-            .tts_path
-            .to_owned()
-            .or_else(|| config.derive_tts_path()),
-        reference_prompt_text: config.tts_reference_prompt_text.to_owned(),
-        reference_prompt_wav_path: config.tts_reference_prompt_wav_path.to_owned(),
-        options: config.tts_options.clone(),
-    });
+    let tts_config = {
+        let ref_variant = config
+            .tts_reference_variant
+            .as_deref()
+            .unwrap_or("xiyangyang");
+        let (ref_path, ref_text) = crate::downloader::resolve_reference_audio(ref_variant)
+            .unwrap_or_else(|| {
+                (
+                    format!("data/tts/reference/{ref_variant}.wav"),
+                    String::new(),
+                )
+            });
+        Arc::new(TtsConfig {
+            model: config.tts_model.to_owned(),
+            variant: config.tts_variant.to_owned(),
+            path: config
+                .tts_path
+                .to_owned()
+                .or_else(|| config.derive_tts_path()),
+            reference_prompt_text: config.tts_reference_prompt_text.to_owned().or(
+                if ref_text.is_empty() { None } else { Some(ref_text) }
+            ),
+            reference_prompt_wav_path: config
+                .tts_reference_prompt_wav_path
+                .to_owned()
+                .or(Some(ref_path)),
+            options: config.tts_options.clone(),
+        })
+    };
     let asr_config = Arc::new(AsrConfig {
         model: config.asr_model.to_owned(),
         variant: config.asr_variant.to_owned(),

@@ -32,6 +32,7 @@ fn create_model() -> Box<dyn Model> {
     LlmFactory::create_model(&LlmConfig {
         model: Some(LlmModel::Qwen3),
         path: Some(String::from("data/llm/model/unsloth/Qwen3-1.7B-GGUF/")),
+        variant: None,
     })
 }
 
@@ -43,6 +44,7 @@ async fn test_chat_echo() {
         .with_model(Arc::new(LlmFactory::create_model(&LlmConfig {
             model: Some(LlmModel::Echo),
             path: None,
+            variant: None,
         })))
         .build()
         .with_history(Arc::new(Mutex::new(History {

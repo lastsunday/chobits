@@ -33,6 +33,7 @@ async fn test_asr() {
     AsrFactory::init(Arc::new(AsrConfig {
         model: Some(AsrModel::Qwen3),
         path: Some(String::from("data/asr/model/Qwen/Qwen3-ASR-0.6B/")),
+        variant: None,
     }))
     .await;
     let asr = AsrFactory::global().default();

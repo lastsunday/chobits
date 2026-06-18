@@ -2,8 +2,8 @@ pub mod model;
 
 use self::model::mute::TtsMute;
 use self::model::pocket::TtsPocket;
-use crate::config;
 use crate::common::ModelError;
+use crate::config;
 use crate::config::audio::AudioConfig;
 use crate::config::tts::TtsConfig;
 use async_trait::async_trait;
@@ -113,7 +113,9 @@ pub fn encode_sample_to_tts_packet(
         let start = (n - 1) * size;
         let end = cmp::min(n * size, len);
         let mut output = vec![0u8; 4000];
-        let out_len = encoder.encode(&sample[start..end], size, &mut output).unwrap();
+        let out_len = encoder
+            .encode(&sample[start..end], size, &mut output)
+            .unwrap();
         output.truncate(out_len);
         audio.push(output);
     }

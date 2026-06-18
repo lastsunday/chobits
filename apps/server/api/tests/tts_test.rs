@@ -70,7 +70,8 @@ async fn test_tts_default() -> anyhow::Result<()> {
 
     // the follow code is output wav file to test
     info!("decode_data len = {}", decode_data.len());
-    let fp = "./test_tts_default.wav";
+    std::fs::create_dir_all("./test_data")?;
+    let fp = "./test_data/test_tts_default.wav";
     let sr: i32 = 16000;
     let _ = write(fp, &decode_data, sr, 1);
     Ok(())
@@ -123,19 +124,23 @@ async fn test_tts_mute() -> anyhow::Result<()> {
 /// cargo test --test tts_test -- test_tts_pocket --ignored --nocapture
 /// 先下载模型和参考音频：
 ///   cargo run --bin chobits-server -- downloader install tts pocket_tts default --all
-///   cargo run --bin chobits-server -- downloader install reference audio default --all
+///   cargo run --bin chobits-server -- downloader install reference audio xiyangyang --all
+///   cargo run --bin chobits-server -- downloader install reference audio bria --all
 async fn test_tts_pocket() -> anyhow::Result<()> {
     let ws_root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent().unwrap()
-        .parent().unwrap()
-        .parent().unwrap();
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap();
 
     let model_path = ws_root
         .join("data/tts/model/pocket/default/")
         .to_string_lossy()
         .into_owned();
 
-    let ref_wav = ws_root.join("data/tts/model/pocket/default/test_wavs/bria.wav");
+    let ref_wav = ws_root.join("data/tts/reference/test_wavs/bria.wav");
 
     let tts = TtsFactory::create_model(
         &TtsConfig {
@@ -178,7 +183,10 @@ async fn test_tts_pocket() -> anyhow::Result<()> {
         }
     }
 
-    assert!(!all_packets.is_empty(), "Expected audio packets from PocketTTS");
+    assert!(
+        !all_packets.is_empty(),
+        "Expected audio packets from PocketTTS"
+    );
 
     // Save raw PCM (skip Opus)
     if let Some((samples, sr)) = &raw_pcm {

@@ -5,7 +5,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use futures::Stream;
 use sherpa_onnx::{
-    GenerationConfig, LinearResampler, OfflineTts, OfflineTtsConfig, OfflineTtsModelConfig,
+    GenerationConfig, OfflineTts, OfflineTtsConfig, OfflineTtsModelConfig,
     OfflineTtsPocketModelConfig, Wave,
 };
 use tokio::sync::mpsc::channel;
@@ -16,12 +16,13 @@ use tracing::{debug, error};
 use crate::common::ModelError;
 use crate::config::audio::AudioConfig;
 use crate::config::tts::TtsConfig;
-use crate::tts::{encode_sample_to_tts_packet, Tts, TtsData, TtsError};
+use crate::tts::{Tts, TtsData, TtsError, encode_sample_to_tts_packet};
 
 pub struct TtsPocket {
     tts: Arc<OfflineTts>,
     reference_audio: Vec<f32>,
     reference_sample_rate: i32,
+    reference_prompt_text: Option<String>,
     output_sample_rate: u32,
     output_channel: u32,
     output_frame_duration: u64,
@@ -33,7 +34,10 @@ impl TtsPocket {
         tts_config: &TtsConfig,
         audio_config: &AudioConfig,
     ) -> Result<Self, anyhow::Error> {
-        let path = tts_config.path.as_deref().unwrap_or("data/tts/model/pocket/default/");
+        let path = tts_config
+            .path
+            .as_deref()
+            .unwrap_or("data/tts/model/pocket/default/");
         if !path.ends_with('/') {
             return Err(anyhow::anyhow!("tts path must end with '/'"));
         }
@@ -99,6 +103,8 @@ impl TtsPocket {
             .output_frame_duration
             .ok_or_else(|| anyhow::anyhow!("AudioConfig.output_frame_duration is required"))?;
 
+        let reference_prompt_text = tts_config.reference_prompt_text.clone();
+
         let (reference_audio, reference_sample_rate) =
             if let Some(wav_path) = &tts_config.reference_prompt_wav_path {
                 match Wave::read(wav_path) {
@@ -120,6 +126,7 @@ impl TtsPocket {
             tts: Arc::new(tts),
             reference_audio,
             reference_sample_rate,
+            reference_prompt_text,
             output_sample_rate,
             output_channel,
             output_frame_duration,
@@ -141,6 +148,7 @@ impl Tts for TtsPocket {
         let tts = self.tts.clone();
         let reference_audio = self.reference_audio.clone();
         let reference_sample_rate = self.reference_sample_rate;
+        let reference_prompt_text = self.reference_prompt_text.clone();
         let output_sample_rate = self.output_sample_rate;
         let output_channel = self.output_channel;
         let output_frame_duration = self.output_frame_duration;
@@ -163,6 +171,7 @@ impl Tts for TtsPocket {
                 let tts_clone = tts.clone();
                 let text_clone = text.clone();
                 let reference_audio_clone = reference_audio.clone();
+                let reference_prompt_text_clone = reference_prompt_text.clone();
                 let result = tokio::task::spawn_blocking(move || {
                     let mut extra = HashMap::new();
                     extra.insert(
@@ -178,11 +187,15 @@ impl Tts for TtsPocket {
                             None
                         },
                         reference_sample_rate,
+                        reference_text: reference_prompt_text_clone,
                         extra: Some(extra),
                         ..Default::default()
                     };
-                    let audio = tts_clone
-                        .generate_with_config(&text_clone, &gen_config, None::<fn(&[f32], f32) -> bool>);
+                    let audio = tts_clone.generate_with_config(
+                        &text_clone,
+                        &gen_config,
+                        None::<fn(&[f32], f32) -> bool>,
+                    );
                     match audio {
                         Some(a) => {
                             let samples = a.samples().to_vec();
@@ -203,12 +216,10 @@ impl Tts for TtsPocket {
                 };
 
                 let encode_sr = output_sample_rate;
-                let (opus_pcm, opus_sr) = if pcm_sample_rate != encode_sr as i32 {
-                    let resampler = sherpa_onnx::LinearResampler::create(
-                        pcm_sample_rate,
-                        encode_sr as i32,
-                    )
-                    .expect("Failed to create resampler");
+                let (opus_pcm, _opus_sr) = if pcm_sample_rate != encode_sr as i32 {
+                    let resampler =
+                        sherpa_onnx::LinearResampler::create(pcm_sample_rate, encode_sr as i32)
+                            .expect("Failed to create resampler");
                     let resampled = resampler.resample(&pcm_samples, true);
                     (resampled, encode_sr as i32)
                 } else {

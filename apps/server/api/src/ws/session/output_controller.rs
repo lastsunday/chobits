@@ -13,7 +13,9 @@ const PRE_BUFFER_FRAME_COUNT: u64 = 6;
 
 fn trace_info_from_result(item: &Result<FrameResult, AppError>) -> (TraceKind, String) {
     match item {
-        Ok(FrameResult::AudioResult(msg)) => (TraceKind::Audio, format!("{} bytes", msg.data.len())),
+        Ok(FrameResult::AudioResult(msg)) => {
+            (TraceKind::Audio, format!("{} bytes", msg.data.len()))
+        }
         Ok(FrameResult::TTSResult(msg)) => {
             let detail = msg
                 .text
@@ -68,7 +70,7 @@ pub struct OutputController {
 
 impl OutputController {
     pub fn new(
-    input_rx: Receiver<Result<FrameResult, AppError>>,
+        input_rx: Receiver<Result<FrameResult, AppError>>,
         output_tx: TracedSender,
         frame_duration: u64,
         latest_activity_time: Arc<Mutex<Option<i64>>>,

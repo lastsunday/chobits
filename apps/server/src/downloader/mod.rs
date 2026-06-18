@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -41,9 +42,13 @@ struct ModelEntry {
 
 #[derive(Deserialize)]
 struct Variant {
+    #[serde(default)]
     files: Vec<FileEntry>,
     #[serde(default)]
     archives: Vec<ArchiveEntry>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    prompt_text: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -175,7 +180,11 @@ pub async fn run(
             let entry: ModelEntry = serde_json::from_slice(file_entry.contents())?;
 
             let variants: HashMap<&str, &Variant> = if all {
-                entry.variants.iter().map(|(k, v)| (k.as_str(), v)).collect()
+                entry
+                    .variants
+                    .iter()
+                    .map(|(k, v)| (k.as_str(), v))
+                    .collect()
             } else {
                 let effective_variant = variant.or_else(|| {
                     targets
@@ -273,7 +282,11 @@ pub async fn run(
 
                     let archive_dest = dest_dir.with_file_name(format!(
                         "{}.tar.bz2",
-                        dest_dir.file_name().unwrap_or_default().to_str().unwrap_or("model")
+                        dest_dir
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_str()
+                            .unwrap_or("model")
                     ));
 
                     let result = download_file(
@@ -1066,16 +1079,17 @@ fn config_to_targets(config: &AppConfig) -> Vec<(String, String, Option<String>)
 
     match config.tts_model.clone().unwrap_or_default() {
         TtsModel::PocketTts => {
-            targets.push(("tts".into(), "pocket_tts".into(), config.tts_variant.clone()));
+            targets.push((
+                "tts".into(),
+                "pocket_tts".into(),
+                config.tts_variant.clone(),
+            ));
         }
         TtsModel::Mute => {}
     }
 
-    match config.asr_model.clone().unwrap_or_default() {
-        AsrModel::Qwen3 => {
-            targets.push(("asr".into(), "qwen3".into(), config.asr_variant.clone()));
-        }
-        _ => {}
+    if config.asr_model.clone().unwrap_or_default() == AsrModel::Qwen3 {
+        targets.push(("asr".into(), "qwen3".into(), config.asr_variant.clone()));
     }
 
     match config.llm_model.clone().unwrap_or_default() {
@@ -1095,14 +1109,17 @@ fn config_to_targets(config: &AppConfig) -> Vec<(String, String, Option<String>)
     targets
 }
 
-pub fn update_checksums(
-    data_dir: &Path,
-    quiet: bool,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub fn update_checksums(data_dir: &Path, quiet: bool) -> Result<(), Box<dyn std::error::Error>> {
     let report_sha: HashMap<String, String> = std::fs::read(data_dir.join("download-report.json"))
         .ok()
         .and_then(|bytes| serde_json::from_slice::<Report>(&bytes).ok())
-        .map(|r| r.files.into_iter().filter(|f| f.status == "ok").map(|f| (f.path, f.sha256)).collect())
+        .map(|r| {
+            r.files
+                .into_iter()
+                .filter(|f| f.status == "ok")
+                .map(|f| (f.path, f.sha256))
+                .collect()
+        })
         .unwrap_or_default();
 
     let mut sha_updates: Vec<(PathBuf, String, String)> = Vec::new();
@@ -1140,8 +1157,7 @@ pub fn update_checksums(
                     if !quiet {
                         eprintln!("  {:<60} {}", dest.display(), sha);
                     }
-                    sha_updates
-                        .push((manifest_rel.clone(), file.path.clone(), sha));
+                    sha_updates.push((manifest_rel.clone(), file.path.clone(), sha));
                 }
             }
         }
@@ -1160,6 +1176,29 @@ pub fn update_checksums(
     }
 
     Ok(())
+}
+
+/// Look up reference audio path and prompt text from the embedded manifest.
+pub fn resolve_reference_audio(variant: &str) -> Option<(String, String)> {
+    let cat_dir = MANIFESTS.get_dir("reference")?;
+    let file_entry = cat_dir
+        .files()
+        .find(|f| f.path().file_stem() == Some(OsStr::new("audio")))?;
+    let entry: serde_json::Value = serde_json::from_slice(file_entry.contents()).ok()?;
+    let variant_obj = entry["variants"].get(variant)?;
+    let path = variant_obj["files"][0]["path"]
+        .as_str()
+        .map(String::from)
+        .or_else(|| {
+            let ap = variant_obj["archives"][0]["path"].as_str()?;
+            let ex = variant_obj["archives"][0]["extract"][0].as_str()?;
+            Some(format!("{ap}{ex}"))
+        })?;
+    let prompt_text = variant_obj["prompt_text"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
+    Some((path, prompt_text))
 }
 
 #[cfg(test)]

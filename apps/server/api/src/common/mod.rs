@@ -107,14 +107,30 @@ impl From<ModelError> for AppError {
             ModelError::Chat(_) => err!(ModelErrorCode::Chat).with_extra(value.to_string()),
             ModelError::Tts(_) => err!(ModelErrorCode::Tts).with_extra(value.to_string()),
             ModelError::Asr(_) => err!(ModelErrorCode::Asr).with_extra(value.to_string()),
-            ModelError::ModelFileNotFound(_) => err!(CriticalErrorCode::InternalError).with_extra(value.to_string()),
-            ModelError::TokenFileNotFound(_) => err!(CriticalErrorCode::InternalError).with_extra(value.to_string()),
-            ModelError::ModelInitFailure(_) => err!(CriticalErrorCode::InternalError).with_extra(value.to_string()),
-            ModelError::TokenInitFailure(_) => err!(CriticalErrorCode::InternalError).with_extra(value.to_string()),
-            ModelError::TokenConvertFailure(_) => err!(CriticalErrorCode::InternalError).with_extra(value.to_string()),
-            ModelError::ModelCompletionError(_) => err!(CriticalErrorCode::InternalError).with_extra(value.to_string()),
-            ModelError::Tensor(_) => err!(CriticalErrorCode::InternalError).with_extra(value.to_string()),
-            ModelError::Decoder(_) => err!(CriticalErrorCode::InternalError).with_extra(value.to_string()),
+            ModelError::ModelFileNotFound(_) => {
+                err!(CriticalErrorCode::InternalError).with_extra(value.to_string())
+            }
+            ModelError::TokenFileNotFound(_) => {
+                err!(CriticalErrorCode::InternalError).with_extra(value.to_string())
+            }
+            ModelError::ModelInitFailure(_) => {
+                err!(CriticalErrorCode::InternalError).with_extra(value.to_string())
+            }
+            ModelError::TokenInitFailure(_) => {
+                err!(CriticalErrorCode::InternalError).with_extra(value.to_string())
+            }
+            ModelError::TokenConvertFailure(_) => {
+                err!(CriticalErrorCode::InternalError).with_extra(value.to_string())
+            }
+            ModelError::ModelCompletionError(_) => {
+                err!(CriticalErrorCode::InternalError).with_extra(value.to_string())
+            }
+            ModelError::Tensor(_) => {
+                err!(CriticalErrorCode::InternalError).with_extra(value.to_string())
+            }
+            ModelError::Decoder(_) => {
+                err!(CriticalErrorCode::InternalError).with_extra(value.to_string())
+            }
         }
     }
 }

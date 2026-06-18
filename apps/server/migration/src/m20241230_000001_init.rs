@@ -1,6 +1,6 @@
 use entity::*;
-use sea_orm::entity::*;
 use sea_orm::Set;
+use sea_orm::entity::*;
 use sea_orm_migration::{async_trait::async_trait, prelude::*, schema::*};
 
 #[derive(DeriveMigrationName)]

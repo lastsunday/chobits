@@ -8,8 +8,8 @@ use framework::{
         ApiResponse,
         valid::{ValidJson, ValidQuery},
     },
-    error::AppResult,
     err,
+    error::AppResult,
     middleware::get_auth_layer,
     password::{hash, verify},
 };

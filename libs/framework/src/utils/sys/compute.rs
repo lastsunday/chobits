@@ -57,8 +57,6 @@ pub fn set_affinity(ids: impl Iterator<Item = Id>) {
     }
 }
 
-
-
 fn query_cores_available() -> impl Iterator<Item = Id> {
     core_affinity::get_core_ids()
         .unwrap_or_default()

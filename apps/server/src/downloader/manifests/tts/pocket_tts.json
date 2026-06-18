@@ -18,8 +18,7 @@
             "lm_main.int8.onnx",
             "text_conditioner.onnx",
             "vocab.json",
-            "token_scores.json",
-            "test_wavs/bria.wav"
+            "token_scores.json"
           ]
         }
       ],

@@ -13,10 +13,7 @@ use crate::{
     },
     tts::TtsFactory,
     vad::VadFactory,
-    ws::{
-        frame::FrameResult,
-        session::Session,
-    },
+    ws::{frame::FrameResult, session::Session},
 };
 
 use axum::{
@@ -245,7 +242,15 @@ async fn on_send<W>(
             Err(api_err) => {
                 api_err.log();
                 let AppError::App { code, message, .. } = &api_err;
-                send_text(&mut write, &ErrorFrame { mtype: "error", code: *code, message: message.clone() }).await;
+                send_text(
+                    &mut write,
+                    &ErrorFrame {
+                        mtype: "error",
+                        code: *code,
+                        message: message.clone(),
+                    },
+                )
+                .await;
             }
         }
     }

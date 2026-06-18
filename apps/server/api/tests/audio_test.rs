@@ -27,17 +27,15 @@ async fn test_audio_encode_decode() {
         sample_rate
     );
     // the follow code is output wav file to test
-    let fp = "./pcm_decode_data.wav";
+    std::fs::create_dir_all("./test_data").ok();
+    let fp = "./test_data/pcm_decode_data.wav";
     let sr: i32 = 16000;
     let _ = write(fp, &pcm_data, sr, 1);
 
     const ENCODE_SAMPLE_RATE: u32 = 16000;
-    let mut encoder = opus_rs::OpusEncoder::new(
-        ENCODE_SAMPLE_RATE as i32,
-        1,
-        opus_rs::Application::Audio,
-    )
-    .unwrap();
+    let mut encoder =
+        opus_rs::OpusEncoder::new(ENCODE_SAMPLE_RATE as i32, 1, opus_rs::Application::Audio)
+            .unwrap();
 
     // 16000Hz * 1 channel * 20 ms / 1000 = 320
     const MONO_20MS: usize = ENCODE_SAMPLE_RATE as usize * 20 / 1000;
@@ -57,7 +55,9 @@ async fn test_audio_encode_decode() {
         let end = cmp::min((n + 1) * size, len);
         //info!("start = {},end = {}", start, end);
         let mut packet = vec![0u8; 4000];
-        let encoded_len = encoder.encode(&pcm_data[start..end], size, &mut packet).unwrap();
+        let encoded_len = encoder
+            .encode(&pcm_data[start..end], size, &mut packet)
+            .unwrap();
         packet.truncate(encoded_len);
         // info!("packet len = {}", packet.len());
         audio.push(packet);
@@ -77,7 +77,7 @@ async fn test_audio_encode_decode() {
 
     // the follow code is output wav file to test
     info!("decode_data len = {}", decode_data.len());
-    let fp = "./after_decode.wav";
+    let fp = "./test_data/after_decode.wav";
     let sr: i32 = 16000;
     let _ = write(fp, &decode_data, sr, 1);
 }

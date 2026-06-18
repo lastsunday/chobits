@@ -30,7 +30,16 @@ fn make_entry(files: Vec<(&str, Vec<FileEntry>)>, default_variant: Option<&str>)
         default_variant: default_variant.map(|s| s.into()),
         variants: files
             .into_iter()
-            .map(|(k, v)| (k.into(), Variant { files: v, archives: vec![] }))
+            .map(|(k, v)| {
+                (
+                    k.into(),
+                    Variant {
+                        files: v,
+                        archives: vec![],
+                        prompt_text: None,
+                    },
+                )
+            })
             .collect(),
     }
 }
@@ -216,11 +225,7 @@ fn test_set_sha256_no_match() {
 fn test_load_selections_valid() {
     let dir = test_dir("load_sel");
     let p = dir.join("c.toml");
-    fs::write(
-        &p,
-        "[global]\ntts_model = \"mute\"\n",
-    )
-    .unwrap();
+    fs::write(&p, "[global]\ntts_model = \"mute\"\n").unwrap();
     let m = load_selections(&p);
     assert_eq!(m.get("tts_model").unwrap(), "mute");
 }
@@ -351,12 +356,13 @@ fn test_write_checksums_integration() {
     });
     std::fs::write(&full, serde_json::to_string_pretty(&original).unwrap()).unwrap();
 
-    let updates = vec![
-        (rel.clone(), "data/test.bin".into(), "test_sha_value".into()),
-    ];
+    let updates = vec![(rel.clone(), "data/test.bin".into(), "test_sha_value".into())];
 
     let result = write_checksums_to_manifests(&updates);
-    assert!(result.is_ok(), "write_checksums_to_manifests failed: {result:?}");
+    assert!(
+        result.is_ok(),
+        "write_checksums_to_manifests failed: {result:?}"
+    );
 
     let updated: serde_json::Value =
         serde_json::from_slice(&std::fs::read(&full).unwrap()).unwrap();
@@ -382,8 +388,8 @@ fn test_update_checksums_updates_manifest() {
 
     let data_dir = test_dir("update_cksum");
 
-    // The manifest has file.path = "tts/reference/voice_05.wav"
-    let file_rel = "tts/reference/voice_05.wav";
+    // The manifest has file.path = "tts/reference/xiyangyang.wav"
+    let file_rel = "tts/reference/xiyangyang.wav";
     let content = b"test content for update_checksums";
     let abs_file = data_dir.join(file_rel);
     std::fs::create_dir_all(abs_file.parent().unwrap()).unwrap();
@@ -397,8 +403,7 @@ fn test_update_checksums_updates_manifest() {
         serde_json::from_slice(&std::fs::read(&manifest_path).unwrap()).unwrap();
     let expected_sha = sha256_of(content);
     assert_eq!(
-        updated["variants"]["default"]["files"][0]["sha256"],
-        expected_sha,
+        updated["variants"]["xiyangyang"]["files"][0]["sha256"], expected_sha,
         "SHA256 was not written correctly"
     );
 

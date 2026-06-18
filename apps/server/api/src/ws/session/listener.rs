@@ -1,5 +1,7 @@
-use crate::{asr::Asr, common::ModelError, config::audio::AudioConfig, vad::Vad, ws::frame::FrameResult};
 use crate::ws::WsErrorCode;
+use crate::{
+    asr::Asr, common::ModelError, config::audio::AudioConfig, vad::Vad, ws::frame::FrameResult,
+};
 use async_trait::async_trait;
 use chrono::Local;
 use framework::err;

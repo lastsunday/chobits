@@ -1,9 +1,9 @@
 use super::super::frame::FrameResult;
 use super::output_controller::TracedSender;
-use crate::ws::WsErrorCode;
 use crate::llm::client::{ChatRequest, Client};
 use crate::tts::Tts;
 use crate::util::llm::{EMOJI_MAP, analyze_emotion};
+use crate::ws::WsErrorCode;
 use anyhow::Context;
 use core::result::Result;
 use framework::err;
@@ -227,7 +227,10 @@ impl Round {
                         }
                         Err(e) => {
                             error!(target:"round","{:?}", e);
-                            if let Err(e) = tx.send(Err(err!(WsErrorCode::TtsEncode).with_extra(e.to_string()))).await {
+                            if let Err(e) = tx
+                                .send(Err(err!(WsErrorCode::TtsEncode).with_extra(e.to_string())))
+                                .await
+                            {
                                 error!(target:"round","{:?}", e);
                             }
                             stop_me.store(true, Ordering::Relaxed);
@@ -286,13 +289,8 @@ impl Round {
                                 );
                             }
                             if tts_state < &TtsState::SentenceEnd {
-                                send_tts_frame(
-                                    &tx,
-                                    session_id.clone(),
-                                    TtsState::Stop,
-                                    None,
-                                )
-                                .await?;
+                                send_tts_frame(&tx, session_id.clone(), TtsState::Stop, None)
+                                    .await?;
                                 debug!(
                                     target:"round",
                                     "after trigger stop me send tts state = {:?}",

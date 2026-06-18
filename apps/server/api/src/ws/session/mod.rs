@@ -1,6 +1,5 @@
-use super::frame::{Frame, FrameResult};
-use framework::error::AppError;
 use self::trace::Direction;
+use super::frame::{Frame, FrameResult};
 use super::session::listener::Listener;
 use super::session::round::{Command, Round};
 use crate::config::audio::AudioConfig;
@@ -12,14 +11,15 @@ use crate::mcp::mcp_host::{McpHost, UnionMcpHost};
 use crate::tts::Tts;
 use chrono::Local;
 use core::result::Result;
+use framework::error::AppError;
 use futures::Stream;
 use rig::message::ToolResult;
 use service::chobits::message::hello::{AudioParam, HelloMessage};
 use service::chobits::message::listen::ListenState;
 use service::chobits::message::{AudioFormat, Transport};
 use std::sync::Arc;
-use tokio::sync::mpsc::{Sender, channel};
 use tokio::sync::Mutex;
+use tokio::sync::mpsc::{Sender, channel};
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{error, info, trace};
 
@@ -199,7 +199,8 @@ impl Session {
             .with_history(self.history.clone())
             .with_max_prompt_len(self.config.max_prompt_len);
         let trace_log = self.trace_log.clone();
-        let traced_tx = output_controller::TracedSender::new(tx.clone(), trace_log, Direction::Internal);
+        let traced_tx =
+            output_controller::TracedSender::new(tx.clone(), trace_log, Direction::Internal);
         self.current_round = Some(Box::new(Round::new(
             self.id.clone(),
             traced_tx,
@@ -326,7 +327,6 @@ impl Session {
         let time = self.latest_activity_time.lock().await;
         *time
     }
-
 }
 
 include!("handle/phase.rs");
