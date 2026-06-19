@@ -254,7 +254,7 @@ moon run server:download-all-and-checksums # 下载所有模型并更新 SHA
 
 | 模块 | 默认模型 | 说明 |
 |------|----------|------|
-| TTS | MatchaTts（`matcha-icefall-zh-baker`） | 下载 `matcha` |
+| TTS | MatchaTts（`matcha-icefall-zh-en`） | 下载 `matcha` |
 | ASR | Qwen3（默认变体） | 下载 `qwen3` |
 | LLM | Qwen3（默认变体） | 下载 `qwen3` |
 | VAD | Earshot | 默认配置中跳过，不下载 |
