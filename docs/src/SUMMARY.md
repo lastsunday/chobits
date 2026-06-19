@@ -9,6 +9,7 @@
   - [UserManual]()
 - [Development](./development/README.md)
   - [Server](./development/server.md)
+  - [Audio Debug](./development/audio-debug.md)
   - [Downloader](./development/downloader.md)
   - [Server-ui]()
   - [Esp32](./development/esp32.md)
