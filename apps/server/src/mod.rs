@@ -155,6 +155,12 @@ async fn async_main(server: &Arc<Server>) -> Result<(), anyhow::Error> {
                     String::new(),
                 )
             });
+        // The path from the embedded manifest is relative to data_dir
+        let ref_path = if ref_path.starts_with('/') {
+            ref_path
+        } else {
+            format!("{data_dir}/{ref_path}")
+        };
         Arc::new(TtsConfig {
             model: config.tts_model.to_owned(),
             variant: config.tts_variant.to_owned(),
