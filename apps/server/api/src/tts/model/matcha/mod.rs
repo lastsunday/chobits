@@ -2,8 +2,8 @@ use async_trait::async_trait;
 use futures::Stream;
 use rubato::{FftFixedIn, Resampler};
 use sherpa_onnx::{
-    GenerationConfig, OfflineTts, OfflineTtsConfig, OfflineTtsModelConfig,
-    OfflineTtsVitsModelConfig,
+    GenerationConfig, OfflineTts, OfflineTtsConfig, OfflineTtsMatchaModelConfig,
+    OfflineTtsModelConfig,
 };
 use std::pin::Pin;
 use std::sync::Arc;
@@ -17,16 +17,15 @@ use crate::config::audio::AudioConfig;
 use crate::config::tts::TtsConfig;
 use crate::tts::{Tts, TtsData, TtsError, default_length_scale, encode_sample_to_tts_packet};
 
-pub struct TtsVits {
+pub struct TtsMatcha {
     tts: Arc<OfflineTts>,
     output_sample_rate: u32,
     output_channel: u32,
     output_frame_duration: u64,
     speed: f32,
-    sid: i32,
 }
 
-impl TtsVits {
+impl TtsMatcha {
     pub async fn new(
         tts_config: &TtsConfig,
         audio_config: &AudioConfig,
@@ -34,7 +33,7 @@ impl TtsVits {
         let path = tts_config
             .path
             .as_deref()
-            .unwrap_or("data/tts/model/vits/melo-tts-zh_en/");
+            .unwrap_or("data/tts/model/matcha/matcha-icefall-zh-baker/");
         if !path.ends_with('/') {
             return Err(anyhow::anyhow!("tts path must end with '/'"));
         }
@@ -56,11 +55,6 @@ impl TtsVits {
             .and_then(|v| v.as_f64())
             .unwrap_or(0.667) as f32;
 
-        let noise_scale_w = opts
-            .and_then(|o| o.get("noise_scale_w"))
-            .and_then(|v| v.as_f64())
-            .unwrap_or(0.8) as f32;
-
         let length_scale = opts
             .and_then(|o| o.get("length_scale"))
             .and_then(|v| v.as_f64())
@@ -71,38 +65,29 @@ impl TtsVits {
             .and_then(|v| v.as_f64())
             .unwrap_or(1.0) as f32;
 
-        let sid = opts
-            .and_then(|o| o.get("sid"))
-            .and_then(|v| v.as_i64())
-            .unwrap_or(0) as i32;
-
         let dict_dir = opts
             .and_then(|o| o.get("dict_dir"))
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
-        let model = opts
-            .and_then(|o| o.get("model"))
+        let acoustic_model = opts
+            .and_then(|o| o.get("acoustic_model"))
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
-            .or_else(|| {
-                let dir = std::path::Path::new(path);
-                std::fs::read_dir(dir).ok().and_then(|mut entries| {
-                    entries.find_map(|entry| {
-                        entry.ok().and_then(|e| {
-                            let p = e.path();
-                            if p.extension().is_some_and(|ext| ext == "onnx") {
-                                p.to_str().map(|s| s.to_string())
-                            } else {
-                                None
-                            }
-                        })
-                    })
-                })
-            });
+            .or_else(|| auto_discover_onnx(path, "model-steps-3"));
 
-        let model_path =
-            model.ok_or_else(|| anyhow::anyhow!("VITS model file (.onnx) not found in {path}"))?;
+        let acoustic_model_path = acoustic_model.ok_or_else(|| {
+            anyhow::anyhow!("Matcha acoustic model file (.onnx) not found in {path}")
+        })?;
+
+        let vocoder = opts
+            .and_then(|o| o.get("vocoder"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .or_else(|| auto_discover_onnx(path, "vocos-22khz-univ"));
+
+        let vocoder_path = vocoder
+            .ok_or_else(|| anyhow::anyhow!("Matcha vocoder file (.onnx) not found in {path}"))?;
 
         let tokens = opts
             .and_then(|o| o.get("tokens"))
@@ -157,20 +142,20 @@ impl TtsVits {
             }
         };
 
-        let vits_config = OfflineTtsVitsModelConfig {
-            model: Some(model_path),
+        let matcha_config = OfflineTtsMatchaModelConfig {
+            acoustic_model: Some(acoustic_model_path),
+            vocoder: Some(vocoder_path),
             tokens: Some(tokens),
             lexicon: Some(lexicon),
             data_dir,
             dict_dir,
             noise_scale,
-            noise_scale_w,
             length_scale,
         };
 
         let config = OfflineTtsConfig {
             model: OfflineTtsModelConfig {
-                vits: vits_config,
+                matcha: matcha_config,
                 num_threads,
                 debug,
                 ..Default::default()
@@ -181,7 +166,7 @@ impl TtsVits {
         };
 
         let tts = OfflineTts::create(&config)
-            .ok_or_else(|| anyhow::anyhow!("Failed to create OfflineTts"))?;
+            .ok_or_else(|| anyhow::anyhow!("Failed to create OfflineTts (Matcha)"))?;
 
         let output_sample_rate = audio_config
             .output_sample_rate
@@ -199,13 +184,12 @@ impl TtsVits {
             output_channel,
             output_frame_duration,
             speed,
-            sid,
         })
     }
 }
 
 #[async_trait]
-impl Tts for TtsVits {
+impl Tts for TtsMatcha {
     async fn stream(
         &self,
         text_stream: Pin<
@@ -219,7 +203,6 @@ impl Tts for TtsVits {
         let output_channel = self.output_channel;
         let output_frame_duration = self.output_frame_duration;
         let speed = self.speed;
-        let sid = self.sid;
 
         tokio::spawn(async move {
             let mut pinned = text_stream;
@@ -235,7 +218,7 @@ impl Tts for TtsVits {
             ) {
                 Ok(e) => e,
                 Err(err) => {
-                    error!("[VitsTTS] opus encoder creation error = {}", err);
+                    error!("[MatchaTTS] opus encoder creation error = {}", err);
                     return;
                 }
             };
@@ -244,20 +227,19 @@ impl Tts for TtsVits {
                 let text = match text_result {
                     Ok(t) => t,
                     Err(e) => {
-                        error!("[VitsTTS] text stream error = {}", e);
+                        error!("[MatchaTTS] text stream error = {}", e);
                         let _ = tx.send(Err(TtsError::Text(e.to_string()))).await;
                         break;
                     }
                 };
 
-                debug!("[VitsTTS] generating audio for text = {}", text);
+                debug!("[MatchaTTS] generating audio for text = {}", text);
 
                 let tts_clone = tts.clone();
                 let text_clone = text.clone();
                 let result = tokio::task::spawn_blocking(move || {
                     let gen_config = GenerationConfig {
                         speed,
-                        sid,
                         ..Default::default()
                     };
                     let audio = tts_clone.generate_with_config(
@@ -279,7 +261,7 @@ impl Tts for TtsVits {
                 let (pcm_samples, pcm_sample_rate) = match result {
                     Ok(Some((s, sr))) => (s, sr),
                     _ => {
-                        error!("[VitsTTS] generation failed for text = {}", text);
+                        error!("[MatchaTTS] generation failed for text = {}", text);
                         continue;
                     }
                 };
@@ -307,7 +289,6 @@ impl Tts for TtsVits {
                         };
                         all_output.extend_from_slice(&out[0]);
                     }
-                    // flush resampler internal delay tail
                     if let Ok(tail) = resampler.process_partial(None::<&[&[f32]]>, None) {
                         all_output.extend_from_slice(&tail[0]);
                     }
@@ -338,4 +319,26 @@ impl Tts for TtsVits {
 
         Box::pin(ReceiverStream::new(rx))
     }
+}
+
+/// Auto-discover an ONNX file in `dir` matching a known prefix.
+fn auto_discover_onnx(dir: &str, prefix: &str) -> Option<String> {
+    let p = std::path::Path::new(dir);
+    std::fs::read_dir(p).ok().and_then(|mut entries| {
+        entries.find_map(|entry| {
+            entry.ok().and_then(|e| {
+                let path = e.path();
+                if path.extension().is_some_and(|ext| ext == "onnx")
+                    && path
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .is_some_and(|stem| stem == prefix)
+                {
+                    path.to_str().map(|s| s.to_string())
+                } else {
+                    None
+                }
+            })
+        })
+    })
 }

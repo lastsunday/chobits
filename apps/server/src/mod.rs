@@ -169,7 +169,11 @@ async fn async_main(server: &Arc<Server>) -> Result<(), anyhow::Error> {
                 .to_owned()
                 .or_else(|| config.derive_tts_path()),
             reference_prompt_text: config.tts_reference_prompt_text.to_owned().or(
-                if ref_text.is_empty() { None } else { Some(ref_text) }
+                if ref_text.is_empty() {
+                    None
+                } else {
+                    Some(ref_text)
+                },
             ),
             reference_prompt_wav_path: config
                 .tts_reference_prompt_wav_path

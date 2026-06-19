@@ -264,7 +264,10 @@ pub async fn run(
                     let dest_dir = data_dir.join(&archive.path);
                     let all_exist = if cat_name == "reference" {
                         archive.extract.iter().all(|f| {
-                            let ext = Path::new(f).extension().and_then(|e| e.to_str()).unwrap_or("wav");
+                            let ext = Path::new(f)
+                                .extension()
+                                .and_then(|e| e.to_str())
+                                .unwrap_or("wav");
                             dest_dir.join(format!("{}.{}", v_name, ext)).exists()
                         })
                     } else {
@@ -319,10 +322,14 @@ pub async fn run(
                                     let _ = std::fs::remove_file(&archive_dest);
                                     if cat_name == "reference" {
                                         for f in &archive.extract {
-                                            let orig_name = Path::new(f).file_name().unwrap_or(OsStr::new(f));
+                                            let orig_name =
+                                                Path::new(f).file_name().unwrap_or(OsStr::new(f));
                                             let orig_path = dest_dir.join(Path::new(orig_name));
                                             if orig_path.exists() {
-                                                let ext = Path::new(f).extension().and_then(|e| e.to_str()).unwrap_or("wav");
+                                                let ext = Path::new(f)
+                                                    .extension()
+                                                    .and_then(|e| e.to_str())
+                                                    .unwrap_or("wav");
                                                 let new_name = format!("{}.{}", v_name, ext);
                                                 let new_path = dest_dir.join(&new_name);
                                                 if orig_path != new_path {
@@ -1108,11 +1115,10 @@ fn config_to_targets(config: &AppConfig) -> Vec<(String, String, Option<String>)
             ));
         }
         TtsModel::Vits => {
-            targets.push((
-                "tts".into(),
-                "vits".into(),
-                config.tts_variant.clone(),
-            ));
+            targets.push(("tts".into(), "vits".into(), config.tts_variant.clone()));
+        }
+        TtsModel::MatchaTts => {
+            targets.push(("tts".into(), "matcha".into(), config.tts_variant.clone()));
         }
         TtsModel::Mute => {}
     }
@@ -1221,7 +1227,10 @@ pub fn resolve_reference_audio(variant: &str) -> Option<(String, String)> {
         .or_else(|| {
             let ap = variant_obj["archives"][0]["path"].as_str()?;
             let ex = variant_obj["archives"][0]["extract"][0].as_str()?;
-            let ext = Path::new(ex).extension().and_then(|e| e.to_str()).unwrap_or("wav");
+            let ext = Path::new(ex)
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("wav");
             Some(format!("{ap}{variant}.{ext}"))
         })?;
     let prompt_text = variant_obj["prompt_text"]

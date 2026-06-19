@@ -1,0 +1,33 @@
+{
+  "config": {
+    "category": "tts",
+    "model": "matchatts"
+  },
+  "default_variant": "matcha-icefall-zh-baker",
+  "variants": {
+    "matcha-icefall-zh-baker": {
+      "archives": [
+        {
+          "path": "tts/model/matcha/matcha-icefall-zh-baker/",
+          "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/matcha-icefall-zh-baker.tar.bz2",
+          "sha256": null,
+          "extract": [
+            "model-steps-3.onnx",
+            "tokens.txt",
+            "lexicon.txt",
+            "date.fst",
+            "number.fst",
+            "phone.fst"
+          ]
+        }
+      ],
+      "files": [
+        {
+          "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/vocoder-models/vocos-22khz-univ.onnx",
+          "sha256": null,
+          "path": "tts/model/matcha/matcha-icefall-zh-baker/vocos-22khz-univ.onnx"
+        }
+      ]
+    }
+  }
+}

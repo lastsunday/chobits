@@ -171,12 +171,22 @@ pub struct Config {
     ///   - num_threads:      线程数 (默认 2)
     ///   - noise_scale:     生成噪声参数 (默认 0.667)
     ///   - noise_scale_w:   生成噪声参数 (默认 0.8)
-    ///   - length_scale:    语速缩放 (默认 1.0)
+    ///   - length_scale:    语速缩放 (默认 variant-specific: melo-tts-zh_en=1.3, theresa=2.0, aishell3=0.6, 其他=1.0)
     ///   - speed:           播放速度 (默认 1.0)
     ///   - sid:             Speaker ID，多 speaker 模型选择音色 (默认 0)
     ///   - debug:           是否输出调试信息 (默认 false)
     ///   - dict_dir:        发音字典目录路径 (可选)
     ///   - data_dir:        espeak-ng 数据目录路径 (可选)
+    /// MatchaTTS 模型支持以下选项：
+    ///   - num_threads:      线程数 (默认 2)
+    ///   - noise_scale:     生成噪声参数 (默认 0.667)
+    ///   - length_scale:    语速缩放 (默认 variant-specific: matcha-icefall-zh-baker=1.3, 其他=1.0)
+    ///   - speed:           播放速度 (默认 1.0)
+    ///   - debug:           是否输出调试信息 (默认 false)
+    ///   - dict_dir:        发音字典目录路径 (可选)
+    ///   - data_dir:        espeak-ng 数据目录路径 (可选)
+    ///   - acoustic_model:  声学模型 .onnx 文件路径 (自动发现 model-steps-3.onnx)
+    ///   - vocoder:         声码器 .onnx 文件路径 (自动发现 vocos-22khz-univ.onnx)
     #[serde(default)]
     pub tts_options: Option<serde_json::Value>,
 
@@ -650,6 +660,13 @@ impl Config {
                     .unwrap_or_else(|| "melo-tts-zh_en".into());
                 Some(format!("{d}/tts/model/vits/{variant}/"))
             }
+            TtsModel::MatchaTts => {
+                let variant = self
+                    .tts_variant
+                    .clone()
+                    .unwrap_or_else(|| "matcha-icefall-zh-baker".into());
+                Some(format!("{d}/tts/model/matcha/{variant}/"))
+            }
             TtsModel::Mute => None,
         }
     }
@@ -747,6 +764,7 @@ pub enum TtsModel {
     PocketTts,
     #[default]
     Vits,
+    MatchaTts,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Default)]

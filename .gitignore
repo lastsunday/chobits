@@ -79,3 +79,4 @@ logs/
 .direnv/
 result
 
+/test_data

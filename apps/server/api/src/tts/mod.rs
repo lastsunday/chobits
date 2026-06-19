@@ -1,5 +1,6 @@
 pub mod model;
 
+use self::model::matcha::TtsMatcha;
 use self::model::mute::TtsMute;
 use self::model::pocket::TtsPocket;
 use self::model::vits::TtsVits;
@@ -82,6 +83,9 @@ impl TtsFactory {
                 Ok(Box::new(TtsPocket::new(tts_config, audio_config).await?))
             }
             config::TtsModel::Vits => Ok(Box::new(TtsVits::new(tts_config, audio_config).await?)),
+            config::TtsModel::MatchaTts => {
+                Ok(Box::new(TtsMatcha::new(tts_config, audio_config).await?))
+            }
         }
     }
 
@@ -126,4 +130,17 @@ pub fn encode_sample_to_tts_packet(
 
 pub fn calcalute_tts_packet_size(sample_rate: u32, channel: u32, delay_millis: u64) -> usize {
     sample_rate as usize * channel as usize * delay_millis as usize / 1000
+}
+
+/// 根据模型路径（目录名）返回推荐的 `length_scale` 默认值。
+/// 测试校准值，使时长接近标准时长（~14.1s 对 TEST_TTS_TEXT）。
+pub(crate) fn default_length_scale(path: &str) -> f32 {
+    let variant = path.trim_end_matches('/').rsplit('/').next().unwrap_or("");
+    match variant {
+        "melo-tts-zh_en" => 1.3,
+        "zh-hf-theresa" => 2.0,
+        "aishell3" => 0.6,
+        "matcha-icefall-zh-baker" => 1.3,
+        _ => 1.0,
+    }
 }

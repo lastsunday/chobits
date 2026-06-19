@@ -1,6 +1,3 @@
-use std::collections::HashMap;
-use std::pin::Pin;
-use std::sync::Arc;
 use async_trait::async_trait;
 use futures::Stream;
 use rubato::{FftFixedIn, Resampler};
@@ -8,11 +5,13 @@ use sherpa_onnx::{
     GenerationConfig, OfflineTts, OfflineTtsConfig, OfflineTtsModelConfig,
     OfflineTtsPocketModelConfig, Wave,
 };
+use std::collections::HashMap;
+use std::pin::Pin;
+use std::sync::Arc;
 use tokio::sync::mpsc::channel;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{debug, error};
-
 
 use crate::common::ModelError;
 use crate::config::audio::AudioConfig;
@@ -162,14 +161,17 @@ impl Tts for TtsPocket {
                 2 => 2_usize,
                 _ => 1_usize,
             };
-            let mut encoder =
-                match opus_rs::OpusEncoder::new(encode_sr as i32, channels, opus_rs::Application::Audio) {
-                    Ok(e) => e,
-                    Err(err) => {
-                        error!("[PocketTTS] opus encoder creation error = {}", err);
-                        return;
-                    }
-                };
+            let mut encoder = match opus_rs::OpusEncoder::new(
+                encode_sr as i32,
+                channels,
+                opus_rs::Application::Audio,
+            ) {
+                Ok(e) => e,
+                Err(err) => {
+                    error!("[PocketTTS] opus encoder creation error = {}", err);
+                    return;
+                }
+            };
 
             while let Some(text_result) = pinned.next().await {
                 let text = match text_result {
