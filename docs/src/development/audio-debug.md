@@ -173,9 +173,9 @@ Frame 4:                 │
 | `apps/server/api/src/ws/mod.rs` | WebSocket 帧发送 |
 | `apps/server/api/src/tts/mod.rs` | `encode_sample_to_tts_packet` 帧分割编码 |
 
-## TTS Test Tools
+## TTS 测试工具
 
-`apps/server/api/tests/tts_test.rs` 包含 TTS 集成测试和音频质量分析函数。
+音频质量分析工具位于 `apps/server/api/tests/common/tts.rs`，TTS 集成测试位于 `apps/server/api/tests/tts_test.rs`。
 
 ### 共享辅助函数
 
@@ -184,20 +184,42 @@ Frame 4:                 │
 | `ws_root()` | monorepo 根路径（`CARGO_MANIFEST_DIR` 往上 3 层） |
 | `vits_audio_config()` | VITS 测试标准 AudioConfig（16000Hz / mono / 20ms 帧） |
 | `run_vits_test(tts_config, audio_config, wav)` | 完整流程：创建模型 → TTS 流式推理 → Opus 解码 → 写 WAV |
+| `run_length_scale_scan(model, dir, audio_cfg, wav_prefix, ls_values, sid)` | 扫描多个 `length_scale` 值，找到语速校准点 |
 | `tts_stream(text)` | 从字符串创建 TTS 输入 `Stream` |
+| `analyze_audio(samples, sample_rate, gen_elapsed, std_duration_secs)` | 返回 `TtsAudioDiagnostics` 诊断结果 |
+| `estimate_std_duration(text)` | 基于文本内容估算标准时长（OmniVoice 权重系统） |
 
-### 音频质量指标
+### 标准时长估算
 
-`apps/server/api/tests/tts_test.rs` 中的 `analyze_audio(samples, sample_rate)` 返回 `TtsAudioDiagnostics` 结构体，包含以下指标：
+`estimate_std_duration(text)` 使用 OmniVoice RuleDurationEstimator 权重系统，为文本分配 Unicode 范围语音权重，再以固定速度因子 12.0 weight/sec（≈4 汉字/秒 或 150 WPM 英文）计算标准时长。结果**不随模型或 length_scale 变化**，提供跨模型一致的参考标尺。
 
-| 方法 | 返回值 | 说明 |
-|------|--------|------|
-| `shimmer_pct` | f64 | 10ms 窗口 RMS 帧间振幅变动率（%），反映"抖动/波浪感" |
-| `dynamic_range_db` | f64 | 非静音帧动态范围（dB） |
-| `shimmer_grade()` | &str | 等级：Excellent / Good / Fair / Poor / Bad |
-| `dr_grade()` | &str | 等级：Good / Fair / Poor |
-| `score()` | f64 | 综合得分 (0–100)：shimmer×0.7 + dynamic_range×0.3，区间内线性插值 |
-| `verdict()` | &str | 综合诊断结论（英文） |
+**TEST_TTS_TEXT**：`2024年5月11号，拨打110或者18920240511，花了99块钱。我在学习machine learning和artificial intelligence。`
+
+标准时长：~14.1 秒（权重 ≈168.8 / 12.0）。
+
+### 三维评分体系
+
+`TtsAudioDiagnostics` 独立报告三个维度，**不合并总分**：
+
+| 维度 | 字段 | 评分依据 | 等级 |
+|------|------|---------|------|
+| **Audio**（音质） | `shimmer_pct`, `dynamic_range_db` | shimmer 70% + DR 30% | E/G/F/P/B |
+| **Perf**（性能） | `rtf` | RTF 实时因子阈值 | E/G/F/P/B |
+| **Timing**（语速） | `duration_secs`, `std_duration_secs`, `std_diff_secs` | 偏离标准时长百分比 | E/G/F/P/B |
+
+**等级字母：**
+
+| 得分范围 | 等级 |
+|----------|------|
+| ≥ 86 | E（Excellent） |
+| 66–85 | G（Good） |
+| 41–65 | F（Fair） |
+| 21–40 | P（Poor） |
+| < 21 | B（Bad） |
+
+#### Audio 评分
+
+基于 shimmer（帧间振幅变动率）和动态范围。
 
 **Shimmer 等级（临床语音病理学参考）：**
 
@@ -217,53 +239,78 @@ Frame 4:                 │
 | Fair | 15–20 | 偏压缩，动态不足 |
 | Poor | < 15 | 明显扁平/沉闷 |
 
-**Shimmer 得分（权重 70%，线性插值）：**
+**综合分值（权重 70% + 30%，线性插值）：**
 
-| Shimmer (%) | 得分 |
-|-------------|------|
-| < 3.81 | 100 |
-| 3.81–5.0 | 100 → 75 线性下降 |
-| 5.0–6.0 | 75 → 50 线性下降 |
-| 6.0–10.0 | 50 → 25 线性下降 |
-| >= 10.0 | 0 |
+| Shimmer (%) → 得分 | DR (dB) → 得分 |
+|--------------------|-----------------|
+| < 3.81 → 100 | > 20 → 100 |
+| 3.81–5.0 → 100→75 线性下降 | 15–20 → 0→100 线性上升 |
+| 5.0–6.0 → 75→50 线性下降 | < 15 → 0 |
+| 6.0–10.0 → 50→25 线性下降 | |
+| >= 10.0 → 0 | |
 
-**Dynamic Range 得分（权重 30%，线性插值）：**
+**公式**：`audio_score = shimmer_score × 0.7 + dr_score × 0.3`
 
-| dB | 得分 |
-|-----|------|
-| > 20 | 100 |
-| 15–20 | 0 → 100 线性上升 |
-| < 15 | 0 |
+#### Perf 评分
 
-**综合判定：**
+基于 RTF（生成耗时 / 音频时长）：
 
-| Shimmer | Dynamic Range | 结论 |
-|---------|---------------|------|
-| < 5.0% | >= 15 dB | 适合日常使用 |
-| < 5.0% | < 15 dB | 勉强可用（动态不足） |
-| 5.0–6.0% | 任意 | 勉强可用（轻微抖动） |
-| 6.0–10.0% | 任意 | 勉强可用（明显粗糙） |
-| >= 10.0% | 任意 | 不适合日常使用 |
+| RTF | 得分 | 等级 |
+|-----|------|------|
+| < 0.1 | 100 | E |
+| 0.1–0.3 | 100→80 | G |
+| 0.3–0.5 | 80→60 | F |
+| 0.5–1.0 | 60→0 | P |
+| >= 1.0 | 0 | B |
 
-**示例输出：**
+#### Timing 评分
+
+基于偏离标准时长的百分比 `|actual - std| / std`：
+
+| 偏离 | 得分 | 等级 |
+|------|------|------|
+| < 5% | 100 | E |
+| 5–20% | 100→80 | G |
+| 20–50% | 80→40 | F |
+| 50–100% | 40→0 | P |
+| >= 100% | 0 | B |
+
+### 输出格式
 
 ```
-shimmer=16.75% (Bad), dynamic_range=26.0dB (Good), score=30/100, samples=182400, duration=11.40s  Unsuitable for daily use — shimmer exceeds algorithm reliability limit
+Audio:scr=30(P) Perf:scr=84(G) Timing:scr=74(G) | sh=18.07%(Bad) dr=25.9dB(Good) rtf=0.26 gen=2.8s dur=10.60s(std=14.1s-25%) Marginal...
 ```
+
+三部分一目了然：音质→P、性能→G、语速→G，原始指标跟在 `|` 后。
 
 ### 参数调优测试
 
 ```bash
+# noise_scale / noise_scale_w 扫描（melo-tts-zh_en）
 cargo test --package api --test tts_test -- test_tts_vits_melo_tts_zh_en_noise_scale --ignored --nocapture
+
+# length_scale 语速校准扫描
+cargo test --package api --test tts_test -- test_tts_matcha_zh_baker_scan_ls --ignored --nocapture
+cargo test --package api --test tts_test -- test_tts_vits_melo_tts_zh_en_scan_ls --ignored --nocapture
+cargo test --package api --test tts_test -- test_tts_vits_zh_hf_theresa_scan_ls --ignored --nocapture
+cargo test --package api --test tts_test -- test_tts_vits_aishell3_scan_ls --ignored --nocapture
+
+# SID 扫描（多 speaker 模型）
+cargo test --package api --test tts_test -- test_tts_vits_aishell3_scan_sid --ignored --nocapture
+cargo test --package api --test tts_test -- test_tts_vits_zh_hf_theresa_scan_sid --ignored --nocapture
 ```
 
-迭代 `noise_scale` / `noise_scale_w` 各 3 个值，生成 6 个 WAV 并打印 shimmer 和 dynamic_range。
+### 已知问题
 
-### Known findings (melo-tts-zh_en)
+**melo-tts-zh_en**：shimmer ~16%，远超算法可靠上限（12%），无法通过 `noise_scale` / `noise_scale_w` 调整改善（`noise_scale_w` 被 ONNX 导出忽略）。所有 VITS/Matcha 模型的 shimmer 均在 14–18% 范围。
 
-| Parameter | Range tested | Effect |
-|-----------|-------------|--------|
-| `noise_scale` | 0.3–0.667 | Shimmer dropped from 16.99% to 16.31%, marginal improvement |
-| `noise_scale_w` | 0.2–0.8 | No effect (ignored by ONNX export) |
+**length_scale 默认值校准（使时长接近标准 14.1s）：**
 
-**Conclusion:** melo-tts-zh_en shimmer ~16% greatly exceeds the algorithm reliability limit (>12%). The "waviness" is inherent to this ONNX-exported model and cannot be resolved by adjusting inference parameters.
+| 模型 | 默认 `length_scale` |
+|------|-------------------|
+| matcha-icefall-zh-baker | **1.3** |
+| melo-tts-zh_en | **1.3** |
+| zh-hf-theresa | **2.0** |
+| aishell3 | **0.6** |
+
+校准值已写入 `default_length_scale()`（`api/src/tts/mod.rs`），在 `tts_options` 未指定 `length_scale` 时自动生效。
