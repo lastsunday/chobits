@@ -143,9 +143,9 @@ impl TtsVits {
             }
             files.sort_by(|a, b| {
                 fn priority(f: &str) -> u8 {
-                    if f.ends_with("phone.fst") { 0 }
-                    else if f.ends_with("date.fst") { 1 }
-                    else if f.ends_with("number.fst") { 2 }
+                    if f.contains("phone") { 0 }
+                    else if f.contains("date") { 1 }
+                    else if f.contains("number") { 2 }
                     else { 3 }
                 }
                 priority(a).cmp(&priority(b))

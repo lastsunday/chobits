@@ -28,6 +28,31 @@
           "path": "tts/model/matcha/matcha-icefall-zh-baker/vocos-22khz-univ.onnx"
         }
       ]
+    },
+    "matcha-icefall-zh-en": {
+      "archives": [
+        {
+          "path": "tts/model/matcha/matcha-icefall-zh-en/",
+          "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/matcha-icefall-zh-en.tar.bz2",
+          "sha256": null,
+          "extract": [
+            "model-steps-3.onnx",
+            "tokens.txt",
+            "lexicon.txt",
+            "phone-zh.fst",
+            "date-zh.fst",
+            "number-zh.fst",
+            "espeak-ng-data"
+          ]
+        }
+      ],
+      "files": [
+        {
+          "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/vocoder-models/vocos-16khz-univ.onnx",
+          "sha256": null,
+          "path": "tts/model/matcha/matcha-icefall-zh-en/vocos-16khz-univ.onnx"
+        }
+      ]
     }
   }
 }

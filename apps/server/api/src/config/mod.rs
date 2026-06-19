@@ -180,13 +180,13 @@ pub struct Config {
     /// MatchaTTS 模型支持以下选项：
     ///   - num_threads:      线程数 (默认 2)
     ///   - noise_scale:     生成噪声参数 (默认 0.667)
-    ///   - length_scale:    语速缩放 (默认 variant-specific: matcha-icefall-zh-baker=1.3, 其他=1.0)
+    ///   - length_scale:    语速缩放 (默认 variant-specific: matcha-icefall-zh-baker=1.3, matcha-icefall-zh-en=1.3, 其他=1.0)
     ///   - speed:           播放速度 (默认 1.0)
     ///   - debug:           是否输出调试信息 (默认 false)
     ///   - dict_dir:        发音字典目录路径 (可选)
     ///   - data_dir:        espeak-ng 数据目录路径 (可选)
     ///   - acoustic_model:  声学模型 .onnx 文件路径 (自动发现 model-steps-3.onnx)
-    ///   - vocoder:         声码器 .onnx 文件路径 (自动发现 vocos-22khz-univ.onnx)
+    ///   - vocoder:         声码器 .onnx 文件路径 (自动发现 vocos-22khz-univ.onnx / vocos-16khz-univ.onnx)
     #[serde(default)]
     pub tts_options: Option<serde_json::Value>,
 
@@ -415,7 +415,7 @@ fn default_auth_client_secret() -> Option<String> {
 }
 
 fn default_tts_model() -> Option<TtsModel> {
-    Some(TtsModel::Vits)
+    Some(TtsModel::MatchaTts)
 }
 
 fn default_tts_path() -> Option<String> {

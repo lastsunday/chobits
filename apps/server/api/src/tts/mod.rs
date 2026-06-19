@@ -140,7 +140,7 @@ pub(crate) fn default_length_scale(path: &str) -> f32 {
         "melo-tts-zh_en" => 1.3,
         "zh-hf-theresa" => 2.0,
         "aishell3" => 0.6,
-        "matcha-icefall-zh-baker" => 1.3,
+        "matcha-icefall-zh-baker" | "matcha-icefall-zh-en" => 1.3,
         _ => 1.0,
     }
 }

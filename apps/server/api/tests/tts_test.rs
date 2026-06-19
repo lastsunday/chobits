@@ -230,6 +230,34 @@ async fn test_tts_matcha_zh_baker() -> anyhow::Result<()> {
 #[tokio::test]
 #[traced_test]
 #[ignore]
+/// cargo test --test tts_test -- test_tts_matcha_zh_en --ignored --nocapture
+async fn test_tts_matcha_zh_en() -> anyhow::Result<()> {
+    let path = ws_root()
+        .join("data/tts/model/matcha/matcha-icefall-zh-en/")
+        .to_string_lossy()
+        .into_owned();
+    run_vits_test(
+        &TtsConfig {
+            model: Some(TtsModel::MatchaTts),
+            path: Some(path),
+            options: Some(serde_json::json!({
+                "num_threads": 2,
+                "noise_scale": 0.667,
+                "length_scale": 1.0,
+                "speed": 1.0,
+                "debug": false,
+            })),
+            ..Default::default()
+        },
+        &vits_audio_config(),
+        "./test_data/test_tts_matcha_zh_en.wav",
+    )
+    .await
+}
+
+#[tokio::test]
+#[traced_test]
+#[ignore]
 /// cargo test --test tts_test -- test_tts_vits_melo_tts_zh_en --ignored --nocapture
 async fn test_tts_vits_melo_tts_zh_en() -> anyhow::Result<()> {
     let path = ws_root()

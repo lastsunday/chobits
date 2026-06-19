@@ -648,20 +648,39 @@ fn extract_tar_bz2(
     let mut archive = Archive::new(decoder);
     std::fs::create_dir_all(dest)?;
 
+    let dir_prefixes: Vec<&str> = files.iter().filter(|f| !f.contains('.')).map(|f| f.as_str()).collect();
+
     for entry in archive.entries()? {
         let mut entry = entry?;
         let path = entry.path()?;
-        // Strip the top-level directory component (e.g. "sherpa-onnx-pocket-tts-int8-2026-01-26/encoder.onnx" -> "encoder.onnx")
         let stripped: PathBuf = path.components().skip(1).collect();
         if stripped.as_os_str().is_empty() {
             continue;
         }
-        if !files.iter().any(|f| stripped == Path::new(f)) {
+
+        let stripped_str = stripped.to_string_lossy();
+        let matched = files.iter().any(|f| stripped == Path::new(f))
+            || dir_prefixes.iter().any(|p| stripped_str.starts_with(p));
+
+        if !matched {
             continue;
         }
-        let name = stripped.file_name().map(Path::new).unwrap_or(&stripped);
-        let dest_path = dest.join(name);
-        entry.unpack(&dest_path)?;
+
+        if entry.header().entry_type().is_dir() {
+            let dest_path = dest.join(&stripped);
+            std::fs::create_dir_all(&dest_path)?;
+        } else {
+            let dest_path = if dir_prefixes.iter().any(|p| stripped_str.starts_with(p)) {
+                dest.join(&stripped)
+            } else {
+                let name = stripped.file_name().map(Path::new).unwrap_or(&stripped);
+                dest.join(name)
+            };
+            if let Some(parent) = dest_path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            entry.unpack(&dest_path)?;
+        }
     }
 
     Ok(())

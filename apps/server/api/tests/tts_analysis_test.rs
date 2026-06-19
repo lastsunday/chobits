@@ -445,6 +445,22 @@ async fn test_tts_matcha_zh_baker_scan_ls() -> anyhow::Result<()> {
 #[tokio::test]
 #[traced_test]
 #[ignore]
+/// cargo test --test tts_analysis_test -- test_tts_matcha_zh_en_scan_ls --ignored --nocapture
+async fn test_tts_matcha_zh_en_scan_ls() -> anyhow::Result<()> {
+    run_length_scale_scan(
+        TtsModel::MatchaTts,
+        "data/tts/model/matcha/matcha-icefall-zh-en/",
+        &vits_audio_config(),
+        "matcha_zh_en",
+        &[1.2, 1.3, 1.4, 1.5],
+        None,
+    )
+    .await
+}
+
+#[tokio::test]
+#[traced_test]
+#[ignore]
 /// cargo test --test tts_analysis_test -- test_tts_vits_melo_tts_zh_en_scan_ls --ignored --nocapture
 async fn test_tts_vits_melo_tts_zh_en_scan_ls() -> anyhow::Result<()> {
     run_length_scale_scan(
