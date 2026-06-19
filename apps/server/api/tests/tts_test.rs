@@ -41,7 +41,7 @@ async fn test_tts_default() -> anyhow::Result<()> {
     )
     .await?;
     let tts = TtsFactory::global().default();
-    let text_stream = tts_stream(String::from("我不知道将去何方，但我已经在路上。"));
+    let text_stream = tts_stream(String::from(TEST_TTS_TEXT));
     let mut tts_stream = tts.stream(Box::pin(text_stream)).await;
 
     let mut audio: Vec<Vec<u8>> = Vec::new();
@@ -100,13 +100,13 @@ async fn test_tts_mute() -> anyhow::Result<()> {
     )
     .await?;
     let tts = TtsFactory::global().default();
-    let text_stream = tts_stream(String::from("我不知道将去何方，但我已经在路上。"));
+    let text_stream = tts_stream(String::from(TEST_TTS_TEXT));
     let mut tts_stream = tts.stream(Box::pin(text_stream)).await;
     let mut audio: Vec<Vec<u8>> = Vec::new();
     while let Some(data) = tts_stream.next().await {
         match data {
             Ok(data) => {
-                assert_eq!(data.text, "我不知道将去何方，但我已经在路上。");
+                assert_eq!(data.text, TEST_TTS_TEXT);
                 match data.audio {
                     Some(data) => {
                         audio.append(&mut data.clone());
@@ -148,7 +148,7 @@ async fn test_tts_pocket() -> anyhow::Result<()> {
         .to_string_lossy()
         .into_owned();
 
-    let ref_wav = ws_root.join("data/tts/reference/test_wavs/bria.wav");
+    let ref_wav = ws_root.join("data/tts/reference/bria.wav");
 
     let tts = TtsFactory::create_model(
         &TtsConfig {
@@ -166,12 +166,8 @@ async fn test_tts_pocket() -> anyhow::Result<()> {
     )
     .await?;
 
-    let text = "Today as always, men fall into two groups: slaves and free men. Whoever \
-        does not have two-thirds of his day for himself, is a slave, whatever \
-        he may be: a statesman, a businessman, an official, or a scholar. \
-        Friends fell out often because life was changing so fast. The easiest \
-        thing in the world was to lose touch with someone.";
-    let text_stream = tts_stream(String::from(text));
+    let gen_start = std::time::Instant::now();
+    let text_stream = tts_stream(String::from(TEST_TTS_TEXT));
     let mut tts_stream = tts.stream(Box::pin(text_stream)).await;
 
     let mut all_packets: Vec<Vec<u8>> = Vec::new();
@@ -190,6 +186,7 @@ async fn test_tts_pocket() -> anyhow::Result<()> {
             Err(e) => panic!("{:?}", e),
         }
     }
+    let gen_elapsed = gen_start.elapsed();
 
     assert!(
         !all_packets.is_empty(),
@@ -214,6 +211,7 @@ async fn test_tts_pocket() -> anyhow::Result<()> {
     }
     assert!(decoded.len() > 1000, "Decoded audio too short");
     info!("decoded {} PCM samples", decoded.len());
+    info!("{}", analyze_audio(&decoded, 16000, gen_elapsed, estimate_std_duration(TEST_TTS_TEXT)));
 
     std::fs::create_dir_all("./test_data")?;
     let _ = wavers::write("./test_data/test_tts_pocket.wav", &decoded, 16000, 1);
@@ -246,7 +244,15 @@ fn collect_rule_fsts(dir: &std::path::Path) -> Option<String> {
             }
         }
     }
-    files.sort();
+    files.sort_by(|a, b| {
+        fn priority(f: &str) -> u8 {
+            if f.ends_with("phone.fst") { 0 }
+            else if f.ends_with("date.fst") { 1 }
+            else if f.ends_with("number.fst") { 2 }
+            else { 3 }
+        }
+        priority(a).cmp(&priority(b))
+    });
     (!files.is_empty()).then(|| files.join(","))
 }
 
