@@ -122,6 +122,16 @@
 #tts_reference_prompt_wav_path = false
 
 # pocket-tts 等模型的特有配置
+# VITS 模型支持以下选项：
+#   - num_threads:      线程数 (默认 2)
+#   - noise_scale:     生成噪声参数 (默认 0.667)
+#   - noise_scale_w:   生成噪声参数 (默认 0.8)
+#   - length_scale:    语速缩放 (默认 1.0)
+#   - speed:           播放速度 (默认 1.0)
+#   - sid:             Speaker ID，多 speaker 模型选择音色 (默认 0)
+#   - debug:           是否输出调试信息 (默认 false)
+#   - dict_dir:        发音字典目录路径 (可选)
+#   - data_dir:        espeak-ng 数据目录路径 (可选)
 #
 #tts_options = false
 
