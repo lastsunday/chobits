@@ -534,6 +534,94 @@ async fn test_tts_vits_melo_tts_zh_en_noise_scale() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+#[traced_test]
+#[ignore]
+/// cargo test --test tts_test -- test_tts_vits_aishell3_scan_sid --ignored --nocapture
+/// Scan speaker IDs 0–173 (step 10) to find well-performing SIDs.
+async fn test_tts_vits_aishell3_scan_sid() -> anyhow::Result<()> {
+    let path = ws_root().join("data/tts/model/vits/aishell3/").to_string_lossy().into_owned();
+    let audio_cfg = vits_audio_config();
+
+    let mut rows: Vec<(i32, f64, f64, f64, usize, f64)> = Vec::new();
+
+    for sid in (0..174).step_by(10) {
+        let wav = format!("./test_data/aishell3_sid{sid}.wav");
+        run_vits_test(
+            &TtsConfig {
+                model: Some(TtsModel::Vits),
+                path: Some(path.clone()),
+                options: Some(serde_json::json!({
+                    "num_threads": 2, "noise_scale": 0.667, "noise_scale_w": 0.8,
+                    "length_scale": 1.0, "speed": 1.0, "sid": sid, "debug": false,
+                })),
+                ..Default::default()
+            },
+            &audio_cfg,
+            &wav,
+        ).await?;
+        let (samples, sr): (wavers::Samples<f32>, i32) = wavers::read(&wav)?;
+        let diag = analyze_audio(&samples, sr as u32);
+        let rms_db: f64 = (20.0f32 * (samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32).sqrt().log10()) as f64;
+        info!("sid={sid}: {}", diag);
+        info!("sid={sid}: rms_db={rms_db:.1}");
+        rows.push((sid, diag.shimmer_pct, diag.dynamic_range_db, rms_db, diag.num_samples, diag.duration_secs));
+    }
+
+    rows.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+    info!("=== aishell3 SID scan summary (sorted by shimmer) ===");
+    info!("{:<6} {:<10} {:<12} {:<8} {:<10} {:<8}", "sid", "shimmer", "dr_db", "rms_db", "samples", "duration");
+    for (sid, shimmer, dr, rms, samples, dur) in &rows {
+        info!("{sid:<6} {shimmer:<6.2}% ({dr:<6.1}dB) {rms:<6.1}dB  {samples:<8} {dur:<6.2}s");
+    }
+    Ok(())
+}
+
+#[tokio::test]
+#[traced_test]
+#[ignore]
+/// cargo test --test tts_test -- test_tts_vits_zh_hf_theresa_scan_sid --ignored --nocapture
+/// Scan speaker IDs 0–803 (step 20) to find well-performing SIDs.
+async fn test_tts_vits_zh_hf_theresa_scan_sid() -> anyhow::Result<()> {
+    let path = ws_root().join("data/tts/model/vits/zh-hf-theresa/").to_string_lossy().into_owned();
+    let audio_cfg = vits_audio_config();
+
+    // collect rows for summary table
+    let mut rows: Vec<(i32, f64, f64, f64, usize, f64)> = Vec::new(); // (sid, shimmer, dr, rms_db, samples, dur)
+
+    for sid in (0..804).step_by(20) {
+        let wav = format!("./test_data/zh-hf-theresa_sid{sid}.wav");
+        run_vits_test(
+            &TtsConfig {
+                model: Some(TtsModel::Vits),
+                path: Some(path.clone()),
+                options: Some(serde_json::json!({
+                    "num_threads": 2, "noise_scale": 0.667, "noise_scale_w": 0.8,
+                    "length_scale": 1.0, "speed": 1.0, "sid": sid, "debug": false,
+                })),
+                ..Default::default()
+            },
+            &audio_cfg,
+            &wav,
+        ).await?;
+        let (samples, sr): (wavers::Samples<f32>, i32) = wavers::read(&wav)?;
+        let diag = analyze_audio(&samples, sr as u32);
+        let rms_db: f64 = (20.0f32 * (samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32).sqrt().log10()) as f64;
+        info!("sid={sid}: {}", diag);
+        info!("sid={sid}: rms_db={rms_db:.1}");
+        rows.push((sid, diag.shimmer_pct, diag.dynamic_range_db, rms_db, diag.num_samples, diag.duration_secs));
+    }
+
+    // print summary table sorted by shimmer ascending
+    rows.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+    info!("=== SID scan summary (sorted by shimmer) ===");
+    info!("{:<6} {:<10} {:<12} {:<8} {:<10} {:<8}", "sid", "shimmer", "dr_db", "rms_db", "samples", "duration");
+    for (sid, shimmer, dr, rms, samples, dur) in &rows {
+        info!("{sid:<6} {shimmer:<6.2}% ({dr:<6.1}dB) {rms:<6.1}dB  {samples:<8} {dur:<6.2}s");
+    }
+    Ok(())
+}
+
 fn tts_stream(
     text: String,
 ) -> impl Stream<Item = core::result::Result<String, ModelError>> + Unpin + Send + 'static {
