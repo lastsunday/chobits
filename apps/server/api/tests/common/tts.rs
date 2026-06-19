@@ -1,14 +1,21 @@
 use std::fmt;
+use std::path::Path;
 use std::sync::LazyLock;
+use std::thread;
+
+use api::{
+    common::ModelError,
+    config::{audio::AudioConfig, tts::TtsConfig},
+};
+use futures::{Stream, executor::block_on};
+use tokio::sync::mpsc::channel;
+use tokio_stream::{StreamExt, wrappers::ReceiverStream};
+use tracing::info;
 
 /// Test text covering Chinese, English, and numeric patterns (rule FST + OOV scenarios).
 pub const TEST_TTS_TEXT: &str = "2024年5月11号，拨打110或者18920240511，花了99块钱。我在学习machine learning和artificial intelligence。";
 
 /// Weight of `TEST_TTS_TEXT` in the OmniVoice RuleDurationEstimator weight system.
-///
-/// Uses Unicode-range-based phonetic weights (CJK=3.0, digit=3.5, latin=1.0,
-/// space=0.2, punctuation=0.5). This is a model-independent measure of the
-/// "speech content" in a text.
 pub static TEST_TTS_TEXT_WEIGHT: LazyLock<f64> = LazyLock::new(|| {
     TEST_TTS_TEXT
         .chars()
@@ -27,11 +34,6 @@ pub static TEST_TTS_TEXT_WEIGHT: LazyLock<f64> = LazyLock::new(|| {
 });
 
 /// Estimate standard speech duration from text content alone.
-///
-/// Uses a fixed standard speed factor of 12.0 weight-units per second
-/// (~4 CJK chars/sec or ~150 WPM English). The result is always the same
-/// for the same text regardless of model or length_scale, providing a
-/// consistent reference for cross-model comparison.
 pub fn estimate_std_duration(text: &str) -> f64 {
     const STANDARD_SPEED_FACTOR: f64 = 12.0;
     let weight: f64 = text
@@ -83,7 +85,6 @@ impl TtsAudioDiagnostics {
         }
     }
 
-    /// 音质评分 (0–100)。Shimmer 70% weight, dynamic range 30% weight。
     pub fn audio_score(&self) -> f64 {
         let s = if self.shimmer_pct < 3.81 {
             100.0
@@ -106,7 +107,6 @@ impl TtsAudioDiagnostics {
         s * 0.7 + d * 0.3
     }
 
-    /// 性能评分 (0–100)。基于 RTF（实时因子）。
     pub fn performance_score(&self) -> f64 {
         match self.rtf {
             r if r < 0.1 => 100.0,
@@ -117,7 +117,6 @@ impl TtsAudioDiagnostics {
         }
     }
 
-    /// 语速评分 (0–100)。基于偏离标准时长的百分比。
     pub fn timing_score(&self) -> f64 {
         let deviation = (self.std_diff_secs / self.std_duration_secs).abs();
         match deviation {
@@ -155,7 +154,6 @@ impl TtsAudioDiagnostics {
         Self::score_grade(self.timing_score())
     }
 
-    /// Overall usability verdict based on audio quality.
     pub fn verdict(&self) -> &'static str {
         match self.shimmer_pct {
             s if s >= 10.0 => {
@@ -172,8 +170,7 @@ impl TtsAudioDiagnostics {
     }
 }
 
-/// 线性插值：t ∈ [0, 1] 时返回 start 到 end 之间的值。
-pub fn lerp(start: f64, end: f64, t: f64) -> f64 {
+fn lerp(start: f64, end: f64, t: f64) -> f64 {
     start + (end - start) * t.clamp(0.0, 1.0)
 }
 
@@ -220,11 +217,9 @@ pub fn analyze_audio(
         })
         .collect();
 
-    // 去除静音帧
     let peak = rms.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
     rms.retain(|r| *r > peak * 0.05);
 
-    // shimmer
     let shimmer_pct = if rms.len() < 2 {
         0.0
     } else {
@@ -238,7 +233,6 @@ pub fn analyze_audio(
         }
     };
 
-    // dynamic range
     let dynamic_range_db = if rms.len() < 2 {
         0.0
     } else {
@@ -261,4 +255,179 @@ pub fn analyze_audio(
         std_duration_secs,
         std_diff_secs: samples.len() as f64 / sample_rate as f64 - std_duration_secs,
     }
+}
+
+// --- Shared TTS test helpers ---
+
+/// Monorepo root path (3 levels up from `CARGO_MANIFEST_DIR`).
+pub fn ws_root() -> &'static std::path::PathBuf {
+    static ROOT: LazyLock<std::path::PathBuf> = LazyLock::new(|| {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf()
+    });
+    &ROOT
+}
+
+/// Collect .fst rule files from a model directory, return comma-separated paths (or None).
+pub fn collect_rule_fsts(dir: &std::path::Path) -> Option<String> {
+    let mut files: Vec<String> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let ep = entry.path();
+            if ep.extension().is_some_and(|ext| ext == "fst") {
+                files.push(ep.to_string_lossy().into_owned());
+            }
+        }
+    }
+    files.sort_by(|a, b| {
+        fn priority(f: &str) -> u8 {
+            if f.ends_with("phone.fst") { 0 }
+            else if f.ends_with("date.fst") { 1 }
+            else if f.ends_with("number.fst") { 2 }
+            else { 3 }
+        }
+        priority(a).cmp(&priority(b))
+    });
+    (!files.is_empty()).then(|| files.join(","))
+}
+
+/// Resample → Opus encode → Opus decode → return decoded PCM at `encode_sr`.
+pub fn opus_pipeline(samples: &[f32], sample_rate: i32, encode_sr: u32) -> Vec<f32> {
+    use rubato::Resampler;
+    let channels = 1_usize;
+    let chunk_size = 4096.min(samples.len());
+
+    let (pcm, sr) = if sample_rate as u32 != encode_sr {
+        let mut resampler = rubato::FftFixedIn::<f32>::new(
+            sample_rate as usize,
+            encode_sr as usize,
+            chunk_size,
+            1,
+            1,
+        )
+        .expect("Failed to create resampler");
+        let mut all_output = Vec::new();
+        for chunk in samples.chunks(chunk_size) {
+            let out = if chunk.len() < chunk_size {
+                resampler
+                    .process_partial(Some(&[chunk][..]), None)
+                    .expect("Resampling failed")
+            } else {
+                resampler
+                    .process(&[chunk], None)
+                    .expect("Resampling failed")
+            };
+            all_output.extend_from_slice(&out[0]);
+        }
+        if let Ok(tail) = resampler.process_partial(None::<&[&[f32]]>, None) {
+            all_output.extend_from_slice(&tail[0]);
+        }
+        (all_output, encode_sr)
+    } else {
+        (samples.to_vec(), sample_rate as u32)
+    };
+
+    let mut encoder = opus_rs::OpusEncoder::new(sr as i32, channels, opus_rs::Application::Audio)
+        .expect("Failed to create Opus encoder");
+    let frame_dur = 20u64;
+    let packet_size = sr as usize * channels * frame_dur as usize / 1000;
+    let count = pcm.len().div_ceil(packet_size);
+    let mut packets = Vec::with_capacity(count);
+    for n in 0..count {
+        let start = n * packet_size;
+        let end = std::cmp::min(start + packet_size, pcm.len());
+        let mut frame: Vec<f32> = pcm[start..end].to_vec();
+        frame.resize(packet_size, 0.0);
+        let mut output = vec![0u8; 4000];
+        let out_len = encoder.encode(&frame, packet_size, &mut output).unwrap();
+        output.truncate(out_len);
+        packets.push(output);
+    }
+
+    let mut decoder = opus_rs::OpusDecoder::new(sr as i32, channels).unwrap();
+    let mut decoded = Vec::new();
+    for pkt in &packets {
+        let mut samples = vec![0f32; packet_size];
+        if let Ok(len) = decoder.decode(pkt, packet_size, &mut samples) {
+            decoded.extend_from_slice(&samples[..len]);
+        }
+    }
+    decoded
+}
+
+/// Standard AudioConfig for VITS tests: 16kHz / mono / 20ms frame duration.
+pub fn vits_audio_config() -> AudioConfig {
+    AudioConfig {
+        output_sample_rate: Some(16000),
+        output_channel: Some(1),
+        output_frame_duration: Some(20),
+        ..Default::default()
+    }
+}
+
+/// Shared VITS test helper: create model → stream inference → Opus decode → write WAV.
+pub async fn run_vits_test(
+    tts_config: &TtsConfig,
+    audio_config: &AudioConfig,
+    wav: &str,
+) -> anyhow::Result<()> {
+    let tts = api::tts::TtsFactory::create_model(tts_config, audio_config).await?;
+    let text_stream = tts_stream(String::from(TEST_TTS_TEXT));
+    let mut tts_stream = tts.stream(Box::pin(text_stream)).await;
+
+    let gen_start = std::time::Instant::now();
+    let mut all_packets: Vec<Vec<u8>> = Vec::new();
+    while let Some(data) = tts_stream.next().await {
+        match data {
+            Ok(data) => {
+                info!("text: {}", data.text);
+                if let Some(packets) = data.audio {
+                    all_packets.extend(packets);
+                }
+            }
+            Err(e) => panic!("{:?}", e),
+        }
+    }
+    let gen_elapsed = gen_start.elapsed();
+    anyhow::ensure!(
+        !all_packets.is_empty(),
+        "Expected audio packets from VitsTTS"
+    );
+
+    let decode_fs = 320;
+    let mut decoder = opus_rs::OpusDecoder::new(16000, 1_usize).unwrap();
+    let mut decoded = Vec::new();
+    for packet in &all_packets {
+        let mut samples = vec![0f32; decode_fs];
+        if let Ok(len) = decoder.decode(packet, decode_fs, &mut samples) {
+            decoded.extend_from_slice(&samples[..len]);
+        }
+    }
+    anyhow::ensure!(decoded.len() > 1000, "Decoded audio too short");
+    let std_dur = estimate_std_duration(TEST_TTS_TEXT);
+    info!("{}", analyze_audio(&decoded, 16000, gen_elapsed, std_dur));
+
+    std::fs::create_dir_all("./test_data")?;
+    let _ = wavers::write(wav, &decoded, 16000, 1);
+    Ok(())
+}
+
+/// Create a TTS input stream from a text string.
+pub fn tts_stream(
+    text: String,
+) -> impl Stream<Item = core::result::Result<String, ModelError>> + Unpin + Send + 'static {
+    let (tx, rx) = channel::<core::result::Result<String, ModelError>>(10);
+    thread::spawn(move || {
+        block_on(async move {
+            let _ = tx.send(Ok(text)).await;
+            drop(tx);
+        })
+    });
+    ReceiverStream::new(rx)
 }
