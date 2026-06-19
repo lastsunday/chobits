@@ -147,7 +147,7 @@ pub struct Config {
     #[serde(default = "default_tts_model")]
     pub tts_model: Option<TtsModel>,
 
-    /// default: auto-derived from model+variant
+    /// default: auto-derived from model manifest
     #[serde(default = "default_tts_path")]
     pub tts_path: Option<String>,
 
@@ -223,7 +223,7 @@ pub struct Config {
     #[serde(default = "default_audio_input_sample_rate")]
     pub audio_input_sample_rate: Option<u32>,
 
-    /// default: 60
+    /// default: 20
     #[serde(default = "default_audio_input_frame_duration")]
     pub audio_input_frame_duration: Option<u64>,
 
@@ -239,7 +239,7 @@ pub struct Config {
     #[serde(default = "default_audio_output_channel")]
     pub audio_output_channel: Option<u32>,
 
-    /// default: 60
+    /// default: 20
     #[serde(default = "default_audio_output_frame_duration")]
     pub audio_output_frame_duration: Option<u64>,
 
