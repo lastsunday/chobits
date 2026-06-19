@@ -132,15 +132,4 @@ pub fn calcalute_tts_packet_size(sample_rate: u32, channel: u32, delay_millis: u
     sample_rate as usize * channel as usize * delay_millis as usize / 1000
 }
 
-/// 根据模型路径（目录名）返回推荐的 `length_scale` 默认值。
-/// 测试校准值，使时长接近标准时长（~14.1s 对 TEST_TTS_TEXT）。
-pub(crate) fn default_length_scale(path: &str) -> f32 {
-    let variant = path.trim_end_matches('/').rsplit('/').next().unwrap_or("");
-    match variant {
-        "melo-tts-zh_en" => 1.3,
-        "zh-hf-theresa" => 2.0,
-        "aishell3" => 0.6,
-        "matcha-icefall-zh-baker" | "matcha-icefall-zh-en" => 1.3,
-        _ => 1.0,
-    }
-}
+

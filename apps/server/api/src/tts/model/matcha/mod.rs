@@ -15,7 +15,7 @@ use tracing::{debug, error};
 use crate::common::ModelError;
 use crate::config::audio::AudioConfig;
 use crate::config::tts::TtsConfig;
-use crate::tts::{Tts, TtsData, TtsError, default_length_scale, encode_sample_to_tts_packet};
+use crate::tts::{Tts, TtsData, TtsError, encode_sample_to_tts_packet};
 
 pub struct TtsMatcha {
     tts: Arc<OfflineTts>,
@@ -58,7 +58,7 @@ impl TtsMatcha {
         let length_scale = opts
             .and_then(|o| o.get("length_scale"))
             .and_then(|v| v.as_f64())
-            .unwrap_or_else(|| default_length_scale(path) as f64) as f32;
+            .unwrap_or(1.0) as f32;
 
         let speed = opts
             .and_then(|o| o.get("speed"))

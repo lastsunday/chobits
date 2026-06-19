@@ -1254,6 +1254,18 @@ pub fn tts_base_path(model: &TtsModel) -> Option<String> {
     tts_model_info(model).map(|(_, b, _)| b)
 }
 
+/// Returns the default `length_scale` for the given model+variant from the manifest.
+pub fn tts_length_scale(model: &TtsModel, variant: &str) -> Option<f32> {
+    let (_, _, stem) = tts_model_info(model)?;
+    let cat_dir = MANIFESTS.get_dir("tts")?;
+    let file_entry = cat_dir
+        .files()
+        .find(|f| f.path().file_stem() == Some(OsStr::new(&stem)))?;
+    let entry: serde_json::Value =
+        serde_json::from_slice(file_entry.contents()).ok()?;
+    entry["variants"][variant]["length_scale"].as_f64().map(|v| v as f32)
+}
+
 /// Returns the default reference audio variant from the embedded manifest.
 pub fn default_reference_variant() -> Option<String> {
     let cat_dir = MANIFESTS.get_dir("reference")?;

@@ -175,6 +175,19 @@ async fn async_main(server: &Arc<Server>) -> Result<(), anyhow::Error> {
         } else {
             format!("{data_dir}/{ref_path}")
         };
+
+        // Merge manifest defaults into tts_options, user values take precedence
+        let tts_options = {
+            let mut opts = config.tts_options.clone()
+                .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+            if let Some(ls) = crate::downloader::tts_length_scale(&model, &effective_variant) {
+                if let Some(m) = opts.as_object_mut() {
+                    m.entry("length_scale").or_insert_with(|| serde_json::json!(ls));
+                }
+            }
+            Some(opts)
+        };
+
         Arc::new(TtsConfig {
             model: config.tts_model.to_owned(),
             variant: Some(effective_variant),
@@ -190,7 +203,7 @@ async fn async_main(server: &Arc<Server>) -> Result<(), anyhow::Error> {
                 .tts_reference_prompt_wav_path
                 .to_owned()
                 .or(Some(ref_path)),
-            options: config.tts_options.clone(),
+            options: tts_options,
         })
     };
     let asr_config = Arc::new(AsrConfig {
