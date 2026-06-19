@@ -1481,7 +1481,7 @@ async fn test_tts_audio_collect() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Full session pipeline test at 24000Hz output.
+/// Full session pipeline test at 16000Hz output.
 /// Uses Void VAD/ASR + Echo LLM + Vits TTS.
 /// Captures all Opus packets from the output stream via OutputController,
 /// decodes to PCM, and saves as WAV for analysis.

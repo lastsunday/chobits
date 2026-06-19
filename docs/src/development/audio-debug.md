@@ -8,8 +8,7 @@
 
 ### 1. Validate server output
 
-- Session 集成测试（`test_tts_audio_collect_24k`）产生 WAV 文件，播放干净
-- `TTS_DUMP_DIR` 捕获原始 Opus 帧 → `decode_dump` 离线解码 WAV 干净
+- Session 集成测试（`test_tts_audio_collect` / `test_tts_vits`）产生 WAV 文件，播放干净
 - **结论：服务端音频管线（TTS → resample → Opus → WebSocket）无质量问题**
 
 ### 2. Rule out each tunable
@@ -22,7 +21,6 @@
 | `Application::LowDelay` → `Application::Audio` + FEC | 无效 |
 | `Signal::Auto` → `Signal::Voice` + `Bandwidth::Superwideband` | 无效 |
 | VBR → CBR (`set_vbr(false)`) | 无效 |
-| `PRE_BUFFER_FRAME_COUNT` 6 → 2 → 10 | 无效 |
 | 旧 pacing: elapsed 相对时间 → 绝对目标时间 | 无效 |
 
 ### 3. Client code analysis
@@ -104,7 +102,7 @@ Frame 228:                   │
 
 ### 方案
 
-用 `tokio::time::interval_at` + `MissedTickBehavior::Skip` **惰性创建**，替代手动绝对目标时间计算。
+用 `tokio::time::interval_at` + `MissedTickBehavior::Skip` **惰性创建**，首帧立即发，后续帧从当前时刻起严格 20ms 间距。
 
 ### 代码
 
@@ -114,26 +112,20 @@ Frame 228:                   │
 use tokio::time::{Duration, Instant, MissedTickBehavior, interval_at};
 
 pub struct OutputController {
-    // 移除 audio_start_time、audio_send_count
-    pre_buffer_remaining: u64,
-    interval: Option<tokio::time::Interval>,  // ← 新增
+    interval: Option<tokio::time::Interval>,
     frame_duration: u64,
     // ...
 }
 
 impl OutputController {
     async fn pace_audio(&mut self) {
-        if self.pre_buffer_remaining > 0 {
-            self.pre_buffer_remaining -= 1;  // 前 10 帧立即发送
+        if let Some(interval) = &mut self.interval {
+            interval.tick().await;  // 等 20ms → 发送 → 再等 20ms → 发送...
         } else {
-            // 首个 paced 帧到达时惰性创建 interval
-            let interval = self.interval.get_or_insert_with(|| {
-                let start = Instant::now() + Duration::from_millis(self.frame_duration);
-                let mut intv = interval_at(start, Duration::from_millis(self.frame_duration));
-                intv.set_missed_tick_behavior(MissedTickBehavior::Skip);
-                intv
-            });
-            interval.tick().await;  // 等 60ms → 发送 → 再等 60ms → 发送...
+            let start = Instant::now() + Duration::from_millis(self.frame_duration);
+            let mut intv = interval_at(start, Duration::from_millis(self.frame_duration));
+            intv.set_missed_tick_behavior(MissedTickBehavior::Skip);
+            self.interval = Some(intv); // 首帧立即发，interval 从下一帧起算
         }
     }
 }
@@ -145,20 +137,17 @@ impl OutputController {
 TTS 推理 (~13s)           TTS::Start     AudioResult × N
 │────────────────────────┤───────────────►
                          │
-pre_buffer_remaining=10  │  Frame 1-10: ↘
-                         │  立即发送     初始突发 600ms
-                         │
-Frame 11:                │
+Frame 1:                 │
   interval = None        │
-  get_or_insert_with():  │  → 创建 interval
-    start = now + 60ms   │  → tick().await 等 60ms
-  → 发送                 │
+  → 创建 interval(now+20ms, 20ms)  ← 不 tick，立即发送
                          │
-Frame 12:                │
-  interval.tick().await  │  → 等 60ms → 发送
-Frame 13:                │
-  interval.tick().await  │  → 等 60ms → 发送
-  ...                    │  严格 60ms/帧
+Frame 2:                 │
+  interval.tick().await  │  → 等 20ms → 发送
+Frame 3:                 │
+  interval.tick().await  │  → 等 20ms → 发送
+Frame 4:                 │
+  interval.tick().await  │  → 等 20ms → 发送
+  ...                    │  严格 20ms/帧
                          ▼
                     客户端稳定播放
 ```
@@ -167,11 +156,11 @@ Frame 13:                │
 
 | 指标 | 旧方案 | 新方案 |
 |------|--------|--------|
-| 初始突发 | 228 帧 (<10ms) | 10 帧 (~1ms) |
-| 稳态间隔 | 无（全部爆发） | 严格 60ms/帧 |
-| 客户端批解码 | 200+ 帧/批 | ≤10 帧/批 |
-| 主线程阻塞 | >1 秒 | ~5-10ms |
-| Web Audio Api | 调度断裂 | 连续调度 |
+| 初始突发 | 228 帧 (<10ms) | 1 帧（首帧立即发）|
+| 稳态间隔 | 无（全部爆发） | 严格 20ms/帧 |
+| 客户端批解码 | 200+ 帧/批 | 1 帧/批 |
+| 主线程阻塞 | >1 秒 | <1ms |
+| Web Audio API | 调度断裂 | 连续调度 |
 
 ## Key Files
 
