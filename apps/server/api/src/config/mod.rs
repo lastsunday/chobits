@@ -19,7 +19,7 @@ use figment::{
     Figment,
     providers::{Env, Format, Toml},
 };
-use serde::{Deserialize, de::IgnoredAny};
+use serde::{Deserialize, Serialize, de::IgnoredAny};
 use std::{collections::BTreeMap, net::SocketAddr, path::PathBuf};
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
@@ -143,7 +143,7 @@ pub struct Config {
     #[serde(default = "default_vad_num_threads")]
     pub vad_num_threads: Option<i32>,
 
-    /// default: voxcpm
+    /// default: matchatts
     #[serde(default = "default_tts_model")]
     pub tts_model: Option<TtsModel>,
 
@@ -151,11 +151,18 @@ pub struct Config {
     #[serde(default = "default_tts_path")]
     pub tts_path: Option<String>,
 
+    /// Variant override for the active TTS model.
+    ///
+    /// When not set, the default variant is read from the embedded model manifest.
+    /// This is useful for switching between different model variants without
+    /// changing the model type.
+    ///
+    /// default: auto-detected from model manifest
     #[serde(default)]
     pub tts_variant: Option<String>,
 
-    /// default: xiyangyang
-    #[serde(default = "default_tts_reference_variant")]
+    /// default: auto-detected from model manifest
+    #[serde(default)]
     pub tts_reference_variant: Option<String>,
 
     /// override the auto-derived prompt text from manifest
@@ -422,9 +429,6 @@ fn default_tts_path() -> Option<String> {
     None
 }
 
-fn default_tts_reference_variant() -> Option<String> {
-    Some(String::from("xiyangyang"))
-}
 
 fn default_asr_model() -> Option<AsrModel> {
     Some(AsrModel::Qwen3)
@@ -643,31 +647,17 @@ impl Config {
         self.data_dir.as_deref().unwrap_or("data")
     }
 
-    pub fn derive_tts_path(&self) -> Option<String> {
-        if self.tts_path.is_some() {
-            return self.tts_path.clone();
-        }
-        let d = self.data_dir();
+    /// Derive the full TTS path by joining `data_dir`, `base_path`, and `variant`.
+    ///
+    /// `base_path` comes from the manifest (e.g. `"tts/model/matcha/"`).
+    /// `variant` should already be resolved before calling this method.
+    pub fn derive_tts_path(&self, base_path: &str, variant: &str) -> Option<String> {
         match self.tts_model.clone().unwrap_or_default() {
-            TtsModel::PocketTts => {
-                let variant = self.tts_variant.clone().unwrap_or_else(|| "default".into());
-                Some(format!("{d}/tts/model/pocket/{variant}/"))
-            }
-            TtsModel::Vits => {
-                let variant = self
-                    .tts_variant
-                    .clone()
-                    .unwrap_or_else(|| "melo-tts-zh_en".into());
-                Some(format!("{d}/tts/model/vits/{variant}/"))
-            }
-            TtsModel::MatchaTts => {
-                let variant = self
-                    .tts_variant
-                    .clone()
-                    .unwrap_or_else(|| "matcha-icefall-zh-baker".into());
-                Some(format!("{d}/tts/model/matcha/{variant}/"))
-            }
             TtsModel::Mute => None,
+            _ => {
+                let d = self.data_dir().trim_end_matches('/');
+                Some(format!("{d}/{base_path}{variant}/"))
+            }
         }
     }
 
@@ -757,7 +747,7 @@ pub enum AsrModel {
     Void,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Default)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum TtsModel {
     Mute,

@@ -1,7 +1,7 @@
 {
   "config": {
     "category": "tts",
-    "model": "pocket_tts"
+    "model": "pockettts"
   },
   "default_variant": "default",
   "variants": {

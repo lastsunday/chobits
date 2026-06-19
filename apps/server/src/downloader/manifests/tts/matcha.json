@@ -3,7 +3,7 @@
     "category": "tts",
     "model": "matchatts"
   },
-  "default_variant": "matcha-icefall-zh-baker",
+  "default_variant": "matcha-icefall-zh-en",
   "variants": {
     "matcha-icefall-zh-baker": {
       "archives": [

@@ -8,6 +8,7 @@ use api::config::{
     tts::TtsConfig, vad::VadConfig, ws::WsConfig,
 };
 use framework::config::auth::AuthConfig;
+use anyhow::anyhow;
 use tracing::info;
 
 use crate::{
@@ -144,17 +145,30 @@ async fn async_main(server: &Arc<Server>) -> Result<(), anyhow::Error> {
     });
     let tts_config = {
         let data_dir = config.data_dir();
-        let ref_variant = config
-            .tts_reference_variant
-            .as_deref()
-            .unwrap_or("xiyangyang");
-        let (ref_path, ref_text) = crate::downloader::resolve_reference_audio(ref_variant)
-            .unwrap_or_else(|| {
-                (
-                    format!("{data_dir}/tts/reference/{ref_variant}.wav"),
-                    String::new(),
-                )
-            });
+        let model = config.tts_model.clone().unwrap_or_default();
+
+        // Resolve variant: user config → manifest default
+        let effective_variant = config.tts_variant.clone()
+            .or_else(|| crate::downloader::default_tts_variant(&model))
+            .ok_or_else(|| anyhow!(
+                "tts variant not configured and manifest missing default_variant"
+            ))?;
+
+        // Resolve path: explicit config → manifest base + variant
+        let tts_path = config.tts_path.clone().or_else(|| {
+            let base = crate::downloader::tts_base_path(&model)?;
+            config.derive_tts_path(&base, &effective_variant)
+        });
+
+        let ref_variant = config.tts_reference_variant.clone()
+            .or_else(crate::downloader::default_reference_variant)
+            .ok_or_else(|| anyhow!(
+                "reference audio variant not configured and manifest missing default_variant"
+            ))?;
+        let (ref_path, ref_text) = crate::downloader::resolve_reference_audio(&ref_variant)
+            .ok_or_else(|| anyhow!(
+                "reference audio variant '{ref_variant}' not found in manifest"
+            ))?;
         // The path from the embedded manifest is relative to data_dir
         let ref_path = if ref_path.starts_with('/') {
             ref_path
@@ -163,11 +177,8 @@ async fn async_main(server: &Arc<Server>) -> Result<(), anyhow::Error> {
         };
         Arc::new(TtsConfig {
             model: config.tts_model.to_owned(),
-            variant: config.tts_variant.to_owned(),
-            path: config
-                .tts_path
-                .to_owned()
-                .or_else(|| config.derive_tts_path()),
+            variant: Some(effective_variant),
+            path: tts_path,
             reference_prompt_text: config.tts_reference_prompt_text.to_owned().or(
                 if ref_text.is_empty() {
                     None

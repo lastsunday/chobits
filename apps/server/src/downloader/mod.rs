@@ -1125,21 +1125,10 @@ fn confirm(question: &str) -> Result<bool, Box<dyn std::error::Error>> {
 fn config_to_targets(config: &AppConfig) -> Vec<(String, String, Option<String>)> {
     let mut targets = Vec::new();
 
-    match config.tts_model.clone().unwrap_or_default() {
-        TtsModel::PocketTts => {
-            targets.push((
-                "tts".into(),
-                "pocket_tts".into(),
-                config.tts_variant.clone(),
-            ));
+    if let Some(ref model) = config.tts_model {
+        if let Some((_, _, stem)) = tts_model_info(model) {
+            targets.push(("tts".into(), stem, config.tts_variant.clone()));
         }
-        TtsModel::Vits => {
-            targets.push(("tts".into(), "vits".into(), config.tts_variant.clone()));
-        }
-        TtsModel::MatchaTts => {
-            targets.push(("tts".into(), "matcha".into(), config.tts_variant.clone()));
-        }
-        TtsModel::Mute => {}
     }
 
     if config.asr_model.clone().unwrap_or_default() == AsrModel::Qwen3 {
@@ -1230,6 +1219,50 @@ pub fn update_checksums(data_dir: &Path, quiet: bool) -> Result<(), Box<dyn std:
     }
 
     Ok(())
+}
+
+/// Look up TTS model info from embedded manifest by serde model name.
+/// Returns (default_variant, base_path, manifest_file_stem).
+fn tts_model_info(model: &TtsModel) -> Option<(String, String, String)> {
+    let model_str = serde_json::to_value(model).ok()?.as_str()?.to_owned();
+    let cat_dir = MANIFESTS.get_dir("tts")?;
+    for file_entry in cat_dir.files() {
+        let entry: serde_json::Value =
+            serde_json::from_slice(file_entry.contents()).ok()?;
+        if entry["config"]["model"].as_str() != Some(&model_str) {
+            continue;
+        }
+        let stem = file_entry.path().file_stem()?.to_str()?.to_owned();
+        let default_variant = entry["default_variant"].as_str()?.to_owned();
+        let archive_path = entry["variants"][&default_variant]["archives"][0]["path"]
+            .as_str()?;
+        let base = Path::new(archive_path).parent()?.to_str()?.to_owned();
+        let base_path = format!("{base}/");
+        return Some((default_variant, base_path, stem));
+    }
+    None
+}
+
+/// Returns the default variant name for a given TTS model from its embedded manifest.
+pub fn default_tts_variant(model: &TtsModel) -> Option<String> {
+    tts_model_info(model).map(|(v, _, _)| v)
+}
+
+/// Returns the base storage path for a TTS model (e.g. "tts/model/matcha/").
+/// Derived from the default variant's archive path in the manifest.
+pub fn tts_base_path(model: &TtsModel) -> Option<String> {
+    tts_model_info(model).map(|(_, b, _)| b)
+}
+
+/// Returns the default reference audio variant from the embedded manifest.
+pub fn default_reference_variant() -> Option<String> {
+    let cat_dir = MANIFESTS.get_dir("reference")?;
+    let file_entry = cat_dir
+        .files()
+        .find(|f| f.path().file_stem() == Some(OsStr::new("audio")))?;
+    let entry: serde_json::Value =
+        serde_json::from_slice(file_entry.contents()).ok()?;
+    entry["default_variant"].as_str().map(String::from)
 }
 
 /// Look up reference audio path and prompt text from the embedded manifest.

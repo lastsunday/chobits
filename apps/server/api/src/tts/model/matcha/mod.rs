@@ -33,7 +33,7 @@ impl TtsMatcha {
         let path = tts_config
             .path
             .as_deref()
-            .unwrap_or("data/tts/model/matcha/matcha-icefall-zh-baker/");
+            .ok_or_else(|| anyhow::anyhow!("tts path must be set in TtsConfig"))?;
         if !path.ends_with('/') {
             return Err(anyhow::anyhow!("tts path must end with '/'"));
         }
