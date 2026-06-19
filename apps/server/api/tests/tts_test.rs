@@ -1,3 +1,4 @@
+use std::fmt;
 use std::path::Path;
 use std::sync::LazyLock;
 use std::{sync::Arc, thread};
@@ -213,6 +214,7 @@ async fn test_tts_pocket() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Monorepo root path (3 levels up from `CARGO_MANIFEST_DIR`).
 fn ws_root() -> &'static std::path::PathBuf {
     static ROOT: LazyLock<std::path::PathBuf> = LazyLock::new(|| {
         Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -227,6 +229,7 @@ fn ws_root() -> &'static std::path::PathBuf {
     &ROOT
 }
 
+/// Standard AudioConfig for VITS tests: 16kHz / mono / 20ms frame duration.
 fn vits_audio_config() -> AudioConfig {
     AudioConfig {
         output_sample_rate: Some(16000),
@@ -236,9 +239,9 @@ fn vits_audio_config() -> AudioConfig {
     }
 }
 
+/// Shared VITS test helper: create model → stream inference → Opus decode → write WAV.
 async fn run_vits_test(tts_config: &TtsConfig, audio_config: &AudioConfig, wav: &str) -> anyhow::Result<()> {
     let tts = TtsFactory::create_model(tts_config, audio_config).await?;
-
     let text_stream = tts_stream(String::from(TEST_TTS_TEXT));
     let mut tts_stream = tts.stream(Box::pin(text_stream)).await;
 
@@ -254,8 +257,7 @@ async fn run_vits_test(tts_config: &TtsConfig, audio_config: &AudioConfig, wav: 
             Err(e) => panic!("{:?}", e),
         }
     }
-
-    assert!(!all_packets.is_empty(), "Expected audio packets from VitsTTS");
+    anyhow::ensure!(!all_packets.is_empty(), "Expected audio packets from VitsTTS");
 
     let decode_fs = 320;
     let mut decoder = opus_rs::OpusDecoder::new(16000, 1_usize).unwrap();
@@ -266,8 +268,8 @@ async fn run_vits_test(tts_config: &TtsConfig, audio_config: &AudioConfig, wav: 
             decoded.extend_from_slice(&samples[..len]);
         }
     }
-    assert!(decoded.len() > 1000, "Decoded audio too short");
-    info!("decoded {} PCM samples", decoded.len());
+    anyhow::ensure!(decoded.len() > 1000, "Decoded audio too short");
+    info!("{}", analyze_audio(&decoded, 16000));
 
     std::fs::create_dir_all("./test_data")?;
     let _ = wavers::write(wav, &decoded, 16000, 1);
@@ -343,7 +345,194 @@ async fn test_tts_vits_aishell3() -> anyhow::Result<()> {
     ).await
 }
 
+/// Test text covering Chinese, English, and numeric patterns (rule FST + OOV scenarios).
 const TEST_TTS_TEXT: &str = "2024年5月11号，拨打110或者18920240511，花了99块钱。我在学习machine learning和artificial intelligence。";
+
+/// TTS 音频诊断结果。
+#[derive(Debug)]
+struct TtsAudioDiagnostics {
+    num_samples: usize,
+    duration_secs: f64,
+    shimmer_pct: f64,
+    dynamic_range_db: f64,
+}
+
+impl TtsAudioDiagnostics {
+    fn shimmer_grade(&self) -> &'static str {
+        match self.shimmer_pct {
+            s if s < 3.81 => "Excellent",
+            s if s < 5.0 => "Good",
+            s if s < 6.0 => "Fair",
+            s if s < 10.0 => "Poor",
+            _ => "Bad",
+        }
+    }
+
+    fn dr_grade(&self) -> &'static str {
+        match self.dynamic_range_db {
+            d if d > 20.0 => "Good",
+            d if d > 15.0 => "Fair",
+            _ => "Poor",
+        }
+    }
+
+    /// Composite score (0–100). Shimmer 70% weight, dynamic range 30% weight, linear interpolation within each tier.
+    fn score(&self) -> f64 {
+        let s = if self.shimmer_pct < 3.81 {
+            100.0
+        } else if self.shimmer_pct < 5.0 {
+            lerp(100.0, 75.0, (self.shimmer_pct - 3.81) / (5.0 - 3.81))
+        } else if self.shimmer_pct < 6.0 {
+            lerp(75.0, 50.0, (self.shimmer_pct - 5.0) / (6.0 - 5.0))
+        } else if self.shimmer_pct < 10.0 {
+            lerp(50.0, 25.0, (self.shimmer_pct - 6.0) / (10.0 - 6.0))
+        } else {
+            0.0
+        };
+        let d = if self.dynamic_range_db > 20.0 {
+            100.0
+        } else if self.dynamic_range_db > 15.0 {
+            lerp(0.0, 100.0, (self.dynamic_range_db - 15.0) / (20.0 - 15.0))
+        } else {
+            0.0
+        };
+        s * 0.7 + d * 0.3
+    }
+
+    /// Overall usability verdict.
+    fn verdict(&self) -> &'static str {
+        match self.shimmer_pct {
+            s if s >= 10.0 => "Unsuitable for daily use — shimmer exceeds algorithm reliability limit",
+            s if s >= 6.0 => "Marginal — shimmer in pathological range (>6%), noticeable roughness",
+            s if s >= 5.0 => "Marginal — shimmer in warning zone (5–6%), slight tremor",
+            _ => match self.dynamic_range_db {
+                d if d < 10.0 => "Marginal — dynamic range too low (<10dB), flat audio",
+                d if d < 15.0 => "Marginal — dynamic range narrow (10–15dB), compressed sound",
+                _ => "Suitable for daily use — all indicators within normal range",
+            },
+        }
+    }
+}
+
+/// 线性插值：t ∈ [0, 1] 时返回 start 到 end 之间的值。
+fn lerp(start: f64, end: f64, t: f64) -> f64 {
+    start + (end - start) * t.clamp(0.0, 1.0)
+}
+
+impl fmt::Display for TtsAudioDiagnostics {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "shimmer={:.2}% ({}), dynamic_range={:.1}dB ({}), score={:.0}/100, samples={}, duration={:.2}s  {}",
+            self.shimmer_pct,
+            self.shimmer_grade(),
+            self.dynamic_range_db,
+            self.dr_grade(),
+            self.score(),
+            self.num_samples,
+            self.duration_secs,
+            self.verdict(),
+        )
+    }
+}
+
+/// 对解码后 PCM 做完整音频诊断。
+fn analyze_audio(samples: &[f32], sample_rate: u32) -> TtsAudioDiagnostics {
+    let window = 160; // 10ms @ 16kHz
+    let mut rms: Vec<f32> = samples
+        .chunks(window)
+        .map(|chunk| {
+            let sq_sum: f32 = chunk.iter().map(|s| s * s).sum();
+            (sq_sum / chunk.len() as f32).sqrt()
+        })
+        .collect();
+
+    // 去除静音帧
+    let peak = rms.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+    rms.retain(|r| *r > peak * 0.05);
+
+    // shimmer
+    let shimmer_pct = if rms.len() < 2 {
+        0.0
+    } else {
+        let mean = rms.iter().sum::<f32>() / rms.len() as f32;
+        if mean < 1e-10 {
+            0.0
+        } else {
+            let sum_diff: f32 = rms.windows(2).map(|w| (w[1] - w[0]).abs()).sum();
+            let mean_diff = sum_diff / (rms.len() - 1) as f32;
+            (mean_diff / mean * 100.0) as f64
+        }
+    };
+
+    // dynamic range
+    let dynamic_range_db = if rms.len() < 2 {
+        0.0
+    } else {
+        let max_rms = rms.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+        let min_rms = rms.iter().cloned().fold(f32::INFINITY, f32::min);
+        if min_rms < 1e-10 {
+            0.0
+        } else {
+            (20.0 * (max_rms / min_rms).log10()) as f64
+        }
+    };
+
+    TtsAudioDiagnostics {
+        num_samples: samples.len(),
+        duration_secs: samples.len() as f64 / sample_rate as f64,
+        shimmer_pct,
+        dynamic_range_db,
+    }
+}
+
+#[tokio::test]
+#[traced_test]
+#[ignore]
+/// cargo test --test tts_test -- test_tts_vits_melo_tts_zh_en_noise_scale --ignored --nocapture
+async fn test_tts_vits_melo_tts_zh_en_noise_scale() -> anyhow::Result<()> {
+    let path = ws_root().join("data/tts/model/vits/melo-tts-zh_en/").to_string_lossy().into_owned();
+    let audio_cfg = vits_audio_config();
+
+    for (ns, ns_label) in [(0.667f32, "default"), (0.5, "mid"), (0.3, "low")] {
+        let wav = format!("./test_data/test_tts_vits_melo_tts_zh_en_ns{ns}.wav");
+        run_vits_test(
+            &TtsConfig {
+                model: Some(TtsModel::Vits),
+                path: Some(path.clone()),
+                options: Some(serde_json::json!({
+                    "num_threads": 2, "noise_scale": ns, "noise_scale_w": 0.8,
+                    "length_scale": 1.0, "speed": 1.0, "sid": 0, "debug": false,
+                })),
+                ..Default::default()
+            },
+            &audio_cfg,
+            &wav,
+        ).await?;
+        let (samples, _sr): (wavers::Samples<f32>, i32) = wavers::read(&wav)?;
+        info!("ns={ns} ({ns_label}): {}", analyze_audio(&samples, _sr as u32));
+    }
+
+    for (nsw, nsw_label) in [(0.8f32, "default"), (0.5, "mid"), (0.2, "low")] {
+        let wav = format!("./test_data/test_tts_vits_melo_tts_zh_en_nsw{nsw}.wav");
+        run_vits_test(
+            &TtsConfig {
+                model: Some(TtsModel::Vits),
+                path: Some(path.clone()),
+                options: Some(serde_json::json!({
+                    "num_threads": 2, "noise_scale": 0.667, "noise_scale_w": nsw,
+                    "length_scale": 1.0, "speed": 1.0, "sid": 0, "debug": false,
+                })),
+                ..Default::default()
+            },
+            &audio_cfg,
+            &wav,
+        ).await?;
+        let (samples, _sr): (wavers::Samples<f32>, i32) = wavers::read(&wav)?;
+        info!("nsw={nsw} ({nsw_label}): {}", analyze_audio(&samples, _sr as u32));
+    }
+    Ok(())
+}
 
 fn tts_stream(
     text: String,

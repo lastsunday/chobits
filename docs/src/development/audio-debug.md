@@ -172,3 +172,98 @@ Frame 4:                 │
 | `apps/server/api/src/tts/model/vits/mod.rs` | VITS 模型音频生成 |
 | `apps/server/api/src/ws/mod.rs` | WebSocket 帧发送 |
 | `apps/server/api/src/tts/mod.rs` | `encode_sample_to_tts_packet` 帧分割编码 |
+
+## TTS Test Tools
+
+`apps/server/api/tests/tts_test.rs` 包含 TTS 集成测试和音频质量分析函数。
+
+### 共享辅助函数
+
+| 函数 | 说明 |
+|------|------|
+| `ws_root()` | monorepo 根路径（`CARGO_MANIFEST_DIR` 往上 3 层） |
+| `vits_audio_config()` | VITS 测试标准 AudioConfig（16000Hz / mono / 20ms 帧） |
+| `run_vits_test(tts_config, audio_config, wav)` | 完整流程：创建模型 → TTS 流式推理 → Opus 解码 → 写 WAV |
+| `tts_stream(text)` | 从字符串创建 TTS 输入 `Stream` |
+
+### 音频质量指标
+
+`apps/server/api/tests/tts_test.rs` 中的 `analyze_audio(samples, sample_rate)` 返回 `TtsAudioDiagnostics` 结构体，包含以下指标：
+
+| 方法 | 返回值 | 说明 |
+|------|--------|------|
+| `shimmer_pct` | f64 | 10ms 窗口 RMS 帧间振幅变动率（%），反映"抖动/波浪感" |
+| `dynamic_range_db` | f64 | 非静音帧动态范围（dB） |
+| `shimmer_grade()` | &str | 等级：Excellent / Good / Fair / Poor / Bad |
+| `dr_grade()` | &str | 等级：Good / Fair / Poor |
+| `score()` | f64 | 综合得分 (0–100)：shimmer×0.7 + dynamic_range×0.3，区间内线性插值 |
+| `verdict()` | &str | 综合诊断结论（英文） |
+
+**Shimmer 等级（临床语音病理学参考）：**
+
+| 等级 | Shimmer (%) | 含义 |
+|------|-------------|------|
+| Excellent | < 3.81 | 健康人声水平 |
+| Good | 3.81–5.0 | 正常范围，轻微可感 |
+| Fair | 5.0–6.0 | 警告区，明显不稳定 |
+| Poor | 6.0–10.0 | 病理范围，粗糙/抖动 |
+| Bad | > 10.0 | 超出算法可靠上限 |
+
+**Dynamic Range 等级：**
+
+| 等级 | dB | 含义 |
+|------|-----|------|
+| Good | > 20 | 达到自然语音水平 |
+| Fair | 15–20 | 偏压缩，动态不足 |
+| Poor | < 15 | 明显扁平/沉闷 |
+
+**Shimmer 得分（权重 70%，线性插值）：**
+
+| Shimmer (%) | 得分 |
+|-------------|------|
+| < 3.81 | 100 |
+| 3.81–5.0 | 100 → 75 线性下降 |
+| 5.0–6.0 | 75 → 50 线性下降 |
+| 6.0–10.0 | 50 → 25 线性下降 |
+| >= 10.0 | 0 |
+
+**Dynamic Range 得分（权重 30%，线性插值）：**
+
+| dB | 得分 |
+|-----|------|
+| > 20 | 100 |
+| 15–20 | 0 → 100 线性上升 |
+| < 15 | 0 |
+
+**综合判定：**
+
+| Shimmer | Dynamic Range | 结论 |
+|---------|---------------|------|
+| < 5.0% | >= 15 dB | 适合日常使用 |
+| < 5.0% | < 15 dB | 勉强可用（动态不足） |
+| 5.0–6.0% | 任意 | 勉强可用（轻微抖动） |
+| 6.0–10.0% | 任意 | 勉强可用（明显粗糙） |
+| >= 10.0% | 任意 | 不适合日常使用 |
+
+**示例输出：**
+
+```
+shimmer=16.75% (Bad), dynamic_range=26.0dB (Good), score=30/100, samples=182400, duration=11.40s  Unsuitable for daily use — shimmer exceeds algorithm reliability limit
+```
+
+### 参数调优测试
+
+```bash
+cargo test --package api --test tts_test -- test_tts_vits_melo_tts_zh_en_noise_scale --ignored --nocapture
+```
+
+迭代 `noise_scale` / `noise_scale_w` 各 3 个值，生成 6 个 WAV 并打印 shimmer 和 dynamic_range。
+
+### Known findings (melo-tts-zh_en)
+
+| Parameter | Range tested | Effect |
+|-----------|-------------|--------|
+| `noise_scale` | 0.3–0.667 | Shimmer dropped from 16.99% to 16.31%, marginal improvement |
+| `noise_scale_w` | 0.2–0.8 | No effect (ignored by ONNX export) |
+
+**Conclusion:** melo-tts-zh_en shimmer ~16% greatly exceeds the algorithm reliability limit (>12%). The "waviness" is inherent to this ONNX-exported model and cannot be resolved by adjusting inference parameters.
