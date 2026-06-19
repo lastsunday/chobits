@@ -24,6 +24,7 @@ pub struct TtsVits {
     output_channel: u32,
     output_frame_duration: u64,
     speed: f32,
+    sid: i32,
 }
 
 impl TtsVits {
@@ -70,6 +71,11 @@ impl TtsVits {
             .and_then(|o| o.get("speed"))
             .and_then(|v| v.as_f64())
             .unwrap_or(1.0) as f32;
+
+        let sid = opts
+            .and_then(|o| o.get("sid"))
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0) as i32;
 
         let dict_dir = opts
             .and_then(|o| o.get("dict_dir"))
@@ -124,6 +130,26 @@ impl TtsVits {
                 }
             });
 
+        let rule_fsts = {
+            let p = std::path::Path::new(path);
+            let mut files: Vec<String> = Vec::new();
+            if let Ok(entries) = std::fs::read_dir(p) {
+                for entry in entries.flatten() {
+                    let ep = entry.path();
+                    if ep.extension().is_some_and(|ext| ext == "fst") {
+                        files.push(ep.to_string_lossy().into_owned());
+                    }
+                }
+            }
+            files.sort();
+            if files.is_empty() { None } else { Some(files.join(",")) }
+        };
+
+        let rule_fars = {
+            let p = std::path::Path::new(path).join("rule.far");
+            if p.is_file() { Some(p.to_string_lossy().into_owned()) } else { None }
+        };
+
         let vits_config = OfflineTtsVitsModelConfig {
             model: Some(model_path),
             tokens: Some(tokens),
@@ -142,6 +168,8 @@ impl TtsVits {
                 debug,
                 ..Default::default()
             },
+            rule_fsts,
+            rule_fars,
             ..Default::default()
         };
 
@@ -164,6 +192,7 @@ impl TtsVits {
             output_channel,
             output_frame_duration,
             speed,
+            sid,
         })
     }
 }
@@ -183,6 +212,7 @@ impl Tts for TtsVits {
         let output_channel = self.output_channel;
         let output_frame_duration = self.output_frame_duration;
         let speed = self.speed;
+        let sid = self.sid;
 
         tokio::spawn(async move {
             let mut pinned = text_stream;
@@ -217,6 +247,7 @@ impl Tts for TtsVits {
                 let result = tokio::task::spawn_blocking(move || {
                     let gen_config = GenerationConfig {
                         speed,
+                        sid,
                         ..Default::default()
                     };
                     let audio = tts_clone.generate_with_config(

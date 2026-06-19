@@ -66,7 +66,7 @@ tasks:
       cache: false
 
   dev-lite:
-    command: 'cargo run --package chobits-server -- -O "address=''0.0.0.0''" -O "data_dir=''../../data''" -O "vad_model=''void''" -O "asr_model=''void''" -O "tts_model=''vits''" -O "llm_model=''echo''"'
+    command: 'cargo run --package chobits-server -- -O "address=''0.0.0.0''" -O "data_dir=''../../data''" -O "vad_model=''void''" -O "asr_model=''void''" -O "tts_model=''pockettts''" -O "tts_reference_variant=''bria''" -O "llm_model=''echo''"'
     deps:
       - ~:build
     options:

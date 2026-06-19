@@ -22,6 +22,42 @@
         }
       ],
       "files": []
+    },
+    "zh-hf-theresa": {
+      "archives": [
+        {
+          "path": "tts/model/vits/zh-hf-theresa/",
+          "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-zh-hf-theresa.tar.bz2",
+          "sha256": null,
+          "extract": [
+            "theresa.onnx",
+            "tokens.txt",
+            "lexicon.txt",
+            "date.fst",
+            "number.fst",
+            "phone.fst"
+          ]
+        }
+      ],
+      "files": []
+    },
+    "aishell3": {
+      "archives": [
+        {
+          "path": "tts/model/vits/aishell3/",
+          "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-icefall-zh-aishell3.tar.bz2",
+          "sha256": null,
+          "extract": [
+            "model.onnx",
+            "tokens.txt",
+            "lexicon.txt",
+            "phone.fst",
+            "date.fst",
+            "number.fst"
+          ]
+        }
+      ],
+      "files": []
     }
   }
 }

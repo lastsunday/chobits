@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::sync::LazyLock;
 use std::{sync::Arc, thread};
 
 use api::{
@@ -212,48 +213,36 @@ async fn test_tts_pocket() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-#[traced_test]
-#[ignore]
-/// cargo test --test tts_test -- test_tts_vits --ignored --nocapture
-/// 先下载模型：
-///   cargo run --bin chobits-server -- downloader install tts vits melo-tts-zh_en --all
-async fn test_tts_vits() -> anyhow::Result<()> {
-    let ws_root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap();
+fn ws_root() -> &'static std::path::PathBuf {
+    static ROOT: LazyLock<std::path::PathBuf> = LazyLock::new(|| {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf()
+    });
+    &ROOT
+}
 
-    let model_path = ws_root
-        .join("data/tts/model/vits/melo-tts-zh_en/")
-        .to_string_lossy()
-        .into_owned();
+fn vits_audio_config() -> AudioConfig {
+    AudioConfig {
+        output_sample_rate: Some(16000),
+        output_channel: Some(1),
+        output_frame_duration: Some(20),
+        ..Default::default()
+    }
+}
 
-    let tts = TtsFactory::create_model(
-        &TtsConfig {
-            model: Some(TtsModel::Vits),
-            path: Some(model_path),
-            ..Default::default()
-        },
-        &AudioConfig {
-            output_sample_rate: Some(16000),
-            output_channel: Some(1),
-            output_frame_duration: Some(20),
-            ..Default::default()
-        },
-    )
-    .await?;
+async fn run_vits_test(tts_config: &TtsConfig, audio_config: &AudioConfig, wav: &str) -> anyhow::Result<()> {
+    let tts = TtsFactory::create_model(tts_config, audio_config).await?;
 
-    let text = "对于有媒体报道称，“特朗普说，如果中国不在霍尔木兹海峡护航问题上提供协助，他将推迟访华”，林剑说，中方注意到美方已就媒体不实报道公开作出澄清，表示有关报道是完全错误的，强调访问与霍尔木兹海峡通航问题无关。
-,This is a 中英文的 text to speech 测试例子。";
-    let text_stream = tts_stream(String::from(text));
+    let text_stream = tts_stream(String::from(TEST_TTS_TEXT));
     let mut tts_stream = tts.stream(Box::pin(text_stream)).await;
 
     let mut all_packets: Vec<Vec<u8>> = Vec::new();
-    let mut raw_pcm: Option<(Vec<f32>, i32)> = None;
     while let Some(data) = tts_stream.next().await {
         match data {
             Ok(data) => {
@@ -261,27 +250,14 @@ async fn test_tts_vits() -> anyhow::Result<()> {
                 if let Some(packets) = data.audio {
                     all_packets.extend(packets);
                 }
-                if raw_pcm.is_none() {
-                    raw_pcm = data.raw_pcm;
-                }
             }
             Err(e) => panic!("{:?}", e),
         }
     }
 
-    assert!(
-        !all_packets.is_empty(),
-        "Expected audio packets from VitsTTS"
-    );
+    assert!(!all_packets.is_empty(), "Expected audio packets from VitsTTS");
 
-    // Save raw PCM (skip Opus)
-    if let Some((samples, sr)) = &raw_pcm {
-        std::fs::create_dir_all("./test_data")?;
-        let _ = wavers::write("./test_data/test_tts_vits_raw.wav", samples, *sr, 1);
-        info!("raw PCM: {} samples at {}Hz", samples.len(), sr);
-    }
-
-    let decode_fs = 320; // 16000Hz * 1ch * 20ms / 1000
+    let decode_fs = 320;
     let mut decoder = opus_rs::OpusDecoder::new(16000, 1_usize).unwrap();
     let mut decoded = Vec::new();
     for packet in &all_packets {
@@ -294,9 +270,80 @@ async fn test_tts_vits() -> anyhow::Result<()> {
     info!("decoded {} PCM samples", decoded.len());
 
     std::fs::create_dir_all("./test_data")?;
-    let _ = wavers::write("./test_data/test_tts_vits.wav", &decoded, 16000, 1);
+    let _ = wavers::write(wav, &decoded, 16000, 1);
     Ok(())
 }
+
+#[tokio::test]
+#[traced_test]
+#[ignore]
+/// cargo test --test tts_test -- test_tts_vits_melo_tts_zh_en --ignored --nocapture
+/// 先下载模型：
+///   cargo run --bin chobits-server -- downloader install tts vits melo-tts-zh_en --all
+async fn test_tts_vits_melo_tts_zh_en() -> anyhow::Result<()> {
+    let path = ws_root().join("data/tts/model/vits/melo-tts-zh_en/").to_string_lossy().into_owned();
+    run_vits_test(
+        &TtsConfig { model: Some(TtsModel::Vits), path: Some(path), options: Some(serde_json::json!({
+    "num_threads": 2,
+    "noise_scale": 0.667,
+    "noise_scale_w": 0.8,
+    "length_scale": 1.0,
+    "speed": 1.0,
+    "sid": 0,
+    "debug": false,
+})), ..Default::default() },
+        &vits_audio_config(),
+        "./test_data/test_tts_vits_melo_tts_zh_en.wav",
+    ).await
+}
+
+#[tokio::test]
+#[traced_test]
+#[ignore]
+/// cargo test --test tts_test -- test_tts_vits_zh_hf_theresa --ignored --nocapture
+/// 先下载模型：
+///   cargo run --bin chobits-server -- downloader install tts vits zh-hf-theresa --all
+async fn test_tts_vits_zh_hf_theresa() -> anyhow::Result<()> {
+    let path = ws_root().join("data/tts/model/vits/zh-hf-theresa/").to_string_lossy().into_owned();
+    run_vits_test(
+        &TtsConfig { model: Some(TtsModel::Vits), path: Some(path), options: Some(serde_json::json!({
+    "num_threads": 2,
+    "noise_scale": 0.667,
+    "noise_scale_w": 0.8,
+    "length_scale": 1.0,
+    "speed": 1.0,
+    "sid": 0,
+    "debug": false,
+})), ..Default::default() },
+        &vits_audio_config(),
+        "./test_data/test_tts_vits_zh_hf_theresa.wav",
+    ).await
+}
+
+#[tokio::test]
+#[traced_test]
+#[ignore]
+/// cargo test --test tts_test -- test_tts_vits_aishell3 --ignored --nocapture
+/// 先下载模型：
+///   cargo run --bin chobits-server -- downloader install tts vits aishell3 --all
+async fn test_tts_vits_aishell3() -> anyhow::Result<()> {
+    let path = ws_root().join("data/tts/model/vits/aishell3/").to_string_lossy().into_owned();
+    run_vits_test(
+        &TtsConfig { model: Some(TtsModel::Vits), path: Some(path), options: Some(serde_json::json!({
+    "num_threads": 2,
+    "noise_scale": 0.667,
+    "noise_scale_w": 0.8,
+    "length_scale": 1.0,
+    "speed": 1.0,
+    "sid": 0,
+    "debug": false,
+})), ..Default::default() },
+        &vits_audio_config(),
+        "./test_data/test_tts_vits_aishell3.wav",
+    ).await
+}
+
+const TEST_TTS_TEXT: &str = "2024年5月11号，拨打110或者18920240511，花了99块钱。我在学习machine learning和artificial intelligence。";
 
 fn tts_stream(
     text: String,
