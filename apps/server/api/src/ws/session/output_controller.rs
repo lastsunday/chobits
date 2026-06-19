@@ -8,8 +8,6 @@ use tokio::sync::Mutex;
 use tokio::sync::mpsc::{Receiver, Sender, error::SendError};
 use tokio::time::{Duration, Instant, MissedTickBehavior, interval_at};
 
-const PRE_BUFFER_FRAME_COUNT: u64 = 6;
-
 fn trace_info_from_result(item: &Result<FrameResult, AppError>) -> (TraceKind, String) {
     match item {
         Ok(FrameResult::AudioResult(msg)) => {
@@ -61,7 +59,6 @@ impl TracedSender {
 pub struct OutputController {
     input_rx: Receiver<Result<FrameResult, AppError>>,
     output_tx: TracedSender,
-    pre_buffer_remaining: u64,
     interval: Option<tokio::time::Interval>,
     frame_duration: u64,
     latest_activity_time: Arc<Mutex<Option<i64>>>,
@@ -77,7 +74,6 @@ impl OutputController {
         Self {
             input_rx,
             output_tx,
-            pre_buffer_remaining: 0,
             interval: None,
             frame_duration,
             latest_activity_time,
@@ -102,7 +98,6 @@ impl OutputController {
     async fn dispatch(&mut self, item: Result<FrameResult, AppError>) -> bool {
         match &item {
             Ok(FrameResult::TTSResult(msg)) if msg.state == Some(TtsState::Start) => {
-                self.pre_buffer_remaining = PRE_BUFFER_FRAME_COUNT;
                 self.interval = None;
             }
             Ok(FrameResult::AudioResult(_)) => {
@@ -123,16 +118,13 @@ impl OutputController {
     }
 
     async fn pace_audio(&mut self) {
-        if self.pre_buffer_remaining > 0 {
-            self.pre_buffer_remaining -= 1;
-        } else {
-            let interval = self.interval.get_or_insert_with(|| {
-                let start = Instant::now() + Duration::from_millis(self.frame_duration);
-                let mut intv = interval_at(start, Duration::from_millis(self.frame_duration));
-                intv.set_missed_tick_behavior(MissedTickBehavior::Skip);
-                intv
-            });
+        if let Some(interval) = &mut self.interval {
             interval.tick().await;
+        } else {
+            let start = Instant::now() + Duration::from_millis(self.frame_duration);
+            let mut intv = interval_at(start, Duration::from_millis(self.frame_duration));
+            intv.set_missed_tick_behavior(MissedTickBehavior::Skip);
+            self.interval = Some(intv);
         }
     }
 }
