@@ -81,7 +81,7 @@ tasks:
       cache: false
 
   downloader-install:
-    command: "cargo run --package chobits-server -- downloader install"
+    command: "cargo run --package chobits-server -- downloader install --data-dir ../../data"
     deps:
       - ~:build
     options:
@@ -101,8 +101,8 @@ tasks:
 
   downloader-all-and-checksums:
     script: |
-      cargo run --package chobits-server -- downloader install --all && \
-      cargo run --package chobits-server -- downloader update-checksums
+      cargo run --package chobits-server -- downloader install --all --data-dir ../../data && \
+      cargo run --package chobits-server -- downloader update-checksums --data-dir ../../data
     deps:
       - ~:build
     options:

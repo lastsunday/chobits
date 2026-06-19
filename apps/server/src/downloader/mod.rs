@@ -262,7 +262,17 @@ pub async fn run(
 
                 for archive in &v.archives {
                     let dest_dir = data_dir.join(&archive.path);
-                    let all_exist = archive.extract.iter().all(|f| dest_dir.join(f).exists());
+                    let all_exist = if cat_name == "reference" {
+                        archive.extract.iter().all(|f| {
+                            let ext = Path::new(f).extension().and_then(|e| e.to_str()).unwrap_or("wav");
+                            dest_dir.join(format!("{}.{}", v_name, ext)).exists()
+                        })
+                    } else {
+                        archive.extract.iter().all(|f| {
+                            let name = Path::new(f).file_name().unwrap_or(OsStr::new(f));
+                            dest_dir.join(name).exists()
+                        })
+                    };
                     if all_exist {
                         if !quiet {
                             eprintln!("  ARCHIVE {}: all check files exist, skip", archive.path);
@@ -307,6 +317,20 @@ pub async fn run(
                             match extract_tar_bz2(&archive_dest, &dest_dir, &archive.extract) {
                                 Ok(()) => {
                                     let _ = std::fs::remove_file(&archive_dest);
+                                    if cat_name == "reference" {
+                                        for f in &archive.extract {
+                                            let orig_name = Path::new(f).file_name().unwrap_or(OsStr::new(f));
+                                            let orig_path = dest_dir.join(Path::new(orig_name));
+                                            if orig_path.exists() {
+                                                let ext = Path::new(f).extension().and_then(|e| e.to_str()).unwrap_or("wav");
+                                                let new_name = format!("{}.{}", v_name, ext);
+                                                let new_path = dest_dir.join(&new_name);
+                                                if orig_path != new_path {
+                                                    let _ = std::fs::rename(&orig_path, &new_path);
+                                                }
+                                            }
+                                        }
+                                    }
                                     report_files.push(ReportFile {
                                         path: format!("{} (archive)", archive.path),
                                         size,
@@ -628,10 +652,8 @@ fn extract_tar_bz2(
         if !files.iter().any(|f| stripped == Path::new(f)) {
             continue;
         }
-        let dest_path = dest.join(&stripped);
-        if let Some(parent) = dest_path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
+        let name = stripped.file_name().map(Path::new).unwrap_or(&stripped);
+        let dest_path = dest.join(name);
         entry.unpack(&dest_path)?;
     }
 
@@ -1199,7 +1221,8 @@ pub fn resolve_reference_audio(variant: &str) -> Option<(String, String)> {
         .or_else(|| {
             let ap = variant_obj["archives"][0]["path"].as_str()?;
             let ex = variant_obj["archives"][0]["extract"][0].as_str()?;
-            Some(format!("{ap}{ex}"))
+            let ext = Path::new(ex).extension().and_then(|e| e.to_str()).unwrap_or("wav");
+            Some(format!("{ap}{variant}.{ext}"))
         })?;
     let prompt_text = variant_obj["prompt_text"]
         .as_str()
