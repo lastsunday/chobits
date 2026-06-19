@@ -109,6 +109,7 @@ earshot = { workspace = true }
 # vad end
 # tts start
 sherpa-onnx = { workspace = true }
+rubato = { workspace = true }
 # tts end
 # mcp start
 rmcp = { workspace = true, features = [

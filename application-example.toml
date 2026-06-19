@@ -19,6 +19,10 @@
 #
 #server_name = localhost.localdomain
 
+# Base data directory for model files. All model paths are relative to this.
+#
+#data_dir = data
+
 # The default address (IPv4 or IPv6) continuwuity will listen on.
 #
 # If you are using Docker or a container NAT networking setup, this must

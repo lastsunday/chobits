@@ -181,12 +181,13 @@ async fn on_send<W>(
 ) where
     W: Sink<Message> + Unpin + Send + 'static,
 {
+    let mut frame_seq: u64 = 0;
     while let Some(data) = output.next().await {
         match data {
             Ok(frame) => {
                 match &frame {
-                    frame::FrameResult::AudioResult(_audio_message) => {
-                        trace!(target:"frame","[SEND] Audio");
+                    frame::FrameResult::AudioResult(msg) => {
+                        trace!(target:"frame","[SEND] Audio #{} size={}", frame_seq, msg.data.len());
                     }
                     _ => {
                         debug!(target:"frame","[SEND] {:?}", frame);
@@ -229,6 +230,7 @@ async fn on_send<W>(
                             info!("send audio data failure");
                             break;
                         }
+                        frame_seq += 1;
                     }
                     frame::FrameResult::CloseResult => {
                         let result = write.close().await;

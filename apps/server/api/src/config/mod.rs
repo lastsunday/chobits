@@ -620,9 +620,7 @@ impl Config {
     }
 
     pub fn data_dir(&self) -> &str {
-        self.data_dir
-            .as_deref()
-            .unwrap_or("data")
+        self.data_dir.as_deref().unwrap_or("data")
     }
 
     pub fn derive_tts_path(&self) -> Option<String> {

@@ -58,7 +58,7 @@ impl DefaultListener {
             .input_sample_rate
             .expect("input sample rate is empty");
         let decoder = Arc::new(Mutex::new(
-            opus_rs::OpusDecoder::new(sample_rate as i32, 1).unwrap(),
+            opus_rs::OpusDecoder::new(sample_rate as i32, 1_usize).unwrap(),
         ));
         Self {
             vad,

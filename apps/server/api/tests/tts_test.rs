@@ -59,7 +59,7 @@ async fn test_tts_default() -> anyhow::Result<()> {
     info!("audio len = {}", audio_len);
 
     // 4. decode opus packet to pcm data
-    let mut decoder = opus_rs::OpusDecoder::new(ENCODE_SAMPLE_RATE as i32, 1).unwrap();
+    let mut decoder = opus_rs::OpusDecoder::new(ENCODE_SAMPLE_RATE as i32, 1_usize).unwrap();
     let mut decode_data: Vec<f32> = Vec::new();
     for n in 0..audio_len {
         let mut samples = vec![0f32; size];
@@ -196,7 +196,7 @@ async fn test_tts_pocket() -> anyhow::Result<()> {
     }
 
     let decode_fs = 320; // 16000Hz * 1ch * 20ms / 1000
-    let mut decoder = opus_rs::OpusDecoder::new(16000, 1).unwrap();
+    let mut decoder = opus_rs::OpusDecoder::new(16000, 1_usize).unwrap();
     let mut decoded = Vec::new();
     for packet in &all_packets {
         let mut samples = vec![0f32; decode_fs];
@@ -239,9 +239,9 @@ async fn test_tts_vits() -> anyhow::Result<()> {
             ..Default::default()
         },
         &AudioConfig {
-            output_sample_rate: Some(16000),
+            output_sample_rate: Some(24000),
             output_channel: Some(1),
-            output_frame_duration: Some(20),
+            output_frame_duration: Some(60),
             ..Default::default()
         },
     )
@@ -281,8 +281,8 @@ async fn test_tts_vits() -> anyhow::Result<()> {
         info!("raw PCM: {} samples at {}Hz", samples.len(), sr);
     }
 
-    let decode_fs = 320; // 16000Hz * 1ch * 20ms / 1000
-    let mut decoder = opus_rs::OpusDecoder::new(16000, 1).unwrap();
+    let decode_fs = 1440; // 24000Hz * 1ch * 60ms / 1000
+    let mut decoder = opus_rs::OpusDecoder::new(24000, 1_usize).unwrap();
     let mut decoded = Vec::new();
     for packet in &all_packets {
         let mut samples = vec![0f32; decode_fs];
@@ -294,7 +294,7 @@ async fn test_tts_vits() -> anyhow::Result<()> {
     info!("decoded {} PCM samples", decoded.len());
 
     std::fs::create_dir_all("./test_data")?;
-    let _ = wavers::write("./test_data/test_tts_vits.wav", &decoded, 16000, 1);
+    let _ = wavers::write("./test_data/test_tts_vits.wav", &decoded, 24000, 1);
     Ok(())
 }
 

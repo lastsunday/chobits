@@ -1,8 +1,8 @@
 use std::pin::Pin;
 use std::sync::Arc;
-
 use async_trait::async_trait;
 use futures::Stream;
+use rubato::{FftFixedIn, Resampler};
 use sherpa_onnx::{
     GenerationConfig, OfflineTts, OfflineTtsConfig, OfflineTtsModelConfig,
     OfflineTtsVitsModelConfig,
@@ -11,6 +11,7 @@ use tokio::sync::mpsc::channel;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{debug, error};
+
 
 use crate::common::ModelError;
 use crate::config::audio::AudioConfig;
@@ -81,20 +82,18 @@ impl TtsVits {
             .map(|s| s.to_string())
             .or_else(|| {
                 let dir = std::path::Path::new(path);
-                std::fs::read_dir(dir)
-                    .ok()
-                    .and_then(|mut entries| {
-                        entries.find_map(|entry| {
-                            entry.ok().and_then(|e| {
-                                let p = e.path();
-                                if p.extension().is_some_and(|ext| ext == "onnx") {
-                                    p.to_str().map(|s| s.to_string())
-                                } else {
-                                    None
-                                }
-                            })
+                std::fs::read_dir(dir).ok().and_then(|mut entries| {
+                    entries.find_map(|entry| {
+                        entry.ok().and_then(|e| {
+                            let p = e.path();
+                            if p.extension().is_some_and(|ext| ext == "onnx") {
+                                p.to_str().map(|s| s.to_string())
+                            } else {
+                                None
+                            }
                         })
                     })
+                })
             });
 
         let model_path =
@@ -187,6 +186,20 @@ impl Tts for TtsVits {
 
         tokio::spawn(async move {
             let mut pinned = text_stream;
+            let encode_sr = output_sample_rate;
+            let channels = match output_channel {
+                2 => 2_usize,
+                _ => 1_usize,
+            };
+            let mut encoder =
+                match opus_rs::OpusEncoder::new(encode_sr as i32, channels, opus_rs::Application::Audio) {
+                    Ok(e) => e,
+                    Err(err) => {
+                        error!("[VitsTTS] opus encoder creation error = {}", err);
+                        return;
+                    }
+                };
+
             while let Some(text_result) = pinned.next().await {
                 let text = match text_result {
                     Ok(t) => t,
@@ -230,30 +243,36 @@ impl Tts for TtsVits {
                     }
                 };
 
-                let encode_sr = output_sample_rate;
                 let (opus_pcm, _opus_sr) = if pcm_sample_rate != encode_sr as i32 {
-                    let resampler =
-                        sherpa_onnx::LinearResampler::create(pcm_sample_rate, encode_sr as i32)
-                            .expect("Failed to create resampler");
-                    let resampled = resampler.resample(&pcm_samples, true);
-                    (resampled, encode_sr as i32)
+                    let chunk_size = 4096.min(pcm_samples.len());
+                    let mut resampler = FftFixedIn::<f32>::new(
+                        pcm_sample_rate as usize,
+                        encode_sr as usize,
+                        chunk_size,
+                        1,
+                        1,
+                    )
+                    .expect("Failed to create resampler");
+                    let mut all_output = Vec::new();
+                    for chunk in pcm_samples.chunks(chunk_size) {
+                        let out = if chunk.len() < chunk_size {
+                            resampler
+                                .process_partial(Some(&[chunk][..]), None)
+                                .expect("Resampling failed")
+                        } else {
+                            resampler
+                                .process(&[chunk], None)
+                                .expect("Resampling failed")
+                        };
+                        all_output.extend_from_slice(&out[0]);
+                    }
+                    // flush resampler internal delay tail
+                    if let Ok(tail) = resampler.process_partial(None::<&[&[f32]]>, None) {
+                        all_output.extend_from_slice(&tail[0]);
+                    }
+                    (all_output, encode_sr as i32)
                 } else {
                     (pcm_samples.clone(), pcm_sample_rate)
-                };
-
-                let mut encoder = match opus_rs::OpusEncoder::new(
-                    encode_sr as i32,
-                    output_channel as usize,
-                    opus_rs::Application::Audio,
-                ) {
-                    Ok(mut e) => {
-                        e.bitrate_bps = 64000;
-                        e
-                    }
-                    Err(e) => {
-                        error!("[VitsTTS] opus encoder creation error = {}", e);
-                        continue;
-                    }
                 };
 
                 let audio_packets = encode_sample_to_tts_packet(

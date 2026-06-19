@@ -66,7 +66,7 @@ tasks:
       cache: false
 
   dev-lite:
-    command: 'cargo run --package chobits-server -- -O "data_dir=''../../data''" -O "vad_model=''void''" -O "asr_model=''void''" -O "tts_model=''vits''" -O "llm_model=''echo''"'
+    command: 'cargo run --package chobits-server -- -O "address=''0.0.0.0''" -O "data_dir=''../../data''" -O "vad_model=''void''" -O "asr_model=''void''" -O "tts_model=''vits''" -O "llm_model=''echo''"'
     deps:
       - ~:build
     options:
@@ -86,6 +86,11 @@ tasks:
       - ~:build
     options:
       cache: false
+
+  sweep:
+    command: "cargo sweep --maxsize 20GB"
+    options:
+      runInCI: false
 
   downloader-list:
     command: "cargo run --package chobits-server -- downloader list"

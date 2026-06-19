@@ -70,7 +70,7 @@ rust-i18n = "3.1.5"
 futures-util = "0.3.31"
 futures-channel = "0.3.31"
 jiff = "0.2.19"
-opus-rs = "0.1.22"
+opus-rs = "0.1.23"
 tokio-stream = "0.1.18"
 tokio-util = "0.7.18"
 futures = "0.3.32"
@@ -96,6 +96,7 @@ rust-embed = "8.11.0"
 symphonia = "0.5.5"
 wavers = "1.5.1"
 resampler = "0.4.1"
+rubato = "0.16.0"
 # audio end
 # llm start
 candle-core = "0.9.1"
@@ -147,6 +148,7 @@ mockito = "1.7.2"
 # dev end
 
 [profile.dev]
+strip = "debuginfo"
 
 [profile.release]
 opt-level = 3

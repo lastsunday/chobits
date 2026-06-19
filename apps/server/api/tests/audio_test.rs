@@ -33,9 +33,12 @@ async fn test_audio_encode_decode() {
     let _ = write(fp, &pcm_data, sr, 1);
 
     const ENCODE_SAMPLE_RATE: u32 = 16000;
-    let mut encoder =
-        opus_rs::OpusEncoder::new(ENCODE_SAMPLE_RATE as i32, 1, opus_rs::Application::Audio)
-            .unwrap();
+    let mut encoder = opus_rs::OpusEncoder::new(
+        ENCODE_SAMPLE_RATE as i32,
+        1_usize,
+        opus_rs::Application::Audio,
+    )
+    .unwrap();
 
     // 16000Hz * 1 channel * 20 ms / 1000 = 320
     const MONO_20MS: usize = ENCODE_SAMPLE_RATE as usize * 20 / 1000;
@@ -66,7 +69,7 @@ async fn test_audio_encode_decode() {
     info!("audio len = {}", audio_len);
 
     // 4. decode opus packet to pcm data
-    let mut decoder = opus_rs::OpusDecoder::new(sample_rate as i32, 1).unwrap();
+    let mut decoder = opus_rs::OpusDecoder::new(sample_rate as i32, 1_usize).unwrap();
     let mut decode_data: Vec<f32> = Vec::new();
     for n in 0..audio_len {
         let mut samples = vec![0f32; size];

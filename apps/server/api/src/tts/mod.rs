@@ -10,8 +10,8 @@ use crate::config::tts::TtsConfig;
 use async_trait::async_trait;
 use futures::Stream;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::sync::OnceLock;
-use std::{cmp, sync::Arc};
 
 #[async_trait]
 pub trait Tts: Send + Sync {
@@ -81,9 +81,7 @@ impl TtsFactory {
             config::TtsModel::PocketTts => {
                 Ok(Box::new(TtsPocket::new(tts_config, audio_config).await?))
             }
-            config::TtsModel::Vits => {
-                Ok(Box::new(TtsVits::new(tts_config, audio_config).await?))
-            }
+            config::TtsModel::Vits => Ok(Box::new(TtsVits::new(tts_config, audio_config).await?)),
         }
     }
 
@@ -111,15 +109,15 @@ pub fn encode_sample_to_tts_packet(
 ) -> Vec<Vec<u8>> {
     let len = sample.len();
     let size = calcalute_tts_packet_size(encode_sample_rate, encode_channel, encode_frame_duration);
-    let count = len / size;
-    let mut audio: Vec<Vec<u8>> = Vec::new();
-    for n in 1..count {
-        let start = (n - 1) * size;
-        let end = cmp::min(n * size, len);
+    let count = len.div_ceil(size);
+    let mut audio: Vec<Vec<u8>> = Vec::with_capacity(count);
+    for n in 0..count {
+        let start = n * size;
+        let end = std::cmp::min(start + size, len);
+        let mut frame: Vec<f32> = sample[start..end].to_vec();
+        frame.resize(size, 0.0);
         let mut output = vec![0u8; 4000];
-        let out_len = encoder
-            .encode(&sample[start..end], size, &mut output)
-            .unwrap();
+        let out_len = encoder.encode(&frame, size, &mut output).unwrap();
         output.truncate(out_len);
         audio.push(output);
     }

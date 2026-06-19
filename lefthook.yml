@@ -1,3 +1,8 @@
+post-checkout:
+  commands:
+    sweep:
+      run: which cargo-sweep && cargo sweep --maxsize 20GB || true
+
 commit-msg:
   commands:
     conventional-commit:
