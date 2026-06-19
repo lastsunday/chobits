@@ -105,7 +105,7 @@ chobits downloader install
 # 下载当前配置所需模型，仅限 tts 分类
 chobits downloader install tts
 
-# 无配置文件时，使用默认配置（PocketTts + Qwen3×2）
+# 无配置文件时，使用默认配置（MatchaTts + Qwen3×2）
 chobits downloader install
 
 # 显式指定配置文件
@@ -239,7 +239,7 @@ moon run server:download-all-and-checksums # 下载所有模型并更新 SHA
 
 | 配置字段 | 可选值 | 下载目标 |
 |----------|--------|----------|
-| `tts_model` | `pocket-tts` / `voxcpm` / `mute` | `mute` 跳过 |
+| `tts_model` | `pocket-tts` / `vits` / `matchatts` / `mute` | `mute` 跳过 |
 | `asr_model` | `qwen3` / `whisper` / `void` | `void` 跳过 |
 | `llm_model` | `qwen3` / `echo` / `mini-cpm4` | `echo`/`mini-cpm4` 跳过 |
 | `vad_model` | `silero` / `earshot` / `void` | `earshot`/`void` 跳过 |
@@ -254,7 +254,7 @@ moon run server:download-all-and-checksums # 下载所有模型并更新 SHA
 
 | 模块 | 默认模型 | 说明 |
 |------|----------|------|
-| TTS | PocketTts（默认变体） | 下载 `pocket-tts` |
+| TTS | MatchaTts（`matcha-icefall-zh-baker`） | 下载 `matcha` |
 | ASR | Qwen3（默认变体） | 下载 `qwen3` |
 | LLM | Qwen3（默认变体） | 下载 `qwen3` |
 | VAD | Earshot | 默认配置中跳过，不下载 |

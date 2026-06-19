@@ -290,25 +290,27 @@ Audio:scr=30(P) Perf:scr=84(G) Timing:scr=74(G) | sh=18.07%(Bad) dr=25.9dB(Good)
 cargo test --package api --test tts_test -- test_tts_vits_melo_tts_zh_en_noise_scale --ignored --nocapture
 
 # length_scale 语速校准扫描
-cargo test --package api --test tts_test -- test_tts_matcha_zh_baker_scan_ls --ignored --nocapture
-cargo test --package api --test tts_test -- test_tts_vits_melo_tts_zh_en_scan_ls --ignored --nocapture
-cargo test --package api --test tts_test -- test_tts_vits_zh_hf_theresa_scan_ls --ignored --nocapture
-cargo test --package api --test tts_test -- test_tts_vits_aishell3_scan_ls --ignored --nocapture
+cargo test --package api --test tts_analysis_test -- test_tts_matcha_zh_baker_scan_ls --ignored --nocapture
+cargo test --package api --test tts_analysis_test -- test_tts_matcha_zh_en_scan_ls --ignored --nocapture
+cargo test --package api --test tts_analysis_test -- test_tts_vits_melo_tts_zh_en_scan_ls --ignored --nocapture
+cargo test --package api --test tts_analysis_test -- test_tts_vits_zh_hf_theresa_scan_ls --ignored --nocapture
+cargo test --package api --test tts_analysis_test -- test_tts_vits_aishell3_scan_ls --ignored --nocapture
 
 # SID 扫描（多 speaker 模型）
-cargo test --package api --test tts_test -- test_tts_vits_aishell3_scan_sid --ignored --nocapture
-cargo test --package api --test tts_test -- test_tts_vits_zh_hf_theresa_scan_sid --ignored --nocapture
+cargo test --package api --test tts_analysis_test -- test_tts_vits_aishell3_scan_sid --ignored --nocapture
+cargo test --package api --test tts_analysis_test -- test_tts_vits_zh_hf_theresa_scan_sid --ignored --nocapture
 ```
 
 ### 已知问题
 
-**melo-tts-zh_en**：shimmer ~16%，远超算法可靠上限（12%），无法通过 `noise_scale` / `noise_scale_w` 调整改善（`noise_scale_w` 被 ONNX 导出忽略）。所有 VITS/Matcha 模型的 shimmer 均在 14–18% 范围。
+**melo-tts-zh_en**：shimmer ~16%，远超算法可靠上限（12%），无法通过 `noise_scale` / `noise_scale_w` 调整改善（`noise_scale_w` 被 ONNX 导出忽略）。所有 VITS/Matcha 模型的 shimmer 均在 14–18% 范围。**matcha-icefall-zh-baker / zh-en** 同样 ~17%。
 
 **length_scale 默认值校准（使时长接近标准 14.1s）：**
 
 | 模型 | 默认 `length_scale` |
 |------|-------------------|
 | matcha-icefall-zh-baker | **1.3** |
+| matcha-icefall-zh-en | **1.3** |
 | melo-tts-zh_en | **1.3** |
 | zh-hf-theresa | **2.0** |
 | aishell3 | **0.6** |
@@ -396,10 +398,10 @@ Crest Factor 维持在 14.7 dB——几乎是原始水平，完全没有"闷"感
 
 ```bash
 # 对比测试：Raw vs 重采样+Opus vs Adaptive Normalize，生成 WAV + 打印 EBU R128 指标
-cargo test --package api --test tts_test -- test_compare_raw_vs_processed --ignored --nocapture
+cargo test --package api --test tts_analysis_test -- test_compare_raw_vs_processed --ignored --nocapture
 
 # 网格搜索压缩器（保留历史参考）
-cargo test --package api --test tts_test -- test_grid_search_compressor --ignored --nocapture
+cargo test --package api --test tts_analysis_test -- test_grid_search_compressor --ignored --nocapture
 ```
 
 ### 输出文件
@@ -416,4 +418,5 @@ cargo test --package api --test tts_test -- test_grid_search_compressor --ignore
 |------|------|
 | `apps/server/api/src/util/compressor.rs` | `adaptive_normalize()`、`evaluate_compressed()`、历史 `pcm_compress()` / `grid_search_compressor()` |
 | `apps/server/api/src/tts/model/vits/mod.rs` | VITS 模型的 `stream()` 中调用 `adaptive_normalize()` |
-| `apps/server/api/tests/tts_test.rs` | `test_compare_raw_vs_processed`、`test_grid_search_compressor` |
+| `apps/server/api/src/tts/model/matcha/mod.rs` | Matcha 模型的 `stream()` 中调用 `adaptive_normalize()` |
+| `apps/server/api/tests/tts_analysis_test.rs` | `test_compare_raw_vs_processed`、`test_grid_search_compressor` |
