@@ -110,6 +110,7 @@ earshot = { workspace = true }
 # tts start
 sherpa-onnx = { workspace = true }
 rubato = { workspace = true }
+ebur128 = "0.1"
 # tts end
 # mcp start
 rmcp = { workspace = true, features = [

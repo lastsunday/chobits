@@ -1,17 +1,22 @@
 use std::path::Path;
-use std::{sync::Arc, thread};
+use std::sync::{Arc, LazyLock};
+use std::thread;
 
 use api::{
     common::ModelError,
     config::{TtsModel, audio::AudioConfig, tts::TtsConfig},
     tts::TtsFactory,
+    util::compressor::adaptive_normalize,
 };
 use futures::{Stream, executor::block_on};
+use sherpa_onnx::{
+    GenerationConfig, OfflineTts, OfflineTtsConfig, OfflineTtsModelConfig,
+    OfflineTtsVitsModelConfig,
+};
 use tokio::sync::mpsc::channel;
 use tokio_stream::{StreamExt, wrappers::ReceiverStream};
 use tracing::info;
 use tracing_test::traced_test;
-use wavers::write;
 
 mod common;
 use common::tts::*;
@@ -76,7 +81,7 @@ async fn test_tts_default() -> anyhow::Result<()> {
     std::fs::create_dir_all("./test_data")?;
     let fp = "./test_data/test_tts_default.wav";
     let sr: i32 = 16000;
-    let _ = write(fp, &decode_data, sr, 1);
+    let _ = wavers::write(fp, &decode_data, sr, 1);
     Ok(())
 }
 
@@ -228,6 +233,85 @@ fn ws_root() -> &'static std::path::PathBuf {
             .to_path_buf()
     });
     &ROOT
+}
+
+/// Collect .fst rule files from a model directory, return comma-separated paths (or None).
+fn collect_rule_fsts(dir: &std::path::Path) -> Option<String> {
+    let mut files: Vec<String> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let ep = entry.path();
+            if ep.extension().is_some_and(|ext| ext == "fst") {
+                files.push(ep.to_string_lossy().into_owned());
+            }
+        }
+    }
+    files.sort();
+    (!files.is_empty()).then(|| files.join(","))
+}
+
+/// Resample → Opus encode → Opus decode → return decoded PCM at `encode_sr`.
+fn opus_pipeline(samples: &[f32], sample_rate: i32, encode_sr: u32) -> Vec<f32> {
+    use rubato::Resampler;
+    let channels = 1_usize;
+    let chunk_size = 4096.min(samples.len());
+
+    let (pcm, sr) = if sample_rate as u32 != encode_sr {
+        let mut resampler = rubato::FftFixedIn::<f32>::new(
+            sample_rate as usize,
+            encode_sr as usize,
+            chunk_size,
+            1,
+            1,
+        )
+        .expect("Failed to create resampler");
+        let mut all_output = Vec::new();
+        for chunk in samples.chunks(chunk_size) {
+            let out = if chunk.len() < chunk_size {
+                resampler
+                    .process_partial(Some(&[chunk][..]), None)
+                    .expect("Resampling failed")
+            } else {
+                resampler
+                    .process(&[chunk], None)
+                    .expect("Resampling failed")
+            };
+            all_output.extend_from_slice(&out[0]);
+        }
+        if let Ok(tail) = resampler.process_partial(None::<&[&[f32]]>, None) {
+            all_output.extend_from_slice(&tail[0]);
+        }
+        (all_output, encode_sr)
+    } else {
+        (samples.to_vec(), sample_rate as u32)
+    };
+
+    let mut encoder = opus_rs::OpusEncoder::new(sr as i32, channels, opus_rs::Application::Audio)
+        .expect("Failed to create Opus encoder");
+    let frame_dur = 20u64;
+    let packet_size = sr as usize * channels * frame_dur as usize / 1000;
+    let count = pcm.len().div_ceil(packet_size);
+    let mut packets = Vec::with_capacity(count);
+    for n in 0..count {
+        let start = n * packet_size;
+        let end = std::cmp::min(start + packet_size, pcm.len());
+        let mut frame: Vec<f32> = pcm[start..end].to_vec();
+        frame.resize(packet_size, 0.0);
+        let mut output = vec![0u8; 4000];
+        let out_len = encoder.encode(&frame, packet_size, &mut output).unwrap();
+        output.truncate(out_len);
+        packets.push(output);
+    }
+
+    let mut decoder = opus_rs::OpusDecoder::new(sr as i32, channels).unwrap();
+    let mut decoded = Vec::new();
+    for pkt in &packets {
+        let mut samples = vec![0f32; packet_size];
+        if let Ok(len) = decoder.decode(pkt, packet_size, &mut samples) {
+            decoded.extend_from_slice(&samples[..len]);
+        }
+    }
+    decoded
 }
 
 /// Standard AudioConfig for VITS tests: 16kHz / mono / 20ms frame duration.
@@ -756,4 +840,159 @@ fn tts_stream(
         })
     });
     ReceiverStream::new(rx)
+}
+
+#[tokio::test]
+#[traced_test]
+#[ignore]
+/// 对比测试：Raw PCM vs 重采样+Opus管道 vs Adaptive Normalize
+/// cargo test --test tts_test -- test_compare_raw_vs_processed --ignored --nocapture
+async fn test_compare_raw_vs_processed() -> anyhow::Result<()> {
+    let model_dir_buf = ws_root().join("data/tts/model/vits/melo-tts-zh_en/");
+    let model_dir = std::path::Path::new(&model_dir_buf);
+
+    let config = OfflineTtsConfig {
+        model: OfflineTtsModelConfig {
+            vits: OfflineTtsVitsModelConfig {
+                model: Some(model_dir.join("model.onnx").to_string_lossy().into_owned()),
+                tokens: Some(model_dir.join("tokens.txt").to_string_lossy().into_owned()),
+                lexicon: Some(model_dir.join("lexicon.txt").to_string_lossy().into_owned()),
+                noise_scale: 0.667,
+                noise_scale_w: 0.8,
+                length_scale: 1.0,
+                ..Default::default()
+            },
+            num_threads: 2,
+            ..Default::default()
+        },
+        rule_fsts: collect_rule_fsts(model_dir),
+        ..Default::default()
+    };
+    let tts = OfflineTts::create(&config).expect("Failed to create OfflineTts");
+    let sample_rate = tts.sample_rate() as u32;
+    info!("Model sample rate: {} Hz", sample_rate);
+
+    let audio = tts
+        .generate_with_config(TEST_TTS_TEXT, &GenerationConfig { speed: 1.0, sid: 0, ..Default::default() }, None::<fn(&[f32], f32) -> bool>)
+        .expect("Generation failed");
+    let raw_samples = audio.samples().to_vec();
+    let raw_sr = audio.sample_rate();
+    info!("Raw audio: {} samples at {} Hz", raw_samples.len(), raw_sr);
+
+    let encode_sr = 16000u32;
+    std::fs::create_dir_all("./test_data")?;
+
+    // 1. Raw PCM → WAV
+    wavers::write("./test_data/compare_raw.wav", &raw_samples, raw_sr, 1)?;
+
+    // 2. 当前管道：重采样 + Opus → WAV
+    let processed = opus_pipeline(&raw_samples, raw_sr, encode_sr);
+    wavers::write("./test_data/compare_processed.wav", &processed, encode_sr as i32, 1)?;
+
+    // 3. Adaptive Normalize → 重采样 + Opus → WAV
+    let adaptive = adaptive_normalize(&raw_samples, raw_sr as u32);
+    let adp_decoded = opus_pipeline(&adaptive, raw_sr, encode_sr);
+    wavers::write("./test_data/compare_adaptive.wav", &adp_decoded, encode_sr as i32, 1)?;
+
+    // 4. EBU R128 客观指标
+    use api::util::compressor::evaluate_compressed;
+    info!("--- EBU R128 Metrics ---");
+    if let Ok(m) = evaluate_compressed(&raw_samples, raw_sr as u32) {
+        info!("  Raw:      LRA={:.2} LU, LUFS={:.2}, Crest={:.1} dB", m.lra, m.lufs, m.crest_factor_db);
+    }
+    if let Ok(m) = evaluate_compressed(&adaptive, raw_sr as u32) {
+        info!("  Adaptive: LRA={:.2} LU, LUFS={:.2}, Crest={:.1} dB", m.lra, m.lufs, m.crest_factor_db);
+    }
+
+    info!("=== Done: compare_raw, compare_processed, compare_adaptive ===");
+    Ok(())
+}
+
+#[tokio::test]
+#[traced_test]
+#[ignore]
+/// 网格搜索：用 EBU R128 客观指标自动找到最佳压缩参数
+/// cargo test --test tts_test -- test_grid_search_compressor --ignored --nocapture
+async fn test_grid_search_compressor() -> anyhow::Result<()> {
+    use api::util::compressor::{evaluate_compressed, grid_search_compressor};
+
+    let model_dir = ws_root().join("data/tts/model/vits/melo-tts-zh_en/");
+    let model_path = std::path::Path::new(&model_dir);
+
+    let config = OfflineTtsConfig {
+        model: OfflineTtsModelConfig {
+            vits: OfflineTtsVitsModelConfig {
+                model: Some(model_path.join("model.onnx").to_string_lossy().into_owned()),
+                tokens: Some(model_path.join("tokens.txt").to_string_lossy().into_owned()),
+                lexicon: Some(model_path.join("lexicon.txt").to_string_lossy().into_owned()),
+                noise_scale: 0.667,
+                noise_scale_w: 0.8,
+                length_scale: 1.0,
+                ..Default::default()
+            },
+            num_threads: 2,
+            ..Default::default()
+        },
+        rule_fsts: collect_rule_fsts(model_path),
+        ..Default::default()
+    };
+    let tts = OfflineTts::create(&config).expect("Failed to create OfflineTts");
+    let sample_rate = tts.sample_rate() as u32;
+    info!("Model sample rate: {} Hz", sample_rate);
+
+    let audio = tts
+        .generate_with_config(TEST_TTS_TEXT, &GenerationConfig { speed: 1.0, sid: 0, ..Default::default() }, None::<fn(&[f32], f32) -> bool>)
+        .expect("Generation failed");
+    let raw_samples = audio.samples().to_vec();
+    let raw_sr = audio.sample_rate();
+    info!("Raw audio: {} samples at {} Hz", raw_samples.len(), raw_sr);
+
+    // 评估原始（未压缩）音频
+    let raw_metrics = evaluate_compressed(&raw_samples, raw_sr as u32)?;
+    info!(
+        "Raw (uncompressed): LRA={:.2} LU, LUFS={:.2}, Crest={:.1} dB",
+        raw_metrics.lra, raw_metrics.lufs, raw_metrics.crest_factor_db,
+    );
+
+    // 网格搜索
+    let results = grid_search_compressor(&raw_samples, raw_sr as u32)?;
+
+    info!("=== Grid Search Results (top 10) ===");
+    for (i, (cfg, metrics)) in results.iter().enumerate().take(10) {
+        info!(
+            "#{}: threshold={:.0} ratio={:.0} knee={:.0} attack={:.0} release={:.0} makeup={:.0} | LRA={:.2} LUFS={:.2} Crest={:.1}",
+            i + 1,
+            cfg.threshold_db,
+            cfg.ratio,
+            cfg.knee_db,
+            cfg.attack_ms,
+            cfg.release_ms,
+            cfg.makeup_gain_db,
+            metrics.lra,
+            metrics.lufs,
+            metrics.crest_factor_db,
+        );
+    }
+
+    // 输出最佳参数文本（可直接用于配置）
+    if let Some((best_cfg, best_metrics)) = results.first() {
+        info!("=== Best Compressor Config ===");
+        info!(
+            r#"compressor = {{ threshold_db = {}, ratio = {}, attack_ms = {}, release_ms = {}, makeup_gain_db = {}, knee_db = {} }}"#,
+            best_cfg.threshold_db,
+            best_cfg.ratio,
+            best_cfg.attack_ms,
+            best_cfg.release_ms,
+            best_cfg.makeup_gain_db,
+            best_cfg.knee_db,
+        );
+        info!(
+            "Improvement: LRA {:.2} -> {:.2} LU ({:.0}% reduction)",
+            raw_metrics.lra,
+            best_metrics.lra,
+            (1.0 - best_metrics.lra / raw_metrics.lra) * 100.0,
+        );
+    }
+
+    Ok(())
 }

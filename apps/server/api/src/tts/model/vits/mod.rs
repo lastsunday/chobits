@@ -16,6 +16,7 @@ use crate::common::ModelError;
 use crate::config::audio::AudioConfig;
 use crate::config::tts::TtsConfig;
 use crate::tts::{Tts, TtsData, TtsError, default_length_scale, encode_sample_to_tts_packet};
+use crate::util::compressor::adaptive_normalize;
 
 pub struct TtsVits {
     tts: Arc<OfflineTts>,
@@ -220,7 +221,6 @@ impl Tts for TtsVits {
         let output_frame_duration = self.output_frame_duration;
         let speed = self.speed;
         let sid = self.sid;
-
         tokio::spawn(async move {
             let mut pinned = text_stream;
             let encode_sr = output_sample_rate;
@@ -283,6 +283,8 @@ impl Tts for TtsVits {
                         continue;
                     }
                 };
+
+                let pcm_samples = adaptive_normalize(&pcm_samples, pcm_sample_rate as u32);
 
                 let (opus_pcm, _opus_sr) = if pcm_sample_rate != encode_sr as i32 {
                     let chunk_size = 4096.min(pcm_samples.len());

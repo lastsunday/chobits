@@ -314,3 +314,106 @@ cargo test --package api --test tts_test -- test_tts_vits_zh_hf_theresa_scan_sid
 | aishell3 | **0.6** |
 
 校准值已写入 `default_length_scale()`（`api/src/tts/mod.rs`），在 `tts_options` 未指定 `length_scale` 时自动生效。
+
+---
+
+## Volume 波形归一化
+
+### 问题
+
+TTS 音频前后音量不一致（例如中英混读场景下后半段英文部分明显更响），导致听觉体验割裂。
+
+### 方案演进
+
+#### 方案一：固定参数 DRC 压缩器（已废弃）
+
+传统 feed-forward 压缩器，支持 peak-detector 包络跟随和可选 soft knee。通过网格搜索 + EBU R128 客观指标找到最优参数：
+
+**网格搜索范围：**
+
+| 参数 | 范围 | 步长 |
+|------|------|------|
+| threshold | -32 ~ -20 dB | 2 dB |
+| ratio | 2 ~ 8 | 2 |
+| knee | 0 ~ 6 dB | 3 dB |
+| attack | 1 ~ 5 ms | 1 ms |
+| release | 80 ~ 200 ms | 40 ms |
+
+**最佳结果：** threshold=-28, ratio=6, knee=0, attack=5ms, release=80ms, makeup=8dB
+
+```
+LRA 9.58 → 5.66 LU（↓41%）
+Crest 15.4 → 6.2 dB ❌ 声音发闷
+```
+
+Crest Factor 被压缩到 6.2 dB（太低），人耳感知为"闷"——音量均衡了但动态丧失。
+
+#### 方案二：自适应 RMS 增益归一化（现行方案）
+
+`adaptive_normalize()` 在 `apps/server/api/src/util/compressor.rs`，零配置，自动调整。
+
+**算法：**
+
+| 步骤 | 说明 |
+|------|------|
+| 1. 分帧 RMS 分析 | 200ms 窗口，10ms 步长计算每帧 RMS |
+| 2. 目标响度 | 取所有帧 RMS 的 p30（30%分位） |
+| 3. 帧增益 | 每帧 target_rms / frame_rms，限幅 ±12 dB |
+| 4. 增益平滑 | attack=5ms / release=300ms 逐样点 IIR 平滑 |
+| 5. 全局响度补偿 | 匹配原始 RMS + 额外 +3 dB |
+| 6. 软限幅 | -0.5 dBFS 硬限制防止削波 |
+
+**结果对比：**
+
+| 指标 | Raw | Adaptive |
+|------|-----|----------|
+| LRA | 9.08 LU | **1.59 LU**（↓82%）|
+| LUFS | -26.90 | **-24.14**（比原始响 ~3 dB）|
+| Crest Factor | 15.3 dB | **14.7 dB** ✅ 动态保留 |
+
+Crest Factor 维持在 14.7 dB——几乎是原始水平，完全没有"闷"感。
+
+### EBU R128 客观指标
+
+`apps/server/api/src/util/compressor.rs` 中 `evaluate_compressed()` 报告三个指标：
+
+| 指标 | 全称 | 含义 | 目标 |
+|------|------|------|------|
+| LRA | Loudness Range | 响度范围，越低越一致 | 大幅降低 |
+| LUFS | Loudness Units relative to Full Scale | 整体集成响度 | 匹配原始 +3 dB |
+| Crest Factor | Peak-to-RMS Ratio | 动态余量，越高越有力度 | 保持 ≥ 原始 |
+
+### 性能影响
+
+| 环节 | 复杂度 | 10s 音频耗时 |
+|------|--------|-------------|
+| 分帧 RMS | O(n) | < 1ms |
+| 排序取 p30 | O(f log f), ~1000 帧 | < 1ms |
+| 增益平滑 | O(n), 每样点 IIR | < 10ms |
+| **总开销** | | **~10ms**（TTS 推理数秒，可忽略）|
+
+### 测试命令
+
+```bash
+# 对比测试：Raw vs 重采样+Opus vs Adaptive Normalize，生成 WAV + 打印 EBU R128 指标
+cargo test --package api --test tts_test -- test_compare_raw_vs_processed --ignored --nocapture
+
+# 网格搜索压缩器（保留历史参考）
+cargo test --package api --test tts_test -- test_grid_search_compressor --ignored --nocapture
+```
+
+### 输出文件
+
+| 文件 | 说明 |
+|------|------|
+| `./test_data/compare_raw.wav` | 原始 PCM（sherpa-onnx 直接输出） |
+| `./test_data/compare_processed.wav` | 当前管道（重采样 + Opus） |
+| `./test_data/compare_adaptive.wav` | adaptive_normalize 处理后 |
+
+### Key Files
+
+| 文件 | 作用 |
+|------|------|
+| `apps/server/api/src/util/compressor.rs` | `adaptive_normalize()`、`evaluate_compressed()`、历史 `pcm_compress()` / `grid_search_compressor()` |
+| `apps/server/api/src/tts/model/vits/mod.rs` | VITS 模型的 `stream()` 中调用 `adaptive_normalize()` |
+| `apps/server/api/tests/tts_test.rs` | `test_compare_raw_vs_processed`、`test_grid_search_compressor` |
