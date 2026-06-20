@@ -95,7 +95,6 @@ intel-mkl-src = { workspace = true, features = [
   "mkl-static-lp64-iomp",
 ], optional = true }
 accelerate-src = { workspace = true, optional = true }
-candle-onnx = { workspace = true }
 rig-core = { workspace = true }
 # llm end
 # asr + tts start

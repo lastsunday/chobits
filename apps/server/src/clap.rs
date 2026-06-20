@@ -142,7 +142,7 @@ pub enum DownloaderAction {
         #[arg(conflicts_with = "all")]
         category: Option<String>,
 
-        /// Model name (e.g., qwen3, silero)
+        /// Model name (e.g., qwen3, earshot)
         #[arg(conflicts_with = "all")]
         model: Option<String>,
 

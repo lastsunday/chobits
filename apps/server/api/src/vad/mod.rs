@@ -4,7 +4,6 @@ use crate::config::vad::VadConfig;
 use crate::vad::model::earshot::VadEarshot;
 use crate::{common::ModelError, vad::model::void::VadVoid};
 use async_trait::async_trait;
-use model::silero::VadSilero;
 use std::sync::{Arc, OnceLock};
 
 #[async_trait]
@@ -50,9 +49,6 @@ impl VadFactory {
 
     pub fn create_model(config: &VadConfig) -> Box<dyn Vad> {
         match config.model.as_ref().expect("vad model empty") {
-            VadModel::Silero => {
-                Box::new(VadSilero::new(config.path.clone().expect("vad path is empty")).unwrap())
-            }
             VadModel::Void => Box::new(VadVoid::new().unwrap()),
             VadModel::Earshot => Box::new(VadEarshot::new().unwrap()),
         }

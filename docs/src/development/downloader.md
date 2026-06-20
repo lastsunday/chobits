@@ -18,7 +18,6 @@ apps/server/src/downloader/
 │   │   ├── pocket-tts.json
 │   │   └── voxcpm.json
 │   └── vad/             # 语音活动检测
-│       └── silero.json
 ├── mod.rs               # 业务逻辑（932 行）
 └── tests.rs             # 单元测试（486 行，33 个用例）
 ```
@@ -242,7 +241,7 @@ moon run server:download-all-and-checksums # 下载所有模型并更新 SHA
 | `tts_model` | `pocket-tts` / `vits` / `matchatts` / `mute` | `mute` 跳过 |
 | `asr_model` | `sensevoice` / `paraformer` / `zipformer` / `void` | `void` 跳过 |
 | `llm_model` | `qwen3` / `echo` / `mini-cpm4` | `echo`/`mini-cpm4` 跳过 |
-| `vad_model` | `silero` / `earshot` / `void` | `earshot`/`void` 跳过 |
+| `vad_model` | `earshot` / `void` | `earshot`/`void` 跳过 |
 
 ### config 文件查找
 

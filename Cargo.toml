@@ -101,7 +101,6 @@ rubato = "0.16.0"
 # llm start
 candle-core = "0.9.1"
 candle-transformers = "0.9.1"
-candle-onnx = "0.9.1"
 candle-nn = "0.9.1"
 tokenizers = "0.22.2"
 fancy-regex = "0.17.0"

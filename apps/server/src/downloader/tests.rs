@@ -166,14 +166,6 @@ fn test_config_to_targets_mute() {
     assert!(t.is_empty());
 }
 
-#[test]
-fn test_config_to_targets_silero() {
-    let t = config_to_targets(&make_cfg(serde_json::json!({
-        "vad_model": "silero",
-    })));
-    assert!(t.contains(&("vad".into(), "silero".into(), None)));
-}
-
 // ── sha256_file ──
 
 #[test]

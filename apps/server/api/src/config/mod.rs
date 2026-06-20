@@ -128,7 +128,7 @@ pub struct Config {
     #[serde(default = "default_ws_schema")]
     pub ws_schema: Option<String>,
 
-    /// default: silero
+    /// default: earshot
     #[serde(default = "default_vad_model")]
     pub vad_model: Option<VadModel>,
 
@@ -694,20 +694,7 @@ impl Config {
         if self.vad_path.is_some() {
             return self.vad_path.clone();
         }
-        let variant = self.vad_variant.clone().unwrap_or_else(|| {
-            match self.vad_model.clone().unwrap_or_default() {
-                VadModel::Silero => "default".into(),
-                _ => String::new(),
-            }
-        });
-        if variant.is_empty() {
-            return None;
-        }
-        let d = self.data_dir();
-        match self.vad_model.clone().unwrap_or_default() {
-            VadModel::Silero => Some(format!("{d}/vad/model/silero/{variant}/")),
-            _ => None,
-        }
+        None
     }
 }
 
@@ -728,7 +715,6 @@ pub struct ListeningAddr {
 #[derive(Clone, Debug, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum VadModel {
-    Silero,
     Void,
     #[default]
     Earshot,

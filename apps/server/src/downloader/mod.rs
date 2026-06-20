@@ -1154,9 +1154,6 @@ fn config_to_targets(config: &AppConfig) -> Vec<(String, String, Option<String>)
     }
 
     match config.vad_model.clone().unwrap_or_default() {
-        VadModel::Silero => {
-            targets.push(("vad".into(), "silero".into(), config.vad_variant.clone()));
-        }
         VadModel::Earshot | VadModel::Void => {}
     }
 
