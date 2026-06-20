@@ -265,7 +265,7 @@ pub fn adaptive_normalize(samples: &[f32], sample_rate: u32) -> Vec<f32> {
     let mut output = Vec::with_capacity(samples.len());
     let mut current_gain = 1.0_f32;
 
-    for i in 0..samples.len() {
+    for (i, sample) in samples.iter().enumerate() {
         // Linearly interpolate desired gain from neighbouring frame centres
         let centre = i as f32 / hop_len as f32 - (frame_len as f32 / hop_len as f32) * 0.5;
         let idx = centre.floor() as isize;
@@ -290,7 +290,7 @@ pub fn adaptive_normalize(samples: &[f32], sample_rate: u32) -> Vec<f32> {
         };
         current_gain += coeff * (desired_gain - current_gain);
 
-        output.push(samples[i] * current_gain);
+        output.push(*sample * current_gain);
     }
 
     // 5. Global makeup gain: restore overall loudness to original level + 3 dB extra
