@@ -97,6 +97,14 @@
 #
 #vad_num_threads = 4
 
+# VAD detection threshold (0.0–1.0). Higher = fewer false positives, more false negatives.
+#
+#vad_threshold = 0.5
+
+# Minimum silence duration in ms before VAD considers speech ended.
+#
+#vad_min_silence_duration = 1000
+
 # This item is undocumented. Please contribute documentation for it.
 #
 #tts_model = matchatts

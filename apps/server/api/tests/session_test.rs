@@ -1767,7 +1767,8 @@ async fn test_asr_voice_input_manual() -> anyhow::Result<()> {
     let mut frames = Vec::new();
     loop {
         let frame = output.next().await.unwrap().unwrap();
-        let is_stop = matches!(&frame, FrameResult::TTSResult(msg) if msg.state == Some(TtsState::Stop));
+        let is_stop =
+            matches!(&frame, FrameResult::TTSResult(msg) if msg.state == Some(TtsState::Stop));
         frames.push(frame);
         if is_stop {
             break;
@@ -1809,13 +1810,15 @@ async fn test_asr_voice_input_manual() -> anyhow::Result<()> {
     debug!("Echo: {echo_text}");
 
     assert!(
-        frames
-            .iter()
-            .any(|f| matches!(f, FrameResult::TTSResult(msg) if msg.state == Some(TtsState::Start))),
+        frames.iter().any(
+            |f| matches!(f, FrameResult::TTSResult(msg) if msg.state == Some(TtsState::Start))
+        ),
         "Missing TTSResult(Start)"
     );
     assert!(
-        frames.iter().any(|f| matches!(f, FrameResult::LLMResult(..))),
+        frames
+            .iter()
+            .any(|f| matches!(f, FrameResult::LLMResult(..))),
         "Missing LLMResult"
     );
 

@@ -22,6 +22,7 @@ use tower::ServiceExt;
 pub mod asr;
 pub mod router_client;
 pub mod tts;
+pub mod vad;
 
 #[allow(dead_code)]
 pub async fn setup_database() -> (Option<ContainerAsync<Postgres>>, AppState) {

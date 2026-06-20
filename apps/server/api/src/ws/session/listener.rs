@@ -11,6 +11,9 @@ use tokio::sync::Mutex;
 use tokio::sync::mpsc::Sender;
 use tracing::debug;
 
+/// Maximum prefix padding in samples (300ms at 16kHz).
+const PREFIX_SAMPLES_MAX: usize = 4800;
+
 #[async_trait]
 pub trait Listener: Send + Sync {
     async fn listen(&mut self, data: &[u8]);
@@ -19,6 +22,10 @@ pub trait Listener: Send + Sync {
     async fn get_result(&mut self) -> core::result::Result<ListenResult, ModelError>;
     async fn reset(&mut self, silence_voice_timeout: Option<i64>);
     async fn set_sender(&mut self, tx: Sender<Result<FrameResult, AppError>>);
+
+    async fn get_voice_data(&self) -> Vec<f32> {
+        Vec::new()
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -46,6 +53,10 @@ pub struct DefaultListener {
     latest_speaking_time: Option<i64>,
     audio_config: Arc<AudioConfig>,
     error_tx: Option<Sender<Result<FrameResult, AppError>>>,
+    /// Ring buffer for prefix padding (~300ms of raw audio).
+    prefix_buffer: Vec<f32>,
+    /// Whether prefix has been flushed for current speech turn.
+    prefix_flushed: bool,
 }
 
 impl DefaultListener {
@@ -71,6 +82,8 @@ impl DefaultListener {
             latest_speaking_time: None,
             audio_config,
             error_tx: None,
+            prefix_buffer: Vec::with_capacity(PREFIX_SAMPLES_MAX),
+            prefix_flushed: false,
         }
     }
 }
@@ -98,7 +111,6 @@ impl Listener for DefaultListener {
                 .audio_config
                 .input_frame_duration
                 .expect("input frame duration is empty");
-            // 16000Hz * 1 channel * 20 ms / 1000 = 320 samples -> frameSize
             let frame_size =
                 ((sample_rate as u64 * channel as u64 * frame_duration) / 1000) as usize;
             let mut samples = vec![0f32; frame_size];
@@ -120,17 +132,36 @@ impl Listener for DefaultListener {
             let window_size = vad.window_size().await;
             while temp_voice_data.len() > window_size {
                 let window: Vec<f32> = temp_voice_data.drain(..window_size).collect();
-                if let Err(e) = vad.accept_waveform(window.to_vec()).await {
+
+                // 1. Maintain ring buffer for prefix padding.
+                self.prefix_buffer.extend(&window);
+                if self.prefix_buffer.len() > PREFIX_SAMPLES_MAX {
+                    let excess = self.prefix_buffer.len() - PREFIX_SAMPLES_MAX;
+                    self.prefix_buffer.drain(..excess);
+                }
+
+                // 2. VAD decision only (no longer accumulates audio internally).
+                if let Err(e) = vad.accept_waveform(&window).await {
                     tracing::error!("accept_waveform error = {}", e.to_string());
                     return;
                 }
+
+                // 3. Audio management in Listener.
                 if vad.is_speech().await {
                     self.state = ListenState::Listening(true);
                     self.latest_speaking_time = Some(Local::now().timestamp_millis());
-                    let mut segment = vad.front().await;
-                    vad.pop().await;
                     let mut voice_data = voice_data.lock().await;
-                    voice_data.append(&mut segment.samples);
+                    if !self.prefix_flushed {
+                        // First speech frame in this turn — flush prefix (includes current window).
+                        voice_data.append(&mut self.prefix_buffer);
+                        self.prefix_buffer = Vec::with_capacity(PREFIX_SAMPLES_MAX);
+                        self.prefix_flushed = true;
+                    } else {
+                        // Subsequent speech frames.
+                        voice_data.extend_from_slice(&window);
+                    }
+                } else {
+                    self.prefix_flushed = false;
                 }
             }
         }
@@ -202,9 +233,15 @@ impl Listener for DefaultListener {
         let vad = self.vad.clone();
         let mut vad = vad.lock().await;
         vad.clear().await;
+        self.prefix_buffer.clear();
+        self.prefix_flushed = false;
     }
 
     async fn set_sender(&mut self, tx: Sender<Result<FrameResult, AppError>>) {
         self.error_tx = Some(tx);
+    }
+
+    async fn get_voice_data(&self) -> Vec<f32> {
+        self.voice_data.lock().await.clone()
     }
 }

@@ -143,6 +143,20 @@ pub struct Config {
     #[serde(default = "default_vad_num_threads")]
     pub vad_num_threads: Option<i32>,
 
+    /// VAD detection threshold (0.0–1.0). Higher = fewer false positives, more false negatives.
+    ///
+    /// display: VAD Threshold
+    /// default: 0.5
+    #[serde(default = "default_vad_threshold")]
+    pub vad_threshold: Option<f32>,
+
+    /// Minimum silence duration in ms before VAD considers speech ended.
+    ///
+    /// display: Min Silence Duration
+    /// default: 1000
+    #[serde(default = "default_vad_min_silence_duration")]
+    pub vad_min_silence_duration: Option<f32>,
+
     /// default: matchatts
     #[serde(default = "default_tts_model")]
     pub tts_model: Option<TtsModel>,
@@ -505,6 +519,14 @@ fn default_vad_path() -> Option<String> {
 
 fn default_vad_num_threads() -> Option<i32> {
     Some(4)
+}
+
+fn default_vad_threshold() -> Option<f32> {
+    Some(0.5)
+}
+
+fn default_vad_min_silence_duration() -> Option<f32> {
+    Some(1000.0)
 }
 
 fn default_matrix_enable() -> Option<bool> {

@@ -121,6 +121,8 @@ async fn async_main(server: &Arc<Server>) -> Result<(), anyhow::Error> {
             .to_owned()
             .or_else(|| config.derive_vad_path()),
         num_threads: config.vad_num_threads,
+        threshold: config.vad_threshold,
+        min_silence_duration: config.vad_min_silence_duration,
     });
     let audio_config = Arc::new(AudioConfig {
         input_sample_rate: config.audio_input_sample_rate,
@@ -186,10 +188,11 @@ async fn async_main(server: &Arc<Server>) -> Result<(), anyhow::Error> {
                     .clone()
                     .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
                 if let Some(ls) = crate::downloader::tts_length_scale(&model, &effective_variant)
-                    && let Some(m) = opts.as_object_mut() {
-                        m.entry("length_scale")
-                            .or_insert_with(|| serde_json::json!(ls));
-                    }
+                    && let Some(m) = opts.as_object_mut()
+                {
+                    m.entry("length_scale")
+                        .or_insert_with(|| serde_json::json!(ls));
+                }
                 Some(opts)
             };
 
