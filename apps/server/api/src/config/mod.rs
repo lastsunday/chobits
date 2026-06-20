@@ -429,9 +429,8 @@ fn default_tts_path() -> Option<String> {
     None
 }
 
-
 fn default_asr_model() -> Option<AsrModel> {
-    Some(AsrModel::Qwen3)
+    Some(AsrModel::SenseVoice)
 }
 
 fn default_asr_path() -> Option<String> {
@@ -661,17 +660,13 @@ impl Config {
         }
     }
 
-    pub fn derive_asr_path(&self) -> Option<String> {
-        if self.asr_path.is_some() {
-            return self.asr_path.clone();
-        }
-        let d = self.data_dir();
+    pub fn derive_asr_path(&self, base_path: &str, variant: &str) -> Option<String> {
         match self.asr_model.clone().unwrap_or_default() {
-            AsrModel::Qwen3 => {
-                let variant = self.asr_variant.clone().unwrap_or_else(|| "default".into());
-                Some(format!("{d}/asr/model/qwen3/{variant}/"))
-            }
             AsrModel::Void => None,
+            _ => {
+                let d = self.data_dir().trim_end_matches('/');
+                Some(format!("{d}/{base_path}{variant}/"))
+            }
         }
     }
 
@@ -739,11 +734,13 @@ pub enum VadModel {
     Earshot,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Default)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum AsrModel {
     #[default]
-    Qwen3,
+    SenseVoice,
+    Paraformer,
+    Zipformer,
     Void,
 }
 

@@ -139,12 +139,15 @@ pub enum DownloaderAction {
     /// Download AI models to the local data directory
     Install {
         /// Category: tts, asr, llm, vad, reference (default: all)
+        #[arg(conflicts_with = "all")]
         category: Option<String>,
 
         /// Model name (e.g., qwen3, silero)
+        #[arg(conflicts_with = "all")]
         model: Option<String>,
 
         /// Variant name (e.g., 0.5B, tiny, small, large-v3)
+        #[arg(conflicts_with = "all")]
         variant: Option<String>,
 
         /// Base data directory
@@ -169,7 +172,7 @@ pub enum DownloaderAction {
         config: Option<PathBuf>,
 
         /// Download all files from all manifests (ignores config)
-        #[arg(long)]
+        #[arg(long, conflicts_with_all = ["category", "model", "variant"])]
         all: bool,
     },
     /// Interactive download wizard

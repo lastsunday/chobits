@@ -98,17 +98,13 @@ accelerate-src = { workspace = true, optional = true }
 candle-onnx = { workspace = true }
 rig-core = { workspace = true }
 # llm end
-# asr start
-byteorder = { workspace = true }
-rand = { workspace = true }
-rand_distr = { workspace = true }
-qwen-asr = { workspace = true }
-# asr end
+# asr + tts start
+sherpa-onnx = { workspace = true }
+# asr + tts end
 # vad start
 earshot = { workspace = true }
 # vad end
 # tts start
-sherpa-onnx = { workspace = true }
 rubato = { workspace = true }
 ebur128 = "0.1"
 # tts end

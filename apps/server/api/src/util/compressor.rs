@@ -68,7 +68,11 @@ pub fn pcm_compress(samples: &[f32], sample_rate: u32, config: &CompressorConfig
 
     for &sample in samples {
         let input_abs = sample.abs();
-        let coeff = if input_abs > envelope { attack } else { release };
+        let coeff = if input_abs > envelope {
+            attack
+        } else {
+            release
+        };
         envelope += coeff * (input_abs - envelope);
 
         let gain_db = if envelope > 0.0 {
@@ -103,11 +107,7 @@ pub struct AudioMetrics {
 pub fn evaluate_compressed(samples: &[f32], sample_rate: u32) -> anyhow::Result<AudioMetrics> {
     use ebur128::{EbuR128, Mode};
 
-    let mut meter = EbuR128::new(
-        1,
-        sample_rate,
-        Mode::I | Mode::LRA | Mode::SAMPLE_PEAK,
-    )?;
+    let mut meter = EbuR128::new(1, sample_rate, Mode::I | Mode::LRA | Mode::SAMPLE_PEAK)?;
     meter.set_channel(0, ebur128::Channel::Left)?;
     meter.add_frames_f32(samples)?;
 
@@ -167,11 +167,7 @@ pub fn grid_search_compressor(
                                     results.push((cfg, metrics));
                                 }
                                 Err(e) => {
-                                    tracing::warn!(
-                                        "Evaluation failed for {:?}: {}",
-                                        cfg,
-                                        e
-                                    );
+                                    tracing::warn!("Evaluation failed for {:?}: {}", cfg, e);
                                 }
                             }
                         }
@@ -193,7 +189,9 @@ pub fn grid_search_compressor(
         } else {
             b.lra
         };
-        score_a.partial_cmp(&score_b).unwrap_or(std::cmp::Ordering::Equal)
+        score_a
+            .partial_cmp(&score_b)
+            .unwrap_or(std::cmp::Ordering::Equal)
     });
 
     Ok(results)
@@ -296,8 +294,12 @@ pub fn adaptive_normalize(samples: &[f32], sample_rate: u32) -> Vec<f32> {
     }
 
     // 5. Global makeup gain: restore overall loudness to original level + 3 dB extra
-    let orig_rms = (samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32).sqrt().max(1e-10);
-    let out_rms = (output.iter().map(|s| s * s).sum::<f32>() / output.len() as f32).sqrt().max(1e-10);
+    let orig_rms = (samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32)
+        .sqrt()
+        .max(1e-10);
+    let out_rms = (output.iter().map(|s| s * s).sum::<f32>() / output.len() as f32)
+        .sqrt()
+        .max(1e-10);
     let extra_gain = 10.0_f32.powf(3.0 / 20.0); // +3 dB
     let global_gain = (orig_rms / out_rms * extra_gain).clamp(0.5, 4.0);
 

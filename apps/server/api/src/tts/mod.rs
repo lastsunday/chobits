@@ -131,5 +131,3 @@ pub fn encode_sample_to_tts_packet(
 pub fn calcalute_tts_packet_size(sample_rate: u32, channel: u32, delay_millis: u64) -> usize {
     sample_rate as usize * channel as usize * delay_millis as usize / 1000
 }
-
-

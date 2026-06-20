@@ -104,6 +104,10 @@ pub async fn run(
     config_path: Option<&PathBuf>,
     all: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let has_filters = category.is_some() || model.is_some() || variant.is_some();
+    if all && has_filters {
+        return Err("--all cannot be used with CATEGORY, MODEL, or VARIANT".into());
+    }
     let client = Client::new();
 
     let override_map = match overrides {
@@ -111,7 +115,9 @@ pub async fn run(
         None => None,
     };
 
-    let targets = if !all {
+    let targets = if has_filters || all {
+        Vec::new()
+    } else {
         let cfg_path = config_path
             .cloned()
             .or_else(|| find_config().filter(|p| p.exists()));
@@ -143,8 +149,6 @@ pub async fn run(
         }
 
         t
-    } else {
-        Vec::new()
     };
 
     let mut report_files = Vec::new();
@@ -170,6 +174,7 @@ pub async fn run(
             }
 
             if !all
+                && !has_filters
                 && !targets
                     .iter()
                     .any(|(c, m, _)| c == cat_name && m == model_name)
@@ -648,7 +653,11 @@ fn extract_tar_bz2(
     let mut archive = Archive::new(decoder);
     std::fs::create_dir_all(dest)?;
 
-    let dir_prefixes: Vec<&str> = files.iter().filter(|f| !f.contains('.')).map(|f| f.as_str()).collect();
+    let dir_prefixes: Vec<&str> = files
+        .iter()
+        .filter(|f| !f.contains('.'))
+        .map(|f| f.as_str())
+        .collect();
 
     for entry in archive.entries()? {
         let mut entry = entry?;
@@ -1131,8 +1140,10 @@ fn config_to_targets(config: &AppConfig) -> Vec<(String, String, Option<String>)
         }
     }
 
-    if config.asr_model.clone().unwrap_or_default() == AsrModel::Qwen3 {
-        targets.push(("asr".into(), "qwen3".into(), config.asr_variant.clone()));
+    if let Some(ref model) = config.asr_model {
+        if let Some((_, _, stem)) = asr_model_info(model) {
+            targets.push(("asr".into(), stem, config.asr_variant.clone()));
+        }
     }
 
     match config.llm_model.clone().unwrap_or_default() {
@@ -1227,15 +1238,13 @@ fn tts_model_info(model: &TtsModel) -> Option<(String, String, String)> {
     let model_str = serde_json::to_value(model).ok()?.as_str()?.to_owned();
     let cat_dir = MANIFESTS.get_dir("tts")?;
     for file_entry in cat_dir.files() {
-        let entry: serde_json::Value =
-            serde_json::from_slice(file_entry.contents()).ok()?;
+        let entry: serde_json::Value = serde_json::from_slice(file_entry.contents()).ok()?;
         if entry["config"]["model"].as_str() != Some(&model_str) {
             continue;
         }
         let stem = file_entry.path().file_stem()?.to_str()?.to_owned();
         let default_variant = entry["default_variant"].as_str()?.to_owned();
-        let archive_path = entry["variants"][&default_variant]["archives"][0]["path"]
-            .as_str()?;
+        let archive_path = entry["variants"][&default_variant]["archives"][0]["path"].as_str()?;
         let base = Path::new(archive_path).parent()?.to_str()?.to_owned();
         let base_path = format!("{base}/");
         return Some((default_variant, base_path, stem));
@@ -1261,9 +1270,44 @@ pub fn tts_length_scale(model: &TtsModel, variant: &str) -> Option<f32> {
     let file_entry = cat_dir
         .files()
         .find(|f| f.path().file_stem() == Some(OsStr::new(&stem)))?;
-    let entry: serde_json::Value =
-        serde_json::from_slice(file_entry.contents()).ok()?;
-    entry["variants"][variant]["length_scale"].as_f64().map(|v| v as f32)
+    let entry: serde_json::Value = serde_json::from_slice(file_entry.contents()).ok()?;
+    entry["variants"][variant]["length_scale"]
+        .as_f64()
+        .map(|v| v as f32)
+}
+
+/// Look up ASR model info from embedded manifest by serde model name.
+/// Returns (default_variant, base_path, manifest_file_stem).
+fn asr_model_info(model: &AsrModel) -> Option<(String, String, String)> {
+    let model_str = serde_json::to_value(model).ok()?.as_str()?.to_owned();
+    let cat_dir = MANIFESTS.get_dir("asr")?;
+    for file_entry in cat_dir.files() {
+        let entry: serde_json::Value = serde_json::from_slice(file_entry.contents()).ok()?;
+        if entry["config"]["model"].as_str() != Some(&model_str) {
+            continue;
+        }
+        let stem = file_entry.path().file_stem()?.to_str()?.to_owned();
+        let default_variant = entry["default_variant"].as_str()?.to_owned();
+        let archive_path = entry["variants"][&default_variant]["archives"][0]["path"].as_str()?;
+        let base = std::path::Path::new(archive_path)
+            .parent()?
+            .to_str()?
+            .to_owned();
+        let base_path = format!("{base}/");
+        return Some((default_variant, base_path, stem));
+    }
+    None
+}
+
+/// Returns the default variant name for a given ASR model from its embedded manifest.
+pub fn default_asr_variant(model: &AsrModel) -> Option<String> {
+    asr_model_info(model).map(|(v, _, _)| v)
+}
+
+/// Returns the base storage path for an ASR model (e.g. "asr/model/sense_voice/").
+/// Derived from the default variant's archive path in the manifest.
+pub fn asr_base_path(model: &AsrModel) -> Option<String> {
+    asr_model_info(model).map(|(_, b, _)| b)
 }
 
 /// Returns the default reference audio variant from the embedded manifest.
@@ -1272,8 +1316,7 @@ pub fn default_reference_variant() -> Option<String> {
     let file_entry = cat_dir
         .files()
         .find(|f| f.path().file_stem() == Some(OsStr::new("audio")))?;
-    let entry: serde_json::Value =
-        serde_json::from_slice(file_entry.contents()).ok()?;
+    let entry: serde_json::Value = serde_json::from_slice(file_entry.contents()).ok()?;
     entry["default_variant"].as_str().map(String::from)
 }
 
@@ -1291,11 +1334,8 @@ pub fn resolve_reference_audio(variant: &str) -> Option<(String, String)> {
         .or_else(|| {
             let ap = variant_obj["archives"][0]["path"].as_str()?;
             let ex = variant_obj["archives"][0]["extract"][0].as_str()?;
-            let ext = Path::new(ex)
-                .extension()
-                .and_then(|e| e.to_str())
-                .unwrap_or("wav");
-            Some(format!("{ap}{variant}.{ext}"))
+            let ex_filename = Path::new(ex).file_name().and_then(|f| f.to_str())?;
+            Some(format!("{ap}{ex_filename}"))
         })?;
     let prompt_text = variant_obj["prompt_text"]
         .as_str()

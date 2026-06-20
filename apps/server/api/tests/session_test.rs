@@ -1521,8 +1521,8 @@ async fn create_session()
                 ..Default::default()
             })))),
             Arc::new(Mutex::new(AsrFactory::create_model(&AsrConfig {
-                model: Some(AsrModel::Qwen3),
-                path: Some(String::from("data/asr/model/Qwen/Qwen3-ASR-0.6B/")),
+                model: Some(AsrModel::SenseVoice),
+                path: Some(String::from("data/asr/model/sense_voice/default/")),
                 variant: None,
             }))),
             audio_config.clone(),

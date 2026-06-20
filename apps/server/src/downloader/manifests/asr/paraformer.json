@@ -1,0 +1,22 @@
+{
+  "config": {
+    "category": "asr",
+    "model": "paraformer"
+  },
+  "default_variant": "default",
+  "variants": {
+    "default": {
+      "archives": [
+        {
+          "path": "asr/model/paraformer/default/",
+          "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-paraformer-zh-2024-03-09.tar.bz2",
+          "sha256": null,
+          "extract": [
+            "model.int8.onnx",
+            "tokens.txt"
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -192,7 +192,15 @@ async fn test_tts_pocket() -> anyhow::Result<()> {
     }
     assert!(decoded.len() > 1000, "Decoded audio too short");
     info!("decoded {} PCM samples", decoded.len());
-    info!("{}", analyze_audio(&decoded, 16000, gen_elapsed, estimate_std_duration(TEST_TTS_TEXT)));
+    info!(
+        "{}",
+        analyze_audio(
+            &decoded,
+            16000,
+            gen_elapsed,
+            estimate_std_duration(TEST_TTS_TEXT)
+        )
+    );
 
     std::fs::create_dir_all("./test_data")?;
     let _ = wavers::write("./test_data/test_tts_pocket.wav", &decoded, 16000, 1);

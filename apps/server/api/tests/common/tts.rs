@@ -53,7 +53,7 @@ pub fn estimate_std_duration(text: &str) -> f64 {
     weight / STANDARD_SPEED_FACTOR
 }
 
-/// TTS 音频诊断结果。
+/// TTS audio diagnostics.
 #[derive(Debug)]
 pub struct TtsAudioDiagnostics {
     pub num_samples: usize,
@@ -69,19 +69,19 @@ pub struct TtsAudioDiagnostics {
 impl TtsAudioDiagnostics {
     pub fn shimmer_grade(&self) -> &'static str {
         match self.shimmer_pct {
-            s if s < 3.81 => "Excellent",
-            s if s < 5.0 => "Good",
-            s if s < 6.0 => "Fair",
-            s if s < 10.0 => "Poor",
-            _ => "Bad",
+            s if s < 3.81 => "A",
+            s if s < 5.0 => "B",
+            s if s < 6.0 => "C",
+            s if s < 10.0 => "D",
+            _ => "F",
         }
     }
 
     pub fn dr_grade(&self) -> &'static str {
         match self.dynamic_range_db {
-            d if d > 20.0 => "Good",
-            d if d > 15.0 => "Fair",
-            _ => "Poor",
+            d if d > 20.0 => "A",
+            d if d > 15.0 => "C",
+            _ => "F",
         }
     }
 
@@ -130,15 +130,15 @@ impl TtsAudioDiagnostics {
 
     pub fn score_grade(score: f64) -> &'static str {
         if score >= 86.0 {
-            "E"
+            "A"
         } else if score >= 66.0 {
-            "G"
-        } else if score >= 41.0 {
-            "F"
-        } else if score >= 21.0 {
-            "P"
-        } else {
             "B"
+        } else if score >= 41.0 {
+            "C"
+        } else if score >= 21.0 {
+            "D"
+        } else {
+            "F"
         }
     }
 
@@ -287,10 +287,15 @@ pub fn collect_rule_fsts(dir: &std::path::Path) -> Option<String> {
     }
     files.sort_by(|a, b| {
         fn priority(f: &str) -> u8 {
-            if f.contains("phone") { 0 }
-            else if f.contains("date") { 1 }
-            else if f.contains("number") { 2 }
-            else { 3 }
+            if f.contains("phone") {
+                0
+            } else if f.contains("date") {
+                1
+            } else if f.contains("number") {
+                2
+            } else {
+                3
+            }
         }
         priority(a).cmp(&priority(b))
     });

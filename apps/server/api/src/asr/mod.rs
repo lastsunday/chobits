@@ -1,7 +1,10 @@
 pub mod model;
 
 use crate::{
-    asr::model::{qwen3::AsrQwen3, void::AsrVoid},
+    asr::model::{
+        paraformer::AsrParaformer, sense_voice::AsrSenseVoice, void::AsrVoid,
+        zipformer::AsrZipformer,
+    },
     common::ModelError,
     config::{AsrModel, asr::AsrConfig},
 };
@@ -56,11 +59,16 @@ impl AsrFactory {
     pub fn create_model(config: &AsrConfig) -> Box<dyn Asr> {
         let model = config.model.clone().expect("asr model is empty");
         match model {
-            AsrModel::Qwen3 => {
-                let path = config.path.clone().expect("asr path is empty").to_string();
-                Box::new(AsrQwen3::new(path).unwrap())
-            }
             AsrModel::Void => Box::new(AsrVoid::new().unwrap()),
+            _ => {
+                let path = config.path.clone().expect("asr path is empty");
+                match model {
+                    AsrModel::SenseVoice => Box::new(AsrSenseVoice::new(&path).unwrap()),
+                    AsrModel::Paraformer => Box::new(AsrParaformer::new(&path).unwrap()),
+                    AsrModel::Zipformer => Box::new(AsrZipformer::new(&path).unwrap()),
+                    AsrModel::Void => unreachable!(),
+                }
+            }
         }
     }
 }

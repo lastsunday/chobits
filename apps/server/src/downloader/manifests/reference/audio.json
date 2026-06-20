@@ -27,6 +27,39 @@
           ]
         }
       ]
+    },
+    "zh": {
+      "prompt_text": "开放时间早上9点至下午5点。",
+      "archives": [
+        {
+          "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2",
+          "sha256": null,
+          "path": "asr/reference/",
+          "extract": ["test_wavs/zh.wav"]
+        }
+      ]
+    },
+    "en": {
+      "prompt_text": "The tribal chieftain called for the boy and presented him with 50 pieces of gold.",
+      "archives": [
+        {
+          "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2",
+          "sha256": null,
+          "path": "asr/reference/",
+          "extract": ["test_wavs/en.wav"]
+        }
+      ]
+    },
+    "yue": {
+      "prompt_text": "(tbd)",
+      "archives": [
+        {
+          "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2",
+          "sha256": null,
+          "path": "asr/reference/",
+          "extract": ["test_wavs/yue.wav"]
+        }
+      ]
     }
   }
 }

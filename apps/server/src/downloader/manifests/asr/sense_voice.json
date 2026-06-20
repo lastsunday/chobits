@@ -1,0 +1,25 @@
+{
+  "config": {
+    "category": "asr",
+    "model": "sensevoice"
+  },
+  "default_variant": "default",
+  "variants": {
+    "default": {
+      "archives": [
+        {
+          "path": "asr/model/sense_voice/default/",
+          "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2",
+          "sha256": null,
+            "extract": [
+            "model.int8.onnx",
+            "tokens.txt",
+            "test_wavs/zh.wav",
+            "test_wavs/en.wav",
+            "test_wavs/yue.wav"
+          ]
+        }
+      ]
+    }
+  }
+}

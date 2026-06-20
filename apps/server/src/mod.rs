@@ -2,13 +2,13 @@
 use std::sync::atomic::Ordering;
 use std::{error::Error, sync::Arc, time::Duration};
 
+use anyhow::anyhow;
 use api::config::{
-    asr::AsrConfig, audio::AudioConfig, database::DatabaseConfig, llm::LlmConfig,
+    AsrModel, asr::AsrConfig, audio::AudioConfig, database::DatabaseConfig, llm::LlmConfig,
     matrix::MatrixConfig, mcp::McpConfig, server::ServerConfig, session::SessionConfig,
     tts::TtsConfig, vad::VadConfig, ws::WsConfig,
 };
 use framework::config::auth::AuthConfig;
-use anyhow::anyhow;
 use tracing::info;
 
 use crate::{
@@ -143,77 +143,98 @@ async fn async_main(server: &Arc<Server>) -> Result<(), anyhow::Error> {
     let ws_config = Arc::new(WsConfig {
         schema: config.ws_schema.to_owned(),
     });
-    let tts_config = {
-        let data_dir = config.data_dir();
-        let model = config.tts_model.clone().unwrap_or_default();
+    let tts_config =
+        {
+            let data_dir = config.data_dir();
+            let model = config.tts_model.clone().unwrap_or_default();
 
-        // Resolve variant: user config → manifest default
-        let effective_variant = config.tts_variant.clone()
-            .or_else(|| crate::downloader::default_tts_variant(&model))
-            .ok_or_else(|| anyhow!(
-                "tts variant not configured and manifest missing default_variant"
-            ))?;
+            // Resolve variant: user config → manifest default
+            let effective_variant = config
+                .tts_variant
+                .clone()
+                .or_else(|| crate::downloader::default_tts_variant(&model))
+                .ok_or_else(|| {
+                    anyhow!("tts variant not configured and manifest missing default_variant")
+                })?;
 
-        // Resolve path: explicit config → manifest base + variant
-        let tts_path = config.tts_path.clone().or_else(|| {
-            let base = crate::downloader::tts_base_path(&model)?;
-            config.derive_tts_path(&base, &effective_variant)
-        });
+            // Resolve path: explicit config → manifest base + variant
+            let tts_path = config.tts_path.clone().or_else(|| {
+                let base = crate::downloader::tts_base_path(&model)?;
+                config.derive_tts_path(&base, &effective_variant)
+            });
 
-        let ref_variant = config.tts_reference_variant.clone()
+            let ref_variant = config.tts_reference_variant.clone()
             .or_else(crate::downloader::default_reference_variant)
             .ok_or_else(|| anyhow!(
                 "reference audio variant not configured and manifest missing default_variant"
             ))?;
-        let (ref_path, ref_text) = crate::downloader::resolve_reference_audio(&ref_variant)
-            .ok_or_else(|| anyhow!(
-                "reference audio variant '{ref_variant}' not found in manifest"
-            ))?;
-        // The path from the embedded manifest is relative to data_dir
-        let ref_path = if ref_path.starts_with('/') {
-            ref_path
-        } else {
-            format!("{data_dir}/{ref_path}")
-        };
+            let (ref_path, ref_text) = crate::downloader::resolve_reference_audio(&ref_variant)
+                .ok_or_else(|| {
+                    anyhow!("reference audio variant '{ref_variant}' not found in manifest")
+                })?;
+            // The path from the embedded manifest is relative to data_dir
+            let ref_path = if ref_path.starts_with('/') {
+                ref_path
+            } else {
+                format!("{data_dir}/{ref_path}")
+            };
 
-        // Merge manifest defaults into tts_options, user values take precedence
-        let tts_options = {
-            let mut opts = config.tts_options.clone()
-                .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
-            if let Some(ls) = crate::downloader::tts_length_scale(&model, &effective_variant) {
-                if let Some(m) = opts.as_object_mut() {
-                    m.entry("length_scale").or_insert_with(|| serde_json::json!(ls));
+            // Merge manifest defaults into tts_options, user values take precedence
+            let tts_options = {
+                let mut opts = config
+                    .tts_options
+                    .clone()
+                    .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+                if let Some(ls) = crate::downloader::tts_length_scale(&model, &effective_variant) {
+                    if let Some(m) = opts.as_object_mut() {
+                        m.entry("length_scale")
+                            .or_insert_with(|| serde_json::json!(ls));
+                    }
                 }
-            }
-            Some(opts)
+                Some(opts)
+            };
+
+            Arc::new(TtsConfig {
+                model: config.tts_model.to_owned(),
+                variant: Some(effective_variant),
+                path: tts_path,
+                reference_prompt_text: config.tts_reference_prompt_text.to_owned().or(
+                    if ref_text.is_empty() {
+                        None
+                    } else {
+                        Some(ref_text)
+                    },
+                ),
+                reference_prompt_wav_path: config
+                    .tts_reference_prompt_wav_path
+                    .to_owned()
+                    .or(Some(ref_path)),
+                options: tts_options,
+            })
+        };
+    let asr_config = {
+        let model = config.asr_model.clone().unwrap_or_default();
+        let (effective_variant, asr_path) = if model == AsrModel::Void {
+            (None, None)
+        } else {
+            let v = config
+                .asr_variant
+                .clone()
+                .or_else(|| crate::downloader::default_asr_variant(&model))
+                .unwrap_or_else(|| "default".into());
+            let p = config.asr_path.clone().or_else(|| {
+                let base = crate::downloader::asr_base_path(&model)?;
+                config.derive_asr_path(&base, &v)
+            });
+            (Some(v), p)
         };
 
-        Arc::new(TtsConfig {
-            model: config.tts_model.to_owned(),
-            variant: Some(effective_variant),
-            path: tts_path,
-            reference_prompt_text: config.tts_reference_prompt_text.to_owned().or(
-                if ref_text.is_empty() {
-                    None
-                } else {
-                    Some(ref_text)
-                },
-            ),
-            reference_prompt_wav_path: config
-                .tts_reference_prompt_wav_path
-                .to_owned()
-                .or(Some(ref_path)),
-            options: tts_options,
+        Arc::new(AsrConfig {
+            model: config.asr_model.to_owned(),
+            variant: effective_variant,
+            path: asr_path,
         })
     };
-    let asr_config = Arc::new(AsrConfig {
-        model: config.asr_model.to_owned(),
-        variant: config.asr_variant.to_owned(),
-        path: config
-            .asr_path
-            .to_owned()
-            .or_else(|| config.derive_asr_path()),
-    });
     let llm_config = Arc::new(LlmConfig {
         model: config.llm_model.to_owned(),
         variant: config.llm_variant.to_owned(),

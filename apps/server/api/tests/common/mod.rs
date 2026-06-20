@@ -19,6 +19,7 @@ use testcontainers::runners::AsyncRunner;
 use testcontainers_modules::postgres::Postgres;
 use tower::ServiceExt;
 
+pub mod asr;
 pub mod router_client;
 pub mod tts;
 

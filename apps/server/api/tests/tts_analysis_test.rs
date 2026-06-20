@@ -23,10 +23,7 @@ async fn run_length_scale_scan(
     ls_values: &[f32],
     sid: Option<i32>,
 ) -> anyhow::Result<()> {
-    let path = ws_root()
-        .join(dir)
-        .to_string_lossy()
-        .into_owned();
+    let path = ws_root().join(dir).to_string_lossy().into_owned();
     let mut rows: Vec<(f32, f64, f64, f64)> = Vec::new();
 
     for &ls in ls_values {
@@ -71,12 +68,18 @@ async fn run_length_scale_scan(
 
     rows.sort_by(|a, b| a.2.partial_cmp(&b.2).unwrap());
     info!("=== length_scale scan summary (sorted by abs deviation) ===");
-    info!("{:<8} {:<10} {:<10} {:<10}", "ls", "duration", "dev_abs", "dev_pct");
+    info!(
+        "{:<8} {:<10} {:<10} {:<10}",
+        "ls", "duration", "dev_abs", "dev_pct"
+    );
     for &(ls, dur, dev, dev_pct) in &rows {
         info!("{ls:<8.3} {dur:<6.2}s   {dev:<6.2}s   {dev_pct:<6.1}%");
     }
     if let Some(best) = rows.first() {
-        info!("Best length_scale: {:.3} (dev={:.2}s, {:.1}%)", best.0, best.2, best.3);
+        info!(
+            "Best length_scale: {:.3} (dev={:.2}s, {:.1}%)",
+            best.0, best.2, best.3
+        );
     }
     Ok(())
 }
@@ -113,7 +116,15 @@ async fn test_compare_raw_vs_processed() -> anyhow::Result<()> {
     info!("Model sample rate: {} Hz", sample_rate);
 
     let audio = tts
-        .generate_with_config(TEST_TTS_TEXT, &GenerationConfig { speed: 1.0, sid: 0, ..Default::default() }, None::<fn(&[f32], f32) -> bool>)
+        .generate_with_config(
+            TEST_TTS_TEXT,
+            &GenerationConfig {
+                speed: 1.0,
+                sid: 0,
+                ..Default::default()
+            },
+            None::<fn(&[f32], f32) -> bool>,
+        )
         .expect("Generation failed");
     let raw_samples = audio.samples().to_vec();
     let raw_sr = audio.sample_rate();
@@ -124,18 +135,34 @@ async fn test_compare_raw_vs_processed() -> anyhow::Result<()> {
 
     wavers::write("./test_data/compare_raw.wav", &raw_samples, raw_sr, 1)?;
     let processed = opus_pipeline(&raw_samples, raw_sr, encode_sr);
-    wavers::write("./test_data/compare_processed.wav", &processed, encode_sr as i32, 1)?;
+    wavers::write(
+        "./test_data/compare_processed.wav",
+        &processed,
+        encode_sr as i32,
+        1,
+    )?;
 
     let adaptive = adaptive_normalize(&raw_samples, raw_sr as u32);
     let adp_decoded = opus_pipeline(&adaptive, raw_sr, encode_sr);
-    wavers::write("./test_data/compare_adaptive.wav", &adp_decoded, encode_sr as i32, 1)?;
+    wavers::write(
+        "./test_data/compare_adaptive.wav",
+        &adp_decoded,
+        encode_sr as i32,
+        1,
+    )?;
 
     info!("--- EBU R128 Metrics ---");
     if let Ok(m) = evaluate_compressed(&raw_samples, raw_sr as u32) {
-        info!("  Raw:      LRA={:.2} LU, LUFS={:.2}, Crest={:.1} dB", m.lra, m.lufs, m.crest_factor_db);
+        info!(
+            "  Raw:      LRA={:.2} LU, LUFS={:.2}, Crest={:.1} dB",
+            m.lra, m.lufs, m.crest_factor_db
+        );
     }
     if let Ok(m) = evaluate_compressed(&adaptive, raw_sr as u32) {
-        info!("  Adaptive: LRA={:.2} LU, LUFS={:.2}, Crest={:.1} dB", m.lra, m.lufs, m.crest_factor_db);
+        info!(
+            "  Adaptive: LRA={:.2} LU, LUFS={:.2}, Crest={:.1} dB",
+            m.lra, m.lufs, m.crest_factor_db
+        );
     }
 
     info!("=== Done: compare_raw, compare_processed, compare_adaptive ===");
@@ -155,7 +182,12 @@ async fn test_grid_search_compressor() -> anyhow::Result<()> {
             vits: OfflineTtsVitsModelConfig {
                 model: Some(model_path.join("model.onnx").to_string_lossy().into_owned()),
                 tokens: Some(model_path.join("tokens.txt").to_string_lossy().into_owned()),
-                lexicon: Some(model_path.join("lexicon.txt").to_string_lossy().into_owned()),
+                lexicon: Some(
+                    model_path
+                        .join("lexicon.txt")
+                        .to_string_lossy()
+                        .into_owned(),
+                ),
                 noise_scale: 0.667,
                 noise_scale_w: 0.8,
                 length_scale: 1.0,
@@ -172,7 +204,15 @@ async fn test_grid_search_compressor() -> anyhow::Result<()> {
     info!("Model sample rate: {} Hz", sample_rate);
 
     let audio = tts
-        .generate_with_config(TEST_TTS_TEXT, &GenerationConfig { speed: 1.0, sid: 0, ..Default::default() }, None::<fn(&[f32], f32) -> bool>)
+        .generate_with_config(
+            TEST_TTS_TEXT,
+            &GenerationConfig {
+                speed: 1.0,
+                sid: 0,
+                ..Default::default()
+            },
+            None::<fn(&[f32], f32) -> bool>,
+        )
         .expect("Generation failed");
     let raw_samples = audio.samples().to_vec();
     let raw_sr = audio.sample_rate();
