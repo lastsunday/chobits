@@ -96,8 +96,7 @@ fn normalize(text: &str) -> String {
             !c.is_ascii_punctuation()
                 && !matches!(
                     c,
-                    '。'
-                        | '，'
+                    '。' | '，'
                         | '、'
                         | '？'
                         | '！'
@@ -132,10 +131,7 @@ fn cer(reference: &str, hypothesis: &str) -> f64 {
         let mut cur = vec![i + 1; hyp_chars.len() + 1];
         for (j, hc) in hyp_chars.iter().enumerate() {
             let cost = if rc == hc { 0 } else { 1 };
-            cur[j + 1] = std::cmp::min(
-                cur[j] + 1,
-                std::cmp::min(prev[j + 1] + 1, prev[j] + cost),
-            );
+            cur[j + 1] = std::cmp::min(cur[j] + 1, std::cmp::min(prev[j + 1] + 1, prev[j] + cost));
         }
         prev = cur;
     }
@@ -157,10 +153,7 @@ fn wer(reference: &str, hypothesis: &str) -> f64 {
         let mut cur = vec![i + 1; hyp_words.len() + 1];
         for (j, hw) in hyp_words.iter().enumerate() {
             let cost = if rw == hw { 0 } else { 1 };
-            cur[j + 1] = std::cmp::min(
-                cur[j] + 1,
-                std::cmp::min(prev[j + 1] + 1, prev[j] + cost),
-            );
+            cur[j + 1] = std::cmp::min(cur[j] + 1, std::cmp::min(prev[j + 1] + 1, prev[j] + cost));
         }
         prev = cur;
     }

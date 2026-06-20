@@ -11,7 +11,7 @@ use tracing_test::traced_test;
 
 mod common;
 use common::asr::analyze_asr;
-use common::tts::{tts_stream, vits_audio_config, ws_root, TEST_TTS_TEXT};
+use common::tts::{TEST_TTS_TEXT, tts_stream, vits_audio_config, ws_root};
 
 const ASR_TEST_CASES: &[(&str, &str)] = &[("zh", "开放时间"), ("en", "pieces"), ("yue", "")];
 
@@ -98,7 +98,10 @@ async fn test_asr_with_reference_audio() {
 
         if !expected.is_empty() {
             assert!(
-                result.text.to_lowercase().contains(&expected.to_lowercase()),
+                result
+                    .text
+                    .to_lowercase()
+                    .contains(&expected.to_lowercase()),
                 "Variant '{variant}': expected '{expected}' in '{}'",
                 result.text
             );
@@ -211,7 +214,10 @@ async fn test_asr_paraformer_reference_audio() {
 
         if !expected.is_empty() {
             assert!(
-                result.text.to_lowercase().contains(&expected.to_lowercase()),
+                result
+                    .text
+                    .to_lowercase()
+                    .contains(&expected.to_lowercase()),
                 "Variant '{variant}': expected '{expected}' in '{}'",
                 result.text
             );
@@ -249,7 +255,10 @@ async fn test_asr_zipformer_reference_audio() {
 
         if !expected.is_empty() {
             assert!(
-                result.text.to_lowercase().contains(&expected.to_lowercase()),
+                result
+                    .text
+                    .to_lowercase()
+                    .contains(&expected.to_lowercase()),
                 "Variant '{variant}': expected '{expected}' in '{}'",
                 result.text
             );
