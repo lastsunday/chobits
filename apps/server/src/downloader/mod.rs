@@ -1134,17 +1134,15 @@ fn confirm(question: &str) -> Result<bool, Box<dyn std::error::Error>> {
 fn config_to_targets(config: &AppConfig) -> Vec<(String, String, Option<String>)> {
     let mut targets = Vec::new();
 
-    if let Some(ref model) = config.tts_model {
-        if let Some((_, _, stem)) = tts_model_info(model) {
+    if let Some(ref model) = config.tts_model
+        && let Some((_, _, stem)) = tts_model_info(model) {
             targets.push(("tts".into(), stem, config.tts_variant.clone()));
         }
-    }
 
-    if let Some(ref model) = config.asr_model {
-        if let Some((_, _, stem)) = asr_model_info(model) {
+    if let Some(ref model) = config.asr_model
+        && let Some((_, _, stem)) = asr_model_info(model) {
             targets.push(("asr".into(), stem, config.asr_variant.clone()));
         }
-    }
 
     match config.llm_model.clone().unwrap_or_default() {
         LlmModel::Qwen3 => {

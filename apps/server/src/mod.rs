@@ -185,12 +185,11 @@ async fn async_main(server: &Arc<Server>) -> Result<(), anyhow::Error> {
                     .tts_options
                     .clone()
                     .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
-                if let Some(ls) = crate::downloader::tts_length_scale(&model, &effective_variant) {
-                    if let Some(m) = opts.as_object_mut() {
+                if let Some(ls) = crate::downloader::tts_length_scale(&model, &effective_variant)
+                    && let Some(m) = opts.as_object_mut() {
                         m.entry("length_scale")
                             .or_insert_with(|| serde_json::json!(ls));
                     }
-                }
                 Some(opts)
             };
 
