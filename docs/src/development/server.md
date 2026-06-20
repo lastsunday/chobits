@@ -18,12 +18,11 @@ _TODO_
 
 ### ASR
 
-| Model                         | Memory | File Size | Remark |
-| ----------------------------- | ------ | --------- | ------ |
-| openai/whisper-tiny           | 0.45GB | 0.15GB    |        |
-| openai/whisper-small          | 1.1GB  | 0.96GB    |        |
-| Qwen/Qwen3-ASR-0.6B           | 2GB    | 1.88GB    |        |
-| openai/whisper-large-v3-turbo | 4GB    | 1.62GB    |        |
+| Model                                    | Memory  | File Size | Language              | CER (TTS 闭环) |
+| ---------------------------------------- | ------- | --------- | --------------------- | -------------- |
+| SenseVoice (sherpa-onnx)                 | ~600MB  | 228MB     | 中/英/日/韩/粤        | 0.00%(A)       |
+| Paraformer (sherpa-onnx)                 | ~400MB  | 217MB     | 中文                  | 34.62%(F)      |
+| Zipformer (sherpa-onnx)                  | ~500MB  | 257MB     | 中/英                 | 32.05%(F)      |
 
 ### TTS
 
