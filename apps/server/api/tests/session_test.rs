@@ -1945,7 +1945,10 @@ async fn test_full_flow() -> anyhow::Result<()> {
         }
     }
 
-    // Poll DB for record data (wait until both llm + tts round_data are flushed)
+    session.stop().await;
+
+    // Poll DB for record data (wait until llm round_data is flushed)
+    // Mute TTS doesn't produce raw_pcm, so on_tts_delta is never called
     let conn = &state.conn;
     let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
     let (rounds, data) = loop {
@@ -1955,7 +1958,7 @@ async fn test_full_flow() -> anyhow::Result<()> {
                 .filter(round_data::Column::RoundId.eq(&round.id))
                 .all(conn)
                 .await?;
-            if data.len() >= 2 {
+            if data.len() >= 1 {
                 break (rounds, data);
             }
         }
@@ -1980,14 +1983,6 @@ async fn test_full_flow() -> anyhow::Result<()> {
     assert_eq!(llm.text, Some("Hello".to_string()));
     assert!(llm.data.is_none());
 
-    let tts = data
-        .iter()
-        .find(|d| d.data_type == "tts")
-        .expect("tts round_data not found");
-    assert_eq!(tts.text, Some("Hello".to_string()));
-    assert!(tts.data.is_none());
-
-    session.stop().await;
     let _ = &state.conn.close().await?;
     tear_down(container).await;
 

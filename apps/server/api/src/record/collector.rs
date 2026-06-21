@@ -150,7 +150,7 @@ impl RecordCollector {
 
         // Insert round
         round::ActiveModel {
-            id: Set(gen_id()),
+            id: Set(buffer.round_id.clone()),
             user_id: Set(buffer.user_id.clone()),
             client_info: Set(buffer.client_info.clone()),
             create_datetime: Set(Some(now)),
