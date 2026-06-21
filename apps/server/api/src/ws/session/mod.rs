@@ -21,9 +21,11 @@ use service::chobits::message::listen::ListenState;
 use service::chobits::message::{AudioFormat, Transport};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::{Sender, channel};
 use tokio_stream::wrappers::ReceiverStream;
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 pub mod listener;
@@ -106,6 +108,7 @@ impl SessionBuilder {
                 preamble: Some(system_prompt.to_string()),
                 chat_history: vec![],
             })),
+            output_cancel_token: CancellationToken::new(),
             config,
             audio_config,
             listener: self.listener.expect("listener is required"),
@@ -129,6 +132,7 @@ pub struct Session {
     phase: Phase,
     latest_activity_time: Arc<Mutex<Option<i64>>>,
     history: Arc<Mutex<History>>,
+    output_cancel_token: CancellationToken,
 
     config: Arc<SessionConfig>,
     audio_config: Arc<AudioConfig>,
@@ -167,6 +171,7 @@ impl Session {
     pub async fn stop(&mut self) {
         info!(target:"session", "stop");
         self.stop_round().await;
+        self.output_cancel_token.cancel();
         let tx = self.output_tx.clone().expect("output tx not exists");
         let result = tx.send(Ok(FrameResult::CloseResult)).await;
         if result.is_err() {
@@ -189,11 +194,13 @@ impl Session {
             .with_history(self.history.clone())
             .with_max_prompt_len(self.config.max_prompt_len);
         let round_id = framework::id::gen_id();
+        let cancel_token = CancellationToken::new();
         let traced_tx = output_controller::TracedSender::new(
             tx.clone(),
             self.observers.clone(),
             Some(round_id.clone()),
             self.seq.clone(),
+            cancel_token.clone(),
         );
         for observer in &self.observers {
             observer.on_round_start(&RoundStartContext {
@@ -209,6 +216,7 @@ impl Session {
             Arc::new(client),
             self.tts.clone(),
             self.observers.clone(),
+            cancel_token,
         )));
         if let Some(round) = &mut self.current_round {
             round.start().await;
@@ -222,6 +230,12 @@ impl Session {
         if let Some(round) = &mut self.current_round {
             let round_id = round.id.clone();
             round.stop().await;
+            // Wait for task to finish (cancellation unblocks any blocked send)
+            if let Some(handle) = round.join_handle.take() {
+                tokio::time::timeout(Duration::from_secs(5), handle)
+                    .await
+                    .ok();
+            }
             for observer in &self.observers {
                 let _ = observer
                     .on_round_end(&RoundEndContext {
@@ -312,6 +326,7 @@ impl Session {
             controller_output_tx,
             frame_duration,
             self.latest_activity_time.clone(),
+            self.output_cancel_token.child_token(),
         );
         controller.start();
 

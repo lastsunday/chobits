@@ -1,7 +1,7 @@
 use super::super::frame::FrameResult;
 use super::output_controller::TracedSender;
 use crate::llm::client::{ChatRequest, Client};
-use crate::record::observer::{LlmDeltaContext, SessionObserver, TtsDeltaContext};
+use crate::record::observer::{LlmDeltaContext, RoundEndContext, SessionObserver, TtsDeltaContext};
 use crate::tts::Tts;
 use crate::util::llm::{EMOJI_MAP, analyze_emotion};
 use crate::ws::WsErrorCode;
@@ -20,6 +20,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::error::SendError;
+use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, Level, error, info, span};
 
 pub struct Round {
@@ -31,7 +33,8 @@ pub struct Round {
     tts: Arc<Box<dyn Tts>>,
     pub tts_state: Arc<Mutex<Option<TtsState>>>,
     pub speaking: Arc<AtomicBool>,
-    pub end: Arc<AtomicBool>,
+    pub cancel: CancellationToken,
+    pub join_handle: Option<JoinHandle<()>>,
     pub observers: Vec<Arc<dyn SessionObserver>>,
 }
 
@@ -82,6 +85,7 @@ impl Round {
         client: Arc<Client>,
         tts: Arc<Box<dyn Tts>>,
         observers: Vec<Arc<dyn SessionObserver>>,
+        cancel: CancellationToken,
     ) -> Self {
         Self {
             parent_id,
@@ -92,7 +96,8 @@ impl Round {
             tts,
             tts_state: Arc::new(Mutex::new(None)),
             speaking: Arc::new(AtomicBool::new(false)),
-            end: Arc::new(AtomicBool::new(false)),
+            cancel,
+            join_handle: None,
             observers,
         }
     }
@@ -117,12 +122,11 @@ impl Round {
         let tts = self.tts.clone();
         let tts_state_clone = self.tts_state.clone();
         let speaking = self.speaking.clone();
-        let end = self.end.clone();
         let text = String::from(text);
         let observers = self.observers.clone();
         let round_id = self.id.clone();
         let span = span!(parent:None,Level::DEBUG, "socket", id=%session_id);
-        tokio::spawn(
+        self.join_handle = Some(tokio::spawn(
             async move {
                 if tx
                     .send(Ok(FrameResult::STTResult(SttMessage::new(
@@ -292,15 +296,22 @@ impl Round {
                         }
                     }
                 }
-                end.store(true, Ordering::Relaxed);
+                for observer in &observers {
+                    let _ = observer
+                        .on_round_end(&RoundEndContext {
+                            round_id: round_id.clone(),
+                        })
+                        .await;
+                }
                 info!(target:"round","end");
             }
             .instrument(span),
-        );
+        ));
     }
 
     pub async fn stop(&self) {
         info!(target:"round","stop");
         self.stop.store(true, Ordering::Relaxed);
+        self.cancel.cancel();
     }
 }

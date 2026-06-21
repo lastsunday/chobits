@@ -107,8 +107,11 @@ impl RecordCollector {
         let mut pending = self.pending.lock().expect("pending lock");
         if let Some(buf) = pending.get_mut(round_id) {
             buf.tts_text.push_str(text);
-            if raw_pcm.is_some() {
-                buf.tts_raw_pcm = raw_pcm;
+            if let Some((new_pcm, sr)) = raw_pcm {
+                match &mut buf.tts_raw_pcm {
+                    Some((existing_pcm, _)) => existing_pcm.extend(new_pcm),
+                    None => buf.tts_raw_pcm = Some((new_pcm, sr)),
+                }
             }
         }
     }

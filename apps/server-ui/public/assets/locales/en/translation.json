@@ -75,6 +75,10 @@
       "dir": "Direction",
       "kind": "Kind",
       "detail": "Detail"
+    },
+    "timeline": {
+      "business": "Business Events",
+      "frames": "Frames"
     }
   }
 }

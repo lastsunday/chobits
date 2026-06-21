@@ -75,6 +75,10 @@
       "dir": "方向",
       "kind": "类型",
       "detail": "详情"
+    },
+    "timeline": {
+      "business": "业务事件",
+      "frames": "帧记录"
     }
   }
 }

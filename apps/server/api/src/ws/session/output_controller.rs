@@ -1,6 +1,8 @@
+use super::super::WsErrorCode;
 use super::super::frame::FrameResult;
 use crate::record::observer::{FrameContext, FrameDirection, SessionObserver};
 use chrono::Local;
+use framework::err;
 use framework::error::AppError;
 use service::chobits::message::tts::TtsState;
 use std::sync::Arc;
@@ -8,6 +10,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::{Receiver, Sender, error::SendError};
 use tokio::time::{Duration, Instant, MissedTickBehavior, interval_at};
+use tokio_util::sync::CancellationToken;
 
 #[derive(Clone)]
 pub struct TracedSender {
@@ -15,6 +18,7 @@ pub struct TracedSender {
     observers: Vec<Arc<dyn SessionObserver>>,
     round_id: Option<String>,
     seq: Arc<AtomicU64>,
+    cancel_token: CancellationToken,
 }
 
 impl TracedSender {
@@ -23,12 +27,14 @@ impl TracedSender {
         observers: Vec<Arc<dyn SessionObserver>>,
         round_id: Option<String>,
         seq: Arc<AtomicU64>,
+        cancel_token: CancellationToken,
     ) -> Self {
         Self {
             inner,
             observers,
             round_id,
             seq,
+            cancel_token,
         }
     }
 
@@ -48,7 +54,12 @@ impl TracedSender {
                 });
             }
         }
-        self.inner.send(item).await
+        tokio::select! {
+            result = self.inner.send(item) => result,
+            _ = self.cancel_token.cancelled() => {
+                Err(SendError(Err(err!(WsErrorCode::InternalError))))
+            }
+        }
     }
 }
 
@@ -58,6 +69,7 @@ pub struct OutputController {
     interval: Option<tokio::time::Interval>,
     frame_duration: u64,
     latest_activity_time: Arc<Mutex<Option<i64>>>,
+    cancel_token: CancellationToken,
 }
 
 impl OutputController {
@@ -66,6 +78,7 @@ impl OutputController {
         output_tx: Sender<Result<FrameResult, AppError>>,
         frame_duration: u64,
         latest_activity_time: Arc<Mutex<Option<i64>>>,
+        cancel_token: CancellationToken,
     ) -> Self {
         Self {
             input_rx,
@@ -73,6 +86,7 @@ impl OutputController {
             interval: None,
             frame_duration,
             latest_activity_time,
+            cancel_token,
         }
     }
 
@@ -83,9 +97,15 @@ impl OutputController {
     }
 
     async fn run(&mut self) {
-        while let Some(item) = self.input_rx.recv().await {
-            if self.dispatch(item).await {
-                break;
+        loop {
+            tokio::select! {
+                item = self.input_rx.recv() => {
+                    match item {
+                        Some(item) => { if self.dispatch(item).await { break; } }
+                        None => break,
+                    }
+                }
+                _ = self.cancel_token.cancelled() => break,
             }
         }
     }

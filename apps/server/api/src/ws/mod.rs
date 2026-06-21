@@ -182,6 +182,7 @@ where
             warn!("unknown continue message");
         }
     }
+    session.stop().await;
 }
 
 async fn on_send<W>(
