@@ -37,7 +37,7 @@ use serde::Serialize;
 use session::{SessionBuilder, listener::DefaultListener};
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
-use tracing::{Instrument, Level, debug, error, info, span, trace};
+use tracing::{Instrument, Level, debug, error, info, span, trace, warn};
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
@@ -86,7 +86,7 @@ async fn ws_handler(
         ..
     }): State<AppState>,
 ) -> impl IntoResponse {
-    info!("user_agent = {:?}", user_agent);
+    debug!("user_agent = {:?}", user_agent);
     ws.on_upgrade(move |socket| {
         let (write, read) = socket.split();
         handle_socket(
@@ -167,7 +167,7 @@ where
             if let Some(item) = result.break_value() {
                 match item {
                     Some(frame) => session.accept_frame(&frame).await,
-                    None => info!("break value none"),
+                    None => trace!("break value none"),
                 }
             }
             session.stop().await;
@@ -179,7 +179,7 @@ where
         {
             session.accept_frame(&frame).await
         } else {
-            info!("unkonw continue message");
+            warn!("unknown continue message");
         }
     }
 }
@@ -190,66 +190,54 @@ async fn on_send<W>(
 ) where
     W: Sink<Message> + Unpin + Send + 'static,
 {
-    let mut frame_seq: u64 = 0;
     while let Some(data) = output.next().await {
         match data {
-            Ok(frame) => {
-                match &frame {
-                    frame::FrameResult::AudioResult(msg) => {
-                        trace!(target:"frame","[SEND] Audio #{} size={}", frame_seq, msg.data.len());
-                    }
-                    _ => {
-                        debug!(target:"frame","[SEND] {:?}", frame);
+            Ok(frame) => match frame {
+                frame::FrameResult::HelloResult(message) => {
+                    if send_text(&mut write, &message).await {
+                        info!("send hello data failure");
+                        break;
                     }
                 }
-                match frame {
-                    frame::FrameResult::HelloResult(message) => {
-                        if send_text(&mut write, &message).await {
-                            info!("send hello data failure");
-                            break;
-                        }
-                    }
-                    frame::FrameResult::STTResult(message) => {
-                        if send_text(&mut write, &message).await {
-                            info!("send stt data failure");
-                            break;
-                        }
-                    }
-                    frame::FrameResult::LLMResult(message) => {
-                        if send_text(&mut write, &message).await {
-                            info!("send llm data failure");
-                            break;
-                        }
-                    }
-                    frame::FrameResult::TTSResult(message) => {
-                        if send_text(&mut write, &message).await {
-                            info!("send tts data failure");
-                            break;
-                        }
-                    }
-                    frame::FrameResult::McpResult(message) => {
-                        if send_text(&mut write, &message).await {
-                            info!("send mcp request data failure");
-                            break;
-                        }
-                    }
-                    frame::FrameResult::AudioResult(audio_message) => {
-                        let data = audio_message.data;
-                        if write.send(Message::Binary(data.into())).await.is_err() {
-                            info!("send audio data failure");
-                            break;
-                        }
-                        frame_seq += 1;
-                    }
-                    frame::FrameResult::CloseResult => {
-                        let result = write.close().await;
-                        if result.is_err() {
-                            info!("write close failure");
-                            break;
-                        }
+                frame::FrameResult::STTResult(message) => {
+                    if send_text(&mut write, &message).await {
+                        info!("send stt data failure");
+                        break;
                     }
                 }
-            }
+                frame::FrameResult::LLMResult(message) => {
+                    if send_text(&mut write, &message).await {
+                        info!("send llm data failure");
+                        break;
+                    }
+                }
+                frame::FrameResult::TTSResult(message) => {
+                    if send_text(&mut write, &message).await {
+                        info!("send tts data failure");
+                        break;
+                    }
+                }
+                frame::FrameResult::McpResult(message) => {
+                    if send_text(&mut write, &message).await {
+                        info!("send mcp request data failure");
+                        break;
+                    }
+                }
+                frame::FrameResult::AudioResult(audio_message) => {
+                    let data = audio_message.data;
+                    if write.send(Message::Binary(data.into())).await.is_err() {
+                        info!("send audio data failure");
+                        break;
+                    }
+                }
+                frame::FrameResult::CloseResult => {
+                    let result = write.close().await;
+                    if result.is_err() {
+                        info!("write close failure");
+                        break;
+                    }
+                }
+            },
             Err(api_err) => {
                 api_err.log();
                 let AppError::App { code, message, .. } = &api_err;

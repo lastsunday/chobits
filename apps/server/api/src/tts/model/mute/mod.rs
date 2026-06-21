@@ -8,7 +8,7 @@ use std::thread;
 use tokio::sync::mpsc::channel;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{debug, error};
+use tracing::error;
 
 pub struct TtsMute {}
 
@@ -34,7 +34,6 @@ impl Tts for TtsMute {
                     let tx = tx.clone();
                     match &text {
                         Ok(text) => {
-                            debug!("[TTS] receive, text = {}", text);
                             let data = TtsData {
                                 audio: None,
                                 text: text.to_string(),
@@ -43,8 +42,6 @@ impl Tts for TtsMute {
                             if let Err(e) = tx.send(Ok(data)).await {
                                 error!("output packet error = {}", e);
                                 break;
-                            } else {
-                                debug!("[TTS] encode and send audio success");
                             }
                         }
                         Err(e) => {

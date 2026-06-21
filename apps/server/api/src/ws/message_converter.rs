@@ -73,11 +73,11 @@ pub async fn convert_to_frame<'a>(
                                 }
                             }
                             None => {
-                                tracing::info!("can't find type field");
+                                tracing::warn!("can't find type field");
                             }
                         }
                     } else {
-                        tracing::info!("unknow json message = {}", json)
+                        tracing::warn!("unknown json message = {}", json)
                     }
                 }
                 Err(_) => {

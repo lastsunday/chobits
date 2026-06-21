@@ -24,7 +24,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::{Sender, channel};
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{error, info, trace};
+use tracing::{error, info};
 
 pub mod listener;
 pub mod output_controller;

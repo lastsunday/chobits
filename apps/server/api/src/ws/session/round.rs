@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::error::SendError;
-use tracing::{Instrument, Level, debug, error, info, span};
+use tracing::{Instrument, Level, error, info, span};
 
 pub struct Round {
     pub parent_id: String,
@@ -111,7 +111,6 @@ impl Round {
 
     async fn llm_tts_handle(&mut self, text: &str) {
         let tx = self.tx.clone();
-        let id = self.id.clone();
         let stop_me = self.stop.clone();
         let session_id = self.parent_id.clone();
         let client = self.client.clone();
@@ -205,8 +204,6 @@ impl Round {
                                 let audio_data = audio_data.unwrap_or_default();
                                 let data = audio_data.into_iter();
                                 speaking.store(true, Ordering::Relaxed);
-                                debug!(target:"round","speaking start");
-                                debug!(target:"round","send audio frame start");
                                 for packet in data {
                                     if stop_me_by_tts_packet.load(Ordering::Relaxed) {
                                         break;
@@ -218,9 +215,7 @@ impl Round {
                                     .await
                                     .context("send audio result failure")?;
                                 }
-                                debug!(target:"round","send audio frame end");
                                 speaking.store(false, Ordering::Relaxed);
-                                debug!(target:"round","speaking end");
                                 send_tts_frame_and_change_state(
                                     tts_state_clone.clone(),
                                     &tx,
@@ -261,16 +256,10 @@ impl Round {
                 .await
                 .is_err()
                 {
-                    debug!(target:"round","send tts state stop failure");
                     stop_me.store(true, Ordering::Relaxed);
                 }
                 if stop_me.load(Ordering::Relaxed) {
                     let tts_state = tts_state_clone.lock().await;
-                    debug!(target:"round",
-                        "trigger stop me,round id = {}, current tts state = {:?}",
-                        id.clone(),
-                        tts_state
-                    );
                     if let Some(tts_state) = tts_state.as_ref() {
                         let result: Result<(), anyhow::Error> = async {
                             if tts_state < &TtsState::Start {
@@ -281,11 +270,6 @@ impl Round {
                                     None,
                                 )
                                 .await?;
-                                debug!(
-                                    target:"round",
-                                    "after trigger stop me send tts state = {:?}",
-                                    TtsState::SentenceStart
-                                );
                             }
                             if tts_state < &TtsState::SentenceStart {
                                 send_tts_frame(
@@ -295,20 +279,10 @@ impl Round {
                                     None,
                                 )
                                 .await?;
-                                debug!(
-                                    target:"round",
-                                    "after trigger stop me send tts state = {:?}",
-                                    TtsState::SentenceEnd
-                                );
                             }
                             if tts_state < &TtsState::SentenceEnd {
                                 send_tts_frame(&tx, session_id.clone(), TtsState::Stop, None)
                                     .await?;
-                                debug!(
-                                    target:"round",
-                                    "after trigger stop me send tts state = {:?}",
-                                    TtsState::Stop
-                                );
                             }
                             Ok(())
                         }

@@ -106,7 +106,6 @@ impl Session {
     }
 
     async fn handle_phase_listen<'a>(&mut self, mode: &ListenMode, frame: &Frame<'a>) {
-        trace!("mode = {:?}", mode);
         match mode {
             ListenMode::Auto => self.handle_phase_listen_for_auto_mode(frame).await,
             ListenMode::Manual => self.handle_phase_listen_for_manual_mode(frame).await,
@@ -187,9 +186,7 @@ impl Session {
                             self.listener.reset(Some(silence_voice_timeout)).await;
                             self.update_latest_activity_time().await;
                         } else {
-                            trace!("before listen data len = {}", data.len());
                             self.listener.listen(data).await;
-                            trace!("listen data len = {}", data.len());
                         }
                     }
                 }
@@ -197,24 +194,15 @@ impl Session {
                     listener::ListenState::Listening(speech) => speech,
                     _ => false,
                 };
-                // trace!("speech: {:?}", is_speech);
-                // trace!("before update latest_activity_time");
                 if is_speech {
                     self.update_latest_activity_time().await;
                 } else {
                     let latest_activity_time = self.get_latest_activity_time().await;
-                    // debug!("latest activity time: {:?}", latest_activity_time);
-                    // debug!(
-                    //     "close connection time: {:?}",
-                    //     self.config.close_connection_no_voice_time
-                    // );
                     if let (Some(latest_activity_time), Some(close_connection_no_voice_time)) = (
                         latest_activity_time,
                         self.config.close_connection_no_voice_time,
                     ) {
-                        //connection timeout handle
                         let offset_time = Local::now().timestamp_millis() - latest_activity_time;
-                        // debug!("offset_time = {}", offset_time);
                         if offset_time >= close_connection_no_voice_time {
                             info!(
                                 target:"session",
@@ -225,8 +213,6 @@ impl Session {
                         }
                     }
                 }
-                // trace!("after update latest_activity_time");
-                // debug!("latest_activity_time = {:?}", self.latest_activity_time);
             }
             _ => {
                 error!(
@@ -417,9 +403,7 @@ impl Session {
                             self.listener.reset(Some(silence_voice_timeout)).await;
                             self.update_latest_activity_time().await;
                         } else {
-                            trace!("before listen data len = {}", data.len());
                             self.listener.listen(data).await;
-                            trace!("listen data len = {}", data.len());
                         }
                     }
                 }
@@ -427,24 +411,15 @@ impl Session {
                     listener::ListenState::Listening(speech) => speech,
                     _ => false,
                 };
-                // trace!("speech: {:?}", is_speech);
-                // trace!("before update latest_activity_time");
                 if is_speech {
                     self.update_latest_activity_time().await;
                 } else {
                     let latest_activity_time = self.get_latest_activity_time().await;
-                    // debug!("latest activity time: {:?}", latest_activity_time);
-                    // debug!(
-                    //     "close connection time: {:?}",
-                    //     self.config.close_connection_no_voice_time
-                    // );
                     if let (Some(latest_activity_time), Some(close_connection_no_voice_time)) = (
                         latest_activity_time,
                         self.config.close_connection_no_voice_time,
                     ) {
-                        //connection timeout handle
                         let offset_time = Local::now().timestamp_millis() - latest_activity_time;
-                        // debug!("offset_time = {}", offset_time);
                         if offset_time >= close_connection_no_voice_time {
                             info!(
                                 target:"session",
@@ -455,8 +430,6 @@ impl Session {
                         }
                     }
                 }
-                // trace!("after update latest_activity_time");
-                // debug!("latest_activity_time = {:?}", self.latest_activity_time);
             }
             _ => {
                 error!(

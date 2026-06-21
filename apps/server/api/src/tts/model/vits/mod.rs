@@ -10,7 +10,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc::channel;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{debug, error};
+use tracing::error;
 
 use crate::common::ModelError;
 use crate::config::audio::AudioConfig;
@@ -264,8 +264,6 @@ impl Tts for TtsVits {
                         break;
                     }
                 };
-
-                debug!("[VitsTTS] generating audio for text = {}", text);
 
                 let tts_clone = tts.clone();
                 let text_clone = text.clone();

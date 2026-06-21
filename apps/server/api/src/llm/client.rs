@@ -19,7 +19,7 @@ use tokio::sync::{
     mpsc::{Sender, channel},
 };
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{Instrument, Level, debug, error, span, trace};
+use tracing::{Instrument, Level, error, span, trace};
 
 #[derive(Clone)]
 pub struct Client {
@@ -255,11 +255,8 @@ pub async fn handle_response(
                         }
                     }
                     Ok(StreamedAssistantContent::Final(
-                        rig::providers::openai::StreamingCompletionResponse { usage },
-                    )) => {
-                        // TODO:
-                        debug!("{:?}", usage);
-                    }
+                        rig::providers::openai::StreamingCompletionResponse { usage: _usage },
+                    )) => {}
                     Ok(StreamedAssistantContent::ToolCall {
                         tool_call,
                         internal_call_id: _internal_call_id,

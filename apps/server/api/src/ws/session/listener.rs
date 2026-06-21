@@ -9,7 +9,6 @@ use framework::error::AppError;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::Sender;
-use tracing::{debug, info};
 
 /// Maximum prefix padding in samples (300ms at 16kHz).
 const PREFIX_SAMPLES_MAX: usize = 4800;
@@ -136,23 +135,6 @@ impl Listener for DefaultListener {
             for s in samples[..len].iter_mut() {
                 *s = s.clamp(-1.0, 1.0);
             }
-            #[cfg(debug_assertions)]
-            if self.total_pcm.lock().await.len() < 16000 {
-                let first5: Vec<f32> = samples.iter().take(5.min(len)).copied().collect();
-                let min = samples[..len].iter().copied().fold(f32::MAX, f32::min);
-                let max = samples[..len].iter().copied().fold(f32::MIN, f32::max);
-                let mean_abs = samples[..len].iter().map(|&x| x.abs()).sum::<f32>() / len as f32;
-                info!(
-                    "[DECODE_DIAG] frame_size={}, decoded_len={}, first_5={:?}, min={:.6}, max={:.6}, mean_abs={:.6}, data_bytes={}",
-                    frame_size,
-                    len,
-                    first5,
-                    min,
-                    max,
-                    mean_abs,
-                    data.len()
-                );
-            }
             let mut total_pcm = self.total_pcm.lock().await;
             total_pcm.extend_from_slice(&samples[..len]);
             drop(total_pcm);
@@ -200,10 +182,6 @@ impl Listener for DefaultListener {
         {
             let offset_time = Local::now().timestamp_millis() - latest_speaking_time;
             if offset_time >= silence_voice_timeout {
-                debug!(
-                    "offset_time = {},silence_voice_timeout = {}",
-                    offset_time, silence_voice_timeout
-                );
                 self.state = ListenState::End;
             }
         }
