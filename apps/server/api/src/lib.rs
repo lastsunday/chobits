@@ -9,6 +9,7 @@ pub mod matrix;
 pub mod mcp;
 pub mod ota;
 pub mod ota_data;
+pub mod record;
 pub mod server;
 pub mod tts;
 pub mod util;
@@ -70,21 +71,36 @@ use crate::llm::LlmFactory;
 use crate::tts::TtsFactory;
 use crate::vad::VadFactory;
 
-#[allow(clippy::too_many_arguments)]
-pub async fn start(
-    server_config: Arc<ServerConfig>,
-    database_config: Arc<DatabaseConfig>,
-    session_config: Arc<SessionConfig>,
-    mcp_config: Arc<McpConfig>,
-    vad_config: Arc<VadConfig>,
-    audio_config: Arc<AudioConfig>,
-    auth_config: Arc<AuthConfig>,
-    ws_config: Arc<WsConfig>,
-    tts_config: Arc<TtsConfig>,
-    asr_config: Arc<AsrConfig>,
-    llm_config: Arc<LlmConfig>,
-    matrix_config: Arc<MatrixConfig>,
-) -> anyhow::Result<()> {
+pub struct StartParams {
+    pub server_config: Arc<ServerConfig>,
+    pub database_config: Arc<DatabaseConfig>,
+    pub session_config: Arc<SessionConfig>,
+    pub mcp_config: Arc<McpConfig>,
+    pub vad_config: Arc<VadConfig>,
+    pub audio_config: Arc<AudioConfig>,
+    pub auth_config: Arc<AuthConfig>,
+    pub ws_config: Arc<WsConfig>,
+    pub tts_config: Arc<TtsConfig>,
+    pub asr_config: Arc<AsrConfig>,
+    pub llm_config: Arc<LlmConfig>,
+    pub matrix_config: Arc<MatrixConfig>,
+}
+
+pub async fn start(params: StartParams) -> anyhow::Result<()> {
+    let StartParams {
+        server_config,
+        database_config,
+        session_config,
+        mcp_config,
+        vad_config,
+        audio_config,
+        auth_config,
+        ws_config,
+        tts_config,
+        asr_config,
+        llm_config,
+        matrix_config,
+    } = params;
     // auth
     Jwt::init(auth_config.clone());
     // database init
@@ -110,26 +126,17 @@ pub async fn start(
     let ct = tokio_util::sync::CancellationToken::new();
     let ct_for_app = ct.clone();
     let mut handles = Vec::new();
-    let session_config_clone = session_config.clone();
-    let mcp_config_clone = mcp_config.clone();
-    let vad_config_clone = vad_config.clone();
-    let audio_config_clone = audio_config.clone();
-    let auth_config_clone = auth_config.clone();
-    let ws_config_clone = ws_config.clone();
+    let state = AppState {
+        conn,
+        session_config: session_config.clone(),
+        mcp_config: mcp_config.clone(),
+        vad_config: vad_config.clone(),
+        audio_config: audio_config.clone(),
+        auth_config: auth_config.clone(),
+        ws_config: ws_config.clone(),
+    };
     handles.push(tokio::spawn(async move {
-        if let Err(error) = start_app(
-            server_config,
-            session_config_clone,
-            mcp_config_clone,
-            vad_config_clone,
-            audio_config_clone,
-            auth_config_clone,
-            ws_config_clone,
-            conn,
-            ct_for_app,
-        )
-        .await
-        {
+        if let Err(error) = start_app(server_config, state, ct_for_app).await {
             tracing::error!("{:?}", error);
         }
     }));
@@ -173,16 +180,9 @@ pub async fn start_matrix_client(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
 pub async fn start_app(
     server_config: Arc<ServerConfig>,
-    session_config: Arc<SessionConfig>,
-    mcp_config: Arc<McpConfig>,
-    vad_config: Arc<VadConfig>,
-    audio_config: Arc<AudioConfig>,
-    auth_config: Arc<AuthConfig>,
-    ws_config: Arc<WsConfig>,
-    conn: sea_orm::DatabaseConnection,
+    state: AppState,
     ct: CancellationToken,
 ) -> anyhow::Result<()> {
     let addrs = server_config
@@ -199,16 +199,6 @@ pub async fn start_app(
     {
         Either::Left(value) => value,
         Either::Right(values) => values.first().expect("port is empty"),
-    };
-    // state
-    let state = AppState {
-        conn,
-        session_config,
-        mcp_config,
-        vad_config,
-        audio_config,
-        auth_config,
-        ws_config,
     };
     // router
     let (app, ct) = create_router(state, ct);
@@ -251,6 +241,7 @@ pub fn create_router(
     api_router = setup_index(api_router);
     api_router = setup_auth(api_router, state.clone());
     api_router = setup_ota(api_router, state.clone());
+    api_router = setup_record(api_router, state.clone());
     api_router = setup_ws(api_router, state.clone());
     api_router = setup_mcp(api_router, state.clone(), cancellation_token.child_token());
     let (mut app, api) = api_router.split_for_parts();
@@ -317,6 +308,10 @@ pub fn setup_auth(router: OpenApiRouter, state: AppState) -> OpenApiRouter {
 
 pub fn setup_ota(router: OpenApiRouter, state: AppState) -> OpenApiRouter {
     api_setup(router, ota::create_routes(state))
+}
+
+pub fn setup_record(router: OpenApiRouter, state: AppState) -> OpenApiRouter {
+    api_setup(router, record::create_routes(state))
 }
 
 fn api_setup(router: OpenApiRouter, api_router: OpenApiRouter) -> OpenApiRouter {

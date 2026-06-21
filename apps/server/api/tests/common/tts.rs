@@ -338,7 +338,12 @@ pub fn opus_pipeline(samples: &[f32], sample_rate: i32, encode_sr: u32) -> Vec<f
         (samples.to_vec(), sample_rate as u32)
     };
 
-    let mut encoder = opus_rs::OpusEncoder::new(sr as i32, channels, opus_rs::Application::Audio)
+    let opus_channels = if channels == 2 {
+        opus::Channels::Stereo
+    } else {
+        opus::Channels::Mono
+    };
+    let mut encoder = opus::Encoder::new(sr as u32, opus_channels, opus::Application::Audio)
         .expect("Failed to create Opus encoder");
     let frame_dur = 20u64;
     let packet_size = sr as usize * channels * frame_dur as usize / 1000;
@@ -349,17 +354,15 @@ pub fn opus_pipeline(samples: &[f32], sample_rate: i32, encode_sr: u32) -> Vec<f
         let end = std::cmp::min(start + packet_size, pcm.len());
         let mut frame: Vec<f32> = pcm[start..end].to_vec();
         frame.resize(packet_size, 0.0);
-        let mut output = vec![0u8; 4000];
-        let out_len = encoder.encode(&frame, packet_size, &mut output).unwrap();
-        output.truncate(out_len);
-        packets.push(output);
+        let packet = encoder.encode_vec_float(&frame, 4000).unwrap();
+        packets.push(packet);
     }
 
-    let mut decoder = opus_rs::OpusDecoder::new(sr as i32, channels).unwrap();
+    let mut decoder = opus::Decoder::new(sr as u32, opus_channels).unwrap();
     let mut decoded = Vec::new();
     for pkt in &packets {
         let mut samples = vec![0f32; packet_size];
-        if let Ok(len) = decoder.decode(pkt, packet_size, &mut samples) {
+        if let Ok(len) = decoder.decode_float(pkt, &mut samples, false) {
             decoded.extend_from_slice(&samples[..len]);
         }
     }
@@ -406,11 +409,11 @@ pub async fn run_vits_test(
     );
 
     let decode_fs = 320;
-    let mut decoder = opus_rs::OpusDecoder::new(16000, 1_usize).unwrap();
+    let mut decoder = opus::Decoder::new(16000, opus::Channels::Mono).unwrap();
     let mut decoded = Vec::new();
     for packet in &all_packets {
         let mut samples = vec![0f32; decode_fs];
-        if let Ok(len) = decoder.decode(packet, decode_fs, &mut samples) {
+        if let Ok(len) = decoder.decode_float(packet, &mut samples, false) {
             decoded.extend_from_slice(&samples[..len]);
         }
     }

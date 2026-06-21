@@ -498,12 +498,33 @@ impl Session {
     }
 
     async fn handle_listen_end(&mut self) {
+        let voice_pcm = self.listener.get_voice_data().await;
+        let sample_rate = self
+            .audio_config
+            .input_sample_rate
+            .expect("input sample rate is empty");
         let command = self.listener.get_result().await;
         match command {
             Ok(command) => {
                 self.new_round().await;
                 info!(                                target:"session",
 "command = {:?}", command.clone());
+                let round_id = self
+                    .current_round
+                    .as_ref()
+                    .map(|r| r.id.clone())
+                    .unwrap_or_default();
+                if let Some(record) = &self.record
+                    && !voice_pcm.is_empty()
+                {
+                    record.collect_asr(
+                        &round_id,
+                        voice_pcm,
+                        sample_rate,
+                        command.text.clone(),
+                        command.prob,
+                    );
+                }
                 let text = command.text.as_str();
                 let is_speech_clear = self.is_speech_clear(&command.text, command.prob);
                 if let Some(round) = &mut self.current_round {

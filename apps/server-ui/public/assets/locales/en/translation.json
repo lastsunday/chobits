@@ -8,7 +8,8 @@
   "admin": {
     "title": "Admin Page",
     "menu": {
-      "dashboard": "Dashboard"
+      "dashboard": "Dashboard",
+      "sessions": "Sessions"
     },
     "confirm_logout": "Confirm logout?",
     "password_not_equal": "Password not equal",
@@ -44,5 +45,36 @@
   "version": "Version",
   "version_unknown": "Unknown",
   "loading": "Loading",
-  "logout": "Logout"
+  "logout": "Logout",
+  "sessions": {
+    "title": "Sessions",
+    "filter_user_id": "Filter by User ID",
+    "table": {
+      "id": "ID",
+      "user_id": "User",
+      "created": "Created",
+      "actions": "Actions"
+    },
+    "detail": {
+      "title": "Session Detail",
+      "round_id": "Round ID",
+      "user_id": "User ID",
+      "created": "Created",
+      "updated": "Updated",
+      "input_audio": "Input Audio",
+      "asr": "ASR",
+      "llm": "LLM",
+      "tts": "TTS",
+      "play": "Play",
+      "no_audio": "No Audio",
+      "frames": "Frames",
+      "back": "Back to List"
+    },
+    "frame_table": {
+      "seq": "#",
+      "dir": "Direction",
+      "kind": "Kind",
+      "detail": "Detail"
+    }
+  }
 }

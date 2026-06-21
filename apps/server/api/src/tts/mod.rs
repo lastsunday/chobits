@@ -106,7 +106,7 @@ impl From<TtsError> for AppError {
 
 pub fn encode_sample_to_tts_packet(
     sample: Vec<f32>,
-    encoder: &mut opus_rs::OpusEncoder,
+    encoder: &mut opus::Encoder,
     encode_sample_rate: u32,
     encode_channel: u32,
     encode_frame_duration: u64,
@@ -120,10 +120,8 @@ pub fn encode_sample_to_tts_packet(
         let end = std::cmp::min(start + size, len);
         let mut frame: Vec<f32> = sample[start..end].to_vec();
         frame.resize(size, 0.0);
-        let mut output = vec![0u8; 4000];
-        let out_len = encoder.encode(&frame, size, &mut output).unwrap();
-        output.truncate(out_len);
-        audio.push(output);
+        let packet = encoder.encode_vec_float(&frame, size).unwrap();
+        audio.push(packet);
     }
     audio
 }

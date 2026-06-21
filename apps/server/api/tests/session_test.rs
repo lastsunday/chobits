@@ -54,6 +54,10 @@ use tracing::{debug, info};
 use tracing_test::traced_test;
 use utoipa_axum::router::OpenApiRouter;
 
+use api::record::collector::RecordCollector;
+use entity::{prelude::*, round_data};
+use sea_orm::entity::prelude::*;
+
 mod common;
 use common::{router_client::RouterClient, setup_database, tear_down};
 
@@ -1465,11 +1469,11 @@ async fn test_tts_audio_collect() -> anyhow::Result<()> {
 
     session.stop().await;
 
-    let mut decoder = opus_rs::OpusDecoder::new(16000, 1_usize).unwrap();
+    let mut decoder = opus::Decoder::new(16000, opus::Channels::Mono).unwrap();
     let mut decoded = Vec::new();
     for packet in &all_packets {
         let mut samples = vec![0f32; 960];
-        if let Ok(len) = decoder.decode(packet, 960, &mut samples) {
+        if let Ok(len) = decoder.decode_float(packet, &mut samples, false) {
             decoded.extend_from_slice(&samples[..len]);
         }
     }
@@ -1626,10 +1630,10 @@ fn get_audio() -> Vec<Vec<u8>> {
     // write(fp, &pcm_data, sr, 1);
 
     const ENCODE_SAMPLE_RATE: u32 = 16000;
-    let mut encoder = opus_rs::OpusEncoder::new(
-        ENCODE_SAMPLE_RATE as i32,
-        1_usize,
-        opus_rs::Application::Audio,
+    let mut encoder = opus::Encoder::new(
+        ENCODE_SAMPLE_RATE,
+        opus::Channels::Mono,
+        opus::Application::Audio,
     )
     .unwrap();
 
@@ -1648,11 +1652,9 @@ fn get_audio() -> Vec<Vec<u8>> {
     for n in 0..count {
         let start = n * size;
         let end = cmp::min((n + 1) * size, len);
-        let mut packet = vec![0u8; 4000];
-        let encoded_len = encoder
-            .encode(&pcm_data[start..end], size, &mut packet)
+        let packet = encoder
+            .encode_vec_float(&pcm_data[start..end], size)
             .unwrap();
-        packet.truncate(encoded_len);
         audio.push(packet);
     }
     audio
@@ -1842,4 +1844,151 @@ where
     T: Serialize,
 {
     object(serde_json::to_value(value).unwrap())
+}
+
+#[tokio::test]
+#[traced_test]
+#[ignore]
+/// Test that record data is persisted to DB after a full round
+/// Using Echo LLM + Mute TTS + Void ASR + Earshot VAD
+/// cargo test --test session_test -- test_full_flow --exact --ignored --nocapture
+async fn test_full_flow() -> anyhow::Result<()> {
+    let (container, state) = setup_database().await;
+    let record = RecordCollector::new(state.conn.clone());
+
+    let audio_config = Arc::new(AudioConfig {
+        input_sample_rate: Some(16000),
+        input_frame_duration: Some(20_u64),
+        input_channel: Some(1),
+        output_sample_rate: Some(16000),
+        output_channel: Some(1),
+        output_frame_duration: Some(20_u64),
+    });
+    let session_id = gen_id();
+    let mut session = SessionBuilder::new()
+        .with_listener(Box::new(DefaultListener::new(
+            Arc::new(Mutex::new(VadFactory::create_model(&Arc::new(
+                VadConfig {
+                    model: Some(VadModel::Earshot),
+                    ..Default::default()
+                },
+            )))),
+            Arc::new(Mutex::new(AsrFactory::create_model(&AsrConfig {
+                model: Some(AsrModel::Void),
+                ..Default::default()
+            }))),
+            audio_config.clone(),
+        )))
+        .with_id(session_id.clone())
+        .with_model(Arc::new(LlmFactory::create_model(&LlmConfig {
+            model: Some(LlmModel::Echo),
+            ..Default::default()
+        })))
+        .with_tts(Arc::new(
+            TtsFactory::create_model(
+                &TtsConfig {
+                    model: Some(TtsModel::Mute),
+                    ..Default::default()
+                },
+                &audio_config,
+            )
+            .await
+            .unwrap(),
+        ))
+        .with_mcp_host(Arc::new(Mutex::new(UnionMcpHost::new(Some(
+            session_id.clone(),
+        )))))
+        .with_config(Arc::new(SessionConfig {
+            close_connection_no_voice_time: Some(3000),
+            silence_voice_timeout: Some(1200),
+            system_prompt: Some(String::from(
+                "你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等。",
+            )),
+            max_prompt_len: Some(3000),
+        }))
+        .with_audio_config(audio_config.clone())
+        .with_record(record)
+        .build();
+
+    session.start().await?;
+    let mut output = session.output_frame().await;
+
+    // Hello
+    session
+        .accept_frame(&Frame::Hello(HelloMessage {
+            ..Default::default()
+        }))
+        .await;
+    assert!(matches!(
+        output.next().await.unwrap().unwrap(),
+        FrameResult::HelloResult(..)
+    ));
+
+    // Send text message via Detect
+    session
+        .accept_frame(&Frame::Listen(ListenMessage {
+            state: ListenState::Detect,
+            mmod: Some(ListenMode::Manual),
+            text: Some("Hello"),
+            ..Default::default()
+        }))
+        .await;
+
+    // Consume output until TTS::Stop
+    loop {
+        let frame = output.next().await.unwrap().unwrap();
+        if let FrameResult::TTSResult(msg) = &frame
+            && msg.state == Some(TtsState::Stop)
+        {
+            break;
+        }
+    }
+
+    // Poll DB for record data (wait until both llm + tts round_data are flushed)
+    let conn = &state.conn;
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    let (rounds, data) = loop {
+        let rounds = Round::find().all(conn).await?;
+        if let Some(round) = rounds.first() {
+            let data = round_data::Entity::find()
+                .filter(round_data::Column::RoundId.eq(&round.id))
+                .all(conn)
+                .await?;
+            if data.len() >= 2 {
+                break (rounds, data);
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        anyhow::ensure!(
+            tokio::time::Instant::now() < deadline,
+            "record data not fully flushed to DB within 5s"
+        );
+    };
+
+    assert_eq!(rounds.len(), 1, "expected 1 round");
+    assert_eq!(
+        rounds[0].user_id,
+        Some(session_id.clone()),
+        "round.user_id should match session_id"
+    );
+
+    let llm = data
+        .iter()
+        .find(|d| d.data_type == "llm")
+        .expect("llm round_data not found");
+    assert_eq!(llm.text, Some("Hello".to_string()));
+    assert!(llm.data.is_none());
+
+    let tts = data
+        .iter()
+        .find(|d| d.data_type == "tts")
+        .expect("tts round_data not found");
+    assert_eq!(tts.text, Some("Hello".to_string()));
+    assert!(tts.data.is_none());
+
+    session.stop().await;
+    let _ = &state.conn.close().await?;
+    tear_down(container).await;
+
+    Ok(())
 }

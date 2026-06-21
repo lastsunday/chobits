@@ -9,7 +9,7 @@ use framework::error::AppError;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::Sender;
-use tracing::debug;
+use tracing::{debug, info};
 
 /// Maximum prefix padding in samples (300ms at 16kHz).
 const PREFIX_SAMPLES_MAX: usize = 4800;
@@ -24,6 +24,10 @@ pub trait Listener: Send + Sync {
     async fn set_sender(&mut self, tx: Sender<Result<FrameResult, AppError>>);
 
     async fn get_voice_data(&self) -> Vec<f32> {
+        Vec::new()
+    }
+
+    async fn get_raw_pcm(&self) -> Vec<f32> {
         Vec::new()
     }
 }
@@ -47,7 +51,7 @@ pub struct DefaultListener {
     voice_data: Arc<Mutex<Vec<f32>>>,
     vad: Arc<Mutex<Box<dyn Vad>>>,
     asr: Arc<Mutex<Box<dyn Asr>>>,
-    decoder: Arc<Mutex<opus_rs::OpusDecoder>>,
+    decoder: Arc<Mutex<opus::Decoder>>,
     pub state: ListenState,
     silence_voice_timeout: Option<i64>,
     latest_speaking_time: Option<i64>,
@@ -57,6 +61,8 @@ pub struct DefaultListener {
     prefix_buffer: Vec<f32>,
     /// Whether prefix has been flushed for current speech turn.
     prefix_flushed: bool,
+    /// Accumulates ALL decoded PCM (diagnostic only).
+    total_pcm: Arc<Mutex<Vec<f32>>>,
 }
 
 impl DefaultListener {
@@ -69,7 +75,7 @@ impl DefaultListener {
             .input_sample_rate
             .expect("input sample rate is empty");
         let decoder = Arc::new(Mutex::new(
-            opus_rs::OpusDecoder::new(sample_rate as i32, 1_usize).unwrap(),
+            opus::Decoder::new(sample_rate, opus::Channels::Mono).unwrap(),
         ));
         Self {
             vad,
@@ -84,6 +90,7 @@ impl DefaultListener {
             error_tx: None,
             prefix_buffer: Vec::with_capacity(PREFIX_SAMPLES_MAX),
             prefix_flushed: false,
+            total_pcm: Arc::new(Mutex::new(Vec::new())),
         }
     }
 }
@@ -115,7 +122,7 @@ impl Listener for DefaultListener {
                 ((sample_rate as u64 * channel as u64 * frame_duration) / 1000) as usize;
             let mut samples = vec![0f32; frame_size];
             let mut decoder = self.decoder.lock().await;
-            let len = match decoder.decode(&data, frame_size, &mut samples) {
+            let len = match decoder.decode_float(&data, &mut samples, false) {
                 Ok(len) => len,
                 Err(e) => {
                     tracing::error!(
@@ -126,6 +133,29 @@ impl Listener for DefaultListener {
                     return;
                 }
             };
+            for s in samples[..len].iter_mut() {
+                *s = s.clamp(-1.0, 1.0);
+            }
+            #[cfg(debug_assertions)]
+            if self.total_pcm.lock().await.len() < 16000 {
+                let first5: Vec<f32> = samples.iter().take(5.min(len)).copied().collect();
+                let min = samples[..len].iter().copied().fold(f32::MAX, f32::min);
+                let max = samples[..len].iter().copied().fold(f32::MIN, f32::max);
+                let mean_abs = samples[..len].iter().map(|&x| x.abs()).sum::<f32>() / len as f32;
+                info!(
+                    "[DECODE_DIAG] frame_size={}, decoded_len={}, first_5={:?}, min={:.6}, max={:.6}, mean_abs={:.6}, data_bytes={}",
+                    frame_size,
+                    len,
+                    first5,
+                    min,
+                    max,
+                    mean_abs,
+                    data.len()
+                );
+            }
+            let mut total_pcm = self.total_pcm.lock().await;
+            total_pcm.extend_from_slice(&samples[..len]);
+            drop(total_pcm);
             let mut temp_voice_data = temp_voice_data.lock().await;
             temp_voice_data.append(&mut samples[..len].to_vec());
             let mut vad = vad.lock().await;
@@ -235,6 +265,7 @@ impl Listener for DefaultListener {
         vad.clear().await;
         self.prefix_buffer.clear();
         self.prefix_flushed = false;
+        self.total_pcm.lock().await.clear();
     }
 
     async fn set_sender(&mut self, tx: Sender<Result<FrameResult, AppError>>) {
@@ -243,5 +274,9 @@ impl Listener for DefaultListener {
 
     async fn get_voice_data(&self) -> Vec<f32> {
         self.voice_data.lock().await.clone()
+    }
+
+    async fn get_raw_pcm(&self) -> Vec<f32> {
+        self.total_pcm.lock().await.clone()
     }
 }

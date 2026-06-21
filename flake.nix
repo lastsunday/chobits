@@ -83,6 +83,7 @@
               sqlite
               postgresql_16
               openblas
+              libopus.dev
             ] ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
               pkgs.libiconv
             ];
@@ -128,6 +129,7 @@
               sqlite
               postgresql_16
               openblas
+              libopus.dev
             ] ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
               pkgs.libiconv
             ];

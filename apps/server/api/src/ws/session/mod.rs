@@ -8,6 +8,7 @@ use crate::llm::Model;
 use crate::llm::client::{ClientBuilder, History};
 use crate::mcp::client::device::{DeviceMcpClient, DeviceMcpPhase};
 use crate::mcp::mcp_host::{McpHost, UnionMcpHost};
+use crate::record::collector::RecordCollector;
 use crate::tts::Tts;
 use chrono::Local;
 use core::result::Result;
@@ -37,6 +38,7 @@ pub struct SessionBuilder {
     mcp_host: Option<Arc<Mutex<UnionMcpHost>>>,
     config: Option<Arc<SessionConfig>>,
     audio_config: Option<Arc<AudioConfig>>,
+    record: Option<RecordCollector>,
 }
 
 impl SessionBuilder {
@@ -79,16 +81,39 @@ impl SessionBuilder {
         self
     }
 
+    pub fn with_record(mut self, record: RecordCollector) -> SessionBuilder {
+        self.record = Some(record);
+        self
+    }
+
     pub fn build(self) -> Session {
-        Session::new(
-            self.id.expect("id is required"),
-            self.listener.expect("listener is required"),
-            self.model.expect("model is required"),
-            self.tts.expect("tts is required"),
-            self.mcp_host.expect("mcp host is required"),
-            self.config.expect("config is required").clone(),
-            self.audio_config.expect("audio is required").clone(),
-        )
+        let config = self.config.expect("config is required");
+        let audio_config = self.audio_config.expect("audio is required");
+        let system_prompt = config
+            .system_prompt
+            .as_ref()
+            .expect("logic system prompt is empty");
+        Session {
+            id: self.id.expect("id is required"),
+            current_round: None,
+            output_tx: None,
+            trace_log: trace::TraceLog::new(),
+            record: self.record,
+            phase: Phase::Hello,
+            latest_activity_time: Arc::new(Mutex::new(None)),
+            history: Arc::new(Mutex::new(History {
+                preamble: Some(system_prompt.to_string()),
+                chat_history: vec![],
+            })),
+            config,
+            audio_config,
+            listener: self.listener.expect("listener is required"),
+            model: self.model.expect("model is required"),
+            tts: self.tts.expect("tts is required"),
+            mcp_host: self.mcp_host.expect("mcp host is required"),
+            device_mcp_phase: DeviceMcpPhase::Initialize,
+            device_mcp_call_tool_result_tx: None,
+        }
     }
 }
 
@@ -99,6 +124,7 @@ pub struct Session {
     pub current_round: Option<Box<Round>>,
     output_tx: OutputTx,
     pub trace_log: trace::TraceLog,
+    pub record: Option<RecordCollector>,
     phase: Phase,
     latest_activity_time: Arc<Mutex<Option<i64>>>,
     history: Arc<Mutex<History>>,
@@ -132,43 +158,6 @@ pub enum ListenMode {
 }
 
 impl Session {
-    pub fn new(
-        id: String,
-        listener: Box<dyn Listener>,
-        model: Arc<Box<dyn Model>>,
-        tts: Arc<Box<dyn Tts>>,
-        mcp_host: Arc<Mutex<UnionMcpHost>>,
-        config: Arc<SessionConfig>,
-        audio_config: Arc<AudioConfig>,
-    ) -> Self {
-        let system_prompt = config
-            .system_prompt
-            .as_ref()
-            .expect("logic system prompt is empty");
-        Self {
-            id,
-            current_round: None,
-            output_tx: None,
-            trace_log: trace::TraceLog::new(),
-            phase: Phase::Hello,
-            latest_activity_time: Arc::new(Mutex::new(None)),
-            history: Arc::new(Mutex::new(History {
-                preamble: Some(system_prompt.to_string()),
-                chat_history: vec![],
-            })),
-
-            config,
-            audio_config,
-
-            listener,
-            model,
-            tts,
-            mcp_host,
-            device_mcp_phase: DeviceMcpPhase::Initialize,
-            device_mcp_call_tool_result_tx: None,
-        }
-    }
-
     pub async fn start(&mut self) -> anyhow::Result<()> {
         info!(target:"session","start" );
         Ok(())
@@ -201,11 +190,17 @@ impl Session {
         let trace_log = self.trace_log.clone();
         let traced_tx =
             output_controller::TracedSender::new(tx.clone(), trace_log, Direction::Internal);
+        let round_id = framework::id::gen_id();
+        if let Some(record) = &self.record {
+            record.start_round(round_id.clone(), Some(self.id.clone()), None);
+        }
         self.current_round = Some(Box::new(Round::new(
             self.id.clone(),
+            round_id,
             traced_tx,
             Arc::new(client),
             self.tts.clone(),
+            self.record.clone(),
         )));
         if let Some(round) = &mut self.current_round {
             round.start().await;
@@ -217,12 +212,25 @@ impl Session {
     pub async fn stop_round(&mut self) {
         info!(target:"session", "stop round");
         if let Some(round) = &mut self.current_round {
+            let round_id = round.id.clone();
             round.stop().await;
+            if let Some(record) = &self.record {
+                let _ = record.finish_round(&round_id).await;
+            }
         }
     }
 
     pub async fn accept_frame<'a>(&mut self, frame: &Frame<'a>) {
         self.trace_log.push_input(&format!("{:?}", frame));
+        if let Some(record) = &self.record
+            && let Some(round_id) = self.current_round.as_ref().map(|r| r.id.clone())
+        {
+            let seq = self
+                .trace_log
+                .seq
+                .load(std::sync::atomic::Ordering::Relaxed);
+            record.record_frame(&round_id, seq, Direction::Inbound, &format!("{:?}", frame));
+        }
 
         match frame {
             Frame::Close(_) => {
@@ -318,12 +326,12 @@ impl Session {
         ReceiverStream::new(controller_output_rx)
     }
 
-    pub async fn update_latest_activity_time(&mut self) {
+    pub async fn update_latest_activity_time(&self) {
         let mut time = self.latest_activity_time.lock().await;
         *time = Some(Local::now().timestamp_millis());
     }
 
-    pub async fn get_latest_activity_time(&mut self) -> Option<i64> {
+    pub async fn get_latest_activity_time(&self) -> Option<i64> {
         let time = self.latest_activity_time.lock().await;
         *time
     }

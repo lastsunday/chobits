@@ -47,7 +47,8 @@ function RouteComponent() {
   const { t } = useTranslation();
 
   const data = [
-    { link: '', key: 'dashboard', label: t('admin.menu.dashboard'), icon: "i-mdi:monitor-dashboard" },
+    { link: '/admin', key: 'dashboard', label: t('admin.menu.dashboard'), icon: "i-mdi:monitor-dashboard" },
+    { link: '/admin/sessions', key: 'sessions', label: t('admin.menu.sessions'), icon: "i-mdi:chat-processing" },
   ];
 
   useEffect(() => {
@@ -73,6 +74,7 @@ function RouteComponent() {
       onClick={(event) => {
         event.preventDefault();
         setActive(item.label);
+        navigate({ to: item.link as any });
       }}
     >
       <div className={`${item.icon} ${classes.linkIcon}`} />

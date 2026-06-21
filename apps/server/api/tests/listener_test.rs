@@ -36,16 +36,15 @@ fn make_listener() -> DefaultListener {
 
 /// Encode PCM f32 into Opus packets (20ms, 320-sample frames, 16kHz).
 fn encode_opus(pcm: &[f32]) -> Vec<Vec<u8>> {
-    let mut encoder = opus_rs::OpusEncoder::new(16000, 1, opus_rs::Application::Audio).unwrap();
+    let mut encoder =
+        opus::Encoder::new(16000, opus::Channels::Mono, opus::Application::Audio).unwrap();
     let frame_size = 320;
     let mut packets = Vec::new();
     for chunk in pcm.chunks(frame_size) {
         let mut padded = chunk.to_vec();
         padded.resize(frame_size, 0.0);
-        let mut buf = vec![0u8; 4000];
-        let len = encoder.encode(&padded, frame_size, &mut buf).unwrap();
-        buf.truncate(len);
-        packets.push(buf);
+        let packet = encoder.encode_vec_float(&padded, 4000).unwrap();
+        packets.push(packet);
     }
     packets
 }

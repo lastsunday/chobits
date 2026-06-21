@@ -40,6 +40,53 @@ impl MigrationTrait for Migration {
                     .to_owned(),
             )
             .await?;
+        manager
+            .create_table(
+                Table::create()
+                    .table(Round::Table)
+                    .if_not_exists()
+                    .col(string_uniq(Round::Id))
+                    .col(string_null(Round::UserId))
+                    .col(json_binary_null(Round::ClientInfo))
+                    .col(timestamp_with_time_zone_null(Round::CreateDatetime))
+                    .col(timestamp_with_time_zone_null(Round::UpdateDatetime))
+                    .primary_key(Index::create().name("pk-round-id").col(Round::Id))
+                    .to_owned(),
+            )
+            .await?;
+        manager
+            .create_table(
+                Table::create()
+                    .table(RoundData::Table)
+                    .if_not_exists()
+                    .col(string_uniq(RoundData::Id))
+                    .col(string(RoundData::RoundId))
+                    .col(string(RoundData::DataType))
+                    .col(blob_null(RoundData::Data))
+                    .col(string_null(RoundData::Text))
+                    .col(json_binary_null(RoundData::Metadata))
+                    .col(timestamp_with_time_zone_null(RoundData::CreateDatetime))
+                    .col(timestamp_with_time_zone_null(RoundData::UpdateDatetime))
+                    .primary_key(Index::create().name("pk-round-data-id").col(RoundData::Id))
+                    .to_owned(),
+            )
+            .await?;
+        manager
+            .create_table(
+                Table::create()
+                    .table(Frame::Table)
+                    .if_not_exists()
+                    .col(integer(Frame::Id).auto_increment().primary_key())
+                    .col(string(Frame::RoundId))
+                    .col(integer(Frame::Seq))
+                    .col(string(Frame::Dir))
+                    .col(string(Frame::Kind))
+                    .col(string_null(Frame::Detail))
+                    .col(timestamp_with_time_zone_null(Frame::CreateDatetime))
+                    .col(timestamp_with_time_zone_null(Frame::UpdateDatetime))
+                    .to_owned(),
+            )
+            .await?;
         let root_user = user::ActiveModel {
             account: Set("root".to_string()),
             password: Set(
@@ -53,6 +100,15 @@ impl MigrationTrait for Migration {
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .drop_table(Table::drop().table(Frame::Table).to_owned())
+            .await?;
+        manager
+            .drop_table(Table::drop().table(RoundData::Table).to_owned())
+            .await?;
+        manager
+            .drop_table(Table::drop().table(Round::Table).to_owned())
+            .await?;
         manager
             .drop_table(Table::drop().table(Config::Table).to_owned())
             .await?;
@@ -81,6 +137,42 @@ enum User {
     Password,
     Email,
     Enable,
+    CreateDatetime,
+    UpdateDatetime,
+}
+
+#[derive(DeriveIden)]
+enum Round {
+    Table,
+    Id,
+    UserId,
+    ClientInfo,
+    CreateDatetime,
+    UpdateDatetime,
+}
+
+#[derive(DeriveIden)]
+enum RoundData {
+    Table,
+    Id,
+    RoundId,
+    DataType,
+    Data,
+    Text,
+    Metadata,
+    CreateDatetime,
+    UpdateDatetime,
+}
+
+#[derive(DeriveIden)]
+enum Frame {
+    Table,
+    Id,
+    RoundId,
+    Seq,
+    Dir,
+    Kind,
+    Detail,
     CreateDatetime,
     UpdateDatetime,
 }

@@ -252,7 +252,7 @@ async fn async_main(server: &Arc<Server>) -> Result<(), anyhow::Error> {
         client_username: config.matrix_client_username.to_owned(),
         client_password: config.matrix_client_password.to_owned(),
     });
-    api::start(
+    api::start(api::StartParams {
         server_config,
         database_config,
         session_config,
@@ -265,7 +265,7 @@ async fn async_main(server: &Arc<Server>) -> Result<(), anyhow::Error> {
         asr_config,
         llm_config,
         matrix_config,
-    )
+    })
     .await?;
     info!("Exit runtime");
     Ok(())

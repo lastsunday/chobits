@@ -33,10 +33,10 @@ async fn test_audio_encode_decode() {
     let _ = write(fp, &pcm_data, sr, 1);
 
     const ENCODE_SAMPLE_RATE: u32 = 16000;
-    let mut encoder = opus_rs::OpusEncoder::new(
-        ENCODE_SAMPLE_RATE as i32,
-        1_usize,
-        opus_rs::Application::Audio,
+    let mut encoder = opus::Encoder::new(
+        ENCODE_SAMPLE_RATE,
+        opus::Channels::Mono,
+        opus::Application::Audio,
     )
     .unwrap();
 
@@ -57,24 +57,21 @@ async fn test_audio_encode_decode() {
         let start = n * size;
         let end = cmp::min((n + 1) * size, len);
         //info!("start = {},end = {}", start, end);
-        let mut packet = vec![0u8; 4000];
-        let encoded_len = encoder
-            .encode(&pcm_data[start..end], size, &mut packet)
+        let packet = encoder
+            .encode_vec_float(&pcm_data[start..end], size)
             .unwrap();
-        packet.truncate(encoded_len);
-        // info!("packet len = {}", packet.len());
         audio.push(packet);
     }
     let audio_len = audio.len();
     info!("audio len = {}", audio_len);
 
     // 4. decode opus packet to pcm data
-    let mut decoder = opus_rs::OpusDecoder::new(sample_rate as i32, 1_usize).unwrap();
+    let mut decoder = opus::Decoder::new(sample_rate, opus::Channels::Mono).unwrap();
     let mut decode_data: Vec<f32> = Vec::new();
     for n in 0..audio_len {
         let mut samples = vec![0f32; size];
         let data = audio.get(n).unwrap();
-        let len = decoder.decode(data, size, &mut samples).unwrap();
+        let len = decoder.decode_float(data, &mut samples, false).unwrap();
         decode_data.append(&mut samples[..len].to_vec());
     }
 

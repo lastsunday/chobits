@@ -75,7 +75,7 @@ rust-i18n = { workspace = true }
 futures-util = { workspace = true, features = ["sink", "std"] }
 futures-channel = { workspace = true }
 jiff = { workspace = true }
-opus-rs = { workspace = true }
+opus = { workspace = true }
 tokio-stream = { workspace = true }
 tokio-util = { workspace = true }
 futures = { workspace = true }

@@ -241,17 +241,19 @@ impl Tts for TtsVits {
                 2 => 2_usize,
                 _ => 1_usize,
             };
-            let mut encoder = match opus_rs::OpusEncoder::new(
-                encode_sr as i32,
-                channels,
-                opus_rs::Application::Audio,
-            ) {
-                Ok(e) => e,
-                Err(err) => {
-                    error!("[VitsTTS] opus encoder creation error = {}", err);
-                    return;
-                }
+            let opus_channels = if channels == 2 {
+                opus::Channels::Stereo
+            } else {
+                opus::Channels::Mono
             };
+            let mut encoder =
+                match opus::Encoder::new(encode_sr, opus_channels, opus::Application::Audio) {
+                    Ok(e) => e,
+                    Err(err) => {
+                        error!("[VitsTTS] opus encoder creation error = {}", err);
+                        return;
+                    }
+                };
 
             while let Some(text_result) = pinned.next().await {
                 let text = match text_result {

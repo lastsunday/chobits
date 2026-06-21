@@ -11,6 +11,7 @@ use crate::{
         client::server::ServerMcpClient,
         mcp_host::{McpHost, UnionMcpHost},
     },
+    record::collector::RecordCollector,
     tts::TtsFactory,
     vad::VadFactory,
     ws::{frame::FrameResult, session::Session},
@@ -76,6 +77,7 @@ async fn ws_handler(
     _headers: HeaderMap,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(AppState {
+        conn,
         session_config,
         mcp_config,
         vad_config,
@@ -85,48 +87,54 @@ async fn ws_handler(
 ) -> impl IntoResponse {
     info!("user_agent = {:?}", user_agent);
     ws.on_upgrade(move |socket| {
-        let session_id = gen_id();
         let (write, read) = socket.split();
         handle_socket(
-            session_id,
-            session_config,
-            mcp_config,
-            vad_config,
-            audio_config,
+            SocketContext {
+                session_id: gen_id(),
+                conn,
+                session_config,
+                mcp_config,
+                vad_config,
+                audio_config,
+            },
             write,
             read,
         )
     })
 }
 
-pub async fn handle_socket<W, R>(
+pub(crate) struct SocketContext {
     session_id: String,
+    conn: sea_orm::DatabaseConnection,
     session_config: Arc<SessionConfig>,
     mcp_config: Arc<McpConfig>,
     vad_config: Arc<VadConfig>,
     audio_config: Arc<AudioConfig>,
-    mut write: W,
-    read: R,
-) where
+}
+
+pub(crate) async fn handle_socket<W, R>(ctx: SocketContext, mut write: W, read: R)
+where
     W: Sink<Message> + Unpin + Send + 'static,
     R: Stream<Item = Result<Message, axum::Error>> + Unpin + Send + 'static,
 {
-    let span = span!(Level::DEBUG, "socket", id=%session_id);
+    let span = span!(Level::DEBUG, "socket", id=%ctx.session_id);
     let _guard = span.enter();
+    let record = RecordCollector::new(ctx.conn);
     let mut session = SessionBuilder::new()
-        .with_id(session_id.clone())
+        .with_id(ctx.session_id.clone())
         .with_listener(Box::new(DefaultListener::new(
-            Arc::new(Mutex::new(VadFactory::create_model(&vad_config))),
+            Arc::new(Mutex::new(VadFactory::create_model(&ctx.vad_config))),
             AsrFactory::global().default().clone(),
-            audio_config.clone(),
+            ctx.audio_config.clone(),
         )))
         .with_model(LlmFactory::global().default())
         .with_tts(TtsFactory::global().default())
         .with_mcp_host(Arc::new(Mutex::new(
-            create_mcp_host(session_id.clone(), mcp_config.clone()).await,
+            create_mcp_host(ctx.session_id.clone(), ctx.mcp_config.clone()).await,
         )))
-        .with_config(session_config.clone())
-        .with_audio_config(audio_config.clone())
+        .with_config(ctx.session_config.clone())
+        .with_audio_config(ctx.audio_config.clone())
+        .with_record(record)
         .build();
     if let Err(e) = session.start().instrument(span.clone()).await {
         error!("{}", e);
@@ -136,14 +144,14 @@ pub async fn handle_socket<W, R>(
         }
         return;
     }
-    let session_id_clone = session_id.clone();
+    let session_id_clone = ctx.session_id.clone();
     let output = session.output_frame().await;
     tokio::spawn(async move {
         let span = span!(parent:None,Level::DEBUG, "socket", id=%session_id_clone);
         on_send(output, write).instrument(span).await
     });
     tokio::spawn(async move {
-        let span = span!(parent:None,Level::DEBUG, "socket", id=%session_id);
+        let span = span!(parent:None,Level::DEBUG, "socket", id=%ctx.session_id);
         on_recv(session, read).instrument(span).await
     });
 }
