@@ -1,4 +1,5 @@
 pub mod collector;
+pub mod observer;
 pub mod wav;
 
 use axum::{

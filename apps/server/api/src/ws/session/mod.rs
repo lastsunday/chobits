@@ -1,4 +1,3 @@
-use self::trace::Direction;
 use super::frame::{Frame, FrameResult};
 use super::session::listener::Listener;
 use super::session::round::{Command, Round};
@@ -8,7 +7,9 @@ use crate::llm::Model;
 use crate::llm::client::{ClientBuilder, History};
 use crate::mcp::client::device::{DeviceMcpClient, DeviceMcpPhase};
 use crate::mcp::mcp_host::{McpHost, UnionMcpHost};
-use crate::record::collector::RecordCollector;
+use crate::record::observer::{
+    AsrContext, FrameContext, FrameDirection, RoundEndContext, RoundStartContext, SessionObserver,
+};
 use crate::tts::Tts;
 use chrono::Local;
 use core::result::Result;
@@ -19,6 +20,7 @@ use service::chobits::message::hello::{AudioParam, HelloMessage};
 use service::chobits::message::listen::ListenState;
 use service::chobits::message::{AudioFormat, Transport};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::{Sender, channel};
 use tokio_stream::wrappers::ReceiverStream;
@@ -27,7 +29,6 @@ use tracing::{error, info, trace};
 pub mod listener;
 pub mod output_controller;
 pub mod round;
-pub mod trace;
 
 #[derive(Default)]
 pub struct SessionBuilder {
@@ -38,7 +39,7 @@ pub struct SessionBuilder {
     mcp_host: Option<Arc<Mutex<UnionMcpHost>>>,
     config: Option<Arc<SessionConfig>>,
     audio_config: Option<Arc<AudioConfig>>,
-    record: Option<RecordCollector>,
+    observers: Vec<Arc<dyn SessionObserver>>,
 }
 
 impl SessionBuilder {
@@ -81,8 +82,8 @@ impl SessionBuilder {
         self
     }
 
-    pub fn with_record(mut self, record: RecordCollector) -> SessionBuilder {
-        self.record = Some(record);
+    pub fn add_observer(mut self, observer: Arc<dyn SessionObserver>) -> SessionBuilder {
+        self.observers.push(observer);
         self
     }
 
@@ -97,8 +98,8 @@ impl SessionBuilder {
             id: self.id.expect("id is required"),
             current_round: None,
             output_tx: None,
-            trace_log: trace::TraceLog::new(),
-            record: self.record,
+            seq: Arc::new(AtomicU64::new(1)),
+            observers: self.observers,
             phase: Phase::Hello,
             latest_activity_time: Arc::new(Mutex::new(None)),
             history: Arc::new(Mutex::new(History {
@@ -123,8 +124,8 @@ pub struct Session {
     pub id: String,
     pub current_round: Option<Box<Round>>,
     output_tx: OutputTx,
-    pub trace_log: trace::TraceLog,
-    pub record: Option<RecordCollector>,
+    seq: Arc<AtomicU64>,
+    pub observers: Vec<Arc<dyn SessionObserver>>,
     phase: Phase,
     latest_activity_time: Arc<Mutex<Option<i64>>>,
     history: Arc<Mutex<History>>,
@@ -187,12 +188,19 @@ impl Session {
             .build()
             .with_history(self.history.clone())
             .with_max_prompt_len(self.config.max_prompt_len);
-        let trace_log = self.trace_log.clone();
-        let traced_tx =
-            output_controller::TracedSender::new(tx.clone(), trace_log, Direction::Internal);
         let round_id = framework::id::gen_id();
-        if let Some(record) = &self.record {
-            record.start_round(round_id.clone(), Some(self.id.clone()), None);
+        let traced_tx = output_controller::TracedSender::new(
+            tx.clone(),
+            self.observers.clone(),
+            Some(round_id.clone()),
+            self.seq.clone(),
+        );
+        for observer in &self.observers {
+            observer.on_round_start(&RoundStartContext {
+                round_id: round_id.clone(),
+                user_id: Some(self.id.clone()),
+                client_info: None,
+            });
         }
         self.current_round = Some(Box::new(Round::new(
             self.id.clone(),
@@ -200,7 +208,7 @@ impl Session {
             traced_tx,
             Arc::new(client),
             self.tts.clone(),
-            self.record.clone(),
+            self.observers.clone(),
         )));
         if let Some(round) = &mut self.current_round {
             round.start().await;
@@ -214,22 +222,27 @@ impl Session {
         if let Some(round) = &mut self.current_round {
             let round_id = round.id.clone();
             round.stop().await;
-            if let Some(record) = &self.record {
-                let _ = record.finish_round(&round_id).await;
+            for observer in &self.observers {
+                let _ = observer
+                    .on_round_end(&RoundEndContext {
+                        round_id: round_id.clone(),
+                    })
+                    .await;
             }
         }
     }
 
     pub async fn accept_frame<'a>(&mut self, frame: &Frame<'a>) {
-        self.trace_log.push_input(&format!("{:?}", frame));
-        if let Some(record) = &self.record
-            && let Some(round_id) = self.current_round.as_ref().map(|r| r.id.clone())
-        {
-            let seq = self
-                .trace_log
-                .seq
-                .load(std::sync::atomic::Ordering::Relaxed);
-            record.record_frame(&round_id, seq, Direction::Inbound, &format!("{:?}", frame));
+        if let Some(round_id) = self.current_round.as_ref().map(|r| r.id.clone()) {
+            let seq = self.seq.load(Ordering::Relaxed);
+            for observer in &self.observers {
+                observer.on_frame(&FrameContext {
+                    round_id: round_id.clone(),
+                    seq,
+                    direction: FrameDirection::Inbound,
+                    detail: format!("{:?}", frame),
+                });
+            }
         }
 
         match frame {
@@ -290,20 +303,13 @@ impl Session {
         let (controller_output_tx, controller_output_rx) =
             channel::<Result<FrameResult, AppError>>(64);
 
-        let trace_log = self.trace_log.clone();
-        let traced_output_tx = output_controller::TracedSender::new(
-            controller_output_tx,
-            trace_log,
-            Direction::Outbound,
-        );
-
         let frame_duration = self
             .audio_config
             .output_frame_duration
             .expect("output frame duration is empty");
         let controller = self::output_controller::OutputController::new(
             controller_input_rx,
-            traced_output_tx,
+            controller_output_tx,
             frame_duration,
             self.latest_activity_time.clone(),
         );
@@ -323,6 +329,7 @@ impl Session {
         mcp_host.set_device_client(mcp_device_client.clone()).await;
         self.listener.set_sender(controller_input_tx.clone()).await;
         self.output_tx = Some(controller_input_tx.clone());
+
         ReceiverStream::new(controller_output_rx)
     }
 

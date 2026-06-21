@@ -112,6 +112,7 @@
 - Rust: 路由必须在 `create_router` 中通过 `OpenApiRouter` 组织
 - Rust: 提交前运行 `cargo fmt && cargo clippy` 保持代码风格
 - AI 模块 (LLM/TTS/VAD/ASR) 使用 Factory 模式，通过 `XxxFactory::init()` 初始化，通过 `XxxFactory::get()` 获取实例
+- Rust: 引入新类型/新模式后（如用 `SessionObserver` 替代 `RecordCollector`、用 `Context` 替代裸 String），用 `rg <旧类型名> --type rust` 确认无残留引用。无引用则删除对应旧文件/旧模块，清零 `#[allow(...)]` 豁免
 
 ## 4. 开发工作流
 

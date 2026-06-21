@@ -514,16 +514,16 @@ impl Session {
                     .as_ref()
                     .map(|r| r.id.clone())
                     .unwrap_or_default();
-                if let Some(record) = &self.record
-                    && !voice_pcm.is_empty()
-                {
-                    record.collect_asr(
-                        &round_id,
-                        voice_pcm,
-                        sample_rate,
-                        command.text.clone(),
-                        command.prob,
-                    );
+                if !voice_pcm.is_empty() {
+                    for observer in &self.observers {
+                        observer.on_asr(&AsrContext {
+                            round_id: round_id.clone(),
+                            voice_pcm: voice_pcm.clone(),
+                            sample_rate,
+                            text: command.text.clone(),
+                            confidence: command.prob,
+                        });
+                    }
                 }
                 let text = command.text.as_str();
                 let is_speech_clear = self.is_speech_clear(&command.text, command.prob);

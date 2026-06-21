@@ -2,34 +2,39 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
 
+use async_trait::async_trait;
 use sea_orm::{ActiveValue::Set, DatabaseConnection, entity::prelude::*};
 use serde_json::Value as JsonValue;
 
+use super::observer::*;
 use super::wav::pcm_f32_to_wav;
 use entity::frame;
 use entity::round;
 use entity::round_data;
 use framework::id::gen_id;
 
-use crate::ws::session::trace::{Direction, TraceEntry};
-
 const MAX_FRAMES_PER_ROUND: usize = 5000;
 
-pub struct RoundBuffer {
-    pub round_id: String,
-    pub user_id: Option<String>,
-    pub client_info: Option<JsonValue>,
+struct FrameEntry {
+    seq: u64,
+    is_inbound: bool,
+    detail: String,
+}
 
-    pub input_audio_wav: Option<Vec<u8>>,
-    pub asr_text: Option<String>,
-    pub asr_confidence: Option<f32>,
+struct RoundBuffer {
+    round_id: String,
+    user_id: Option<String>,
+    client_info: Option<JsonValue>,
 
-    pub llm_text: String,
-    pub tts_text: String,
-    pub tts_raw_pcm: Option<(Vec<f32>, u32)>,
+    input_audio_wav: Option<Vec<u8>>,
+    asr_text: Option<String>,
+    asr_confidence: Option<f32>,
 
-    pub frames: Vec<TraceEntry>,
-    pub status: String,
+    llm_text: String,
+    tts_text: String,
+    tts_raw_pcm: Option<(Vec<f32>, u32)>,
+
+    frames: Vec<FrameEntry>,
 }
 
 #[derive(Clone)]
@@ -50,7 +55,7 @@ impl RecordCollector {
         &self.conn
     }
 
-    pub fn start_round(
+    fn start_round(
         &self,
         round_id: String,
         user_id: Option<String>,
@@ -70,12 +75,11 @@ impl RecordCollector {
                 tts_text: String::new(),
                 tts_raw_pcm: None,
                 frames: Vec::new(),
-                status: "processing".to_string(),
             },
         );
     }
 
-    pub fn collect_asr(
+    fn collect_asr(
         &self,
         round_id: &str,
         voice_pcm: Vec<f32>,
@@ -92,14 +96,14 @@ impl RecordCollector {
         }
     }
 
-    pub fn collect_llm_text(&self, round_id: &str, text: &str) {
+    fn collect_llm_text(&self, round_id: &str, text: &str) {
         let mut pending = self.pending.lock().expect("pending lock");
         if let Some(buf) = pending.get_mut(round_id) {
             buf.llm_text.push_str(text);
         }
     }
 
-    pub fn collect_tts(&self, round_id: &str, text: &str, raw_pcm: Option<(Vec<f32>, u32)>) {
+    fn collect_tts(&self, round_id: &str, text: &str, raw_pcm: Option<(Vec<f32>, u32)>) {
         let mut pending = self.pending.lock().expect("pending lock");
         if let Some(buf) = pending.get_mut(round_id) {
             buf.tts_text.push_str(text);
@@ -109,26 +113,21 @@ impl RecordCollector {
         }
     }
 
-    pub fn record_frame(&self, round_id: &str, seq: u64, dir: Direction, detail: &str) {
-        if dir == Direction::Internal {
-            return;
-        }
+    fn record_frame(&self, round_id: &str, seq: u64, is_inbound: bool, detail: &str) {
         let mut pending = self.pending.lock().expect("pending lock");
         if let Some(buf) = pending.get_mut(round_id) {
             if buf.frames.len() >= MAX_FRAMES_PER_ROUND {
                 return;
             }
-            buf.frames.push(TraceEntry {
-                ts: String::new(),
+            buf.frames.push(FrameEntry {
                 seq,
-                dir,
-                kind: crate::ws::session::trace::TraceKind::InboundFrame,
+                is_inbound,
                 detail: detail.to_string(),
             });
         }
     }
 
-    pub async fn finish_round(&self, round_id: &str) -> Result<(), anyhow::Error> {
+    async fn finish_round(&self, round_id: &str) -> Result<(), anyhow::Error> {
         let buffer = {
             let mut pending = self.pending.lock().expect("pending lock");
             pending.remove(round_id)
@@ -151,7 +150,7 @@ impl RecordCollector {
 
         // Insert round
         round::ActiveModel {
-            id: Set(buffer.round_id.clone()),
+            id: Set(gen_id()),
             user_id: Set(buffer.user_id.clone()),
             client_info: Set(buffer.client_info.clone()),
             create_datetime: Set(Some(now)),
@@ -242,16 +241,16 @@ impl RecordCollector {
 
         // Insert frames
         for entry in &buffer.frames {
-            let dir_str = match entry.dir {
-                Direction::Inbound => "inbound",
-                Direction::Outbound => "outbound",
-                Direction::Internal => continue,
+            let dir_str = if entry.is_inbound {
+                "inbound"
+            } else {
+                "outbound"
             };
             frame::ActiveModel {
                 round_id: Set(buffer.round_id.clone()),
                 seq: Set(entry.seq as i32),
                 dir: Set(dir_str.to_string()),
-                kind: Set(format!("{:?}", entry.kind)),
+                kind: Set("frame".to_string()),
                 detail: Set(Some(entry.detail.clone())),
                 ..Default::default()
             }
@@ -260,5 +259,43 @@ impl RecordCollector {
         }
 
         Ok(())
+    }
+}
+
+#[async_trait]
+impl SessionObserver for RecordCollector {
+    fn on_round_start(&self, ctx: &RoundStartContext) {
+        self.start_round(
+            ctx.round_id.clone(),
+            ctx.user_id.clone(),
+            ctx.client_info.clone(),
+        );
+    }
+
+    fn on_asr(&self, ctx: &AsrContext) {
+        self.collect_asr(
+            &ctx.round_id,
+            ctx.voice_pcm.clone(),
+            ctx.sample_rate,
+            ctx.text.clone(),
+            ctx.confidence,
+        );
+    }
+
+    fn on_llm_delta(&self, ctx: &LlmDeltaContext) {
+        self.collect_llm_text(&ctx.round_id, &ctx.text);
+    }
+
+    fn on_tts_delta(&self, ctx: &TtsDeltaContext) {
+        self.collect_tts(&ctx.round_id, &ctx.text, ctx.raw_pcm.clone());
+    }
+
+    fn on_frame(&self, ctx: &FrameContext) {
+        let is_inbound = matches!(ctx.direction, FrameDirection::Inbound);
+        self.record_frame(&ctx.round_id, ctx.seq, is_inbound, &ctx.detail);
+    }
+
+    async fn on_round_end(&self, ctx: &RoundEndContext) -> Result<(), anyhow::Error> {
+        self.finish_round(&ctx.round_id).await
     }
 }

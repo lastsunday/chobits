@@ -1,64 +1,60 @@
 use super::super::frame::FrameResult;
-use super::trace::{Direction, TraceKind, TraceLog};
+use crate::record::observer::{FrameContext, FrameDirection, SessionObserver};
 use chrono::Local;
 use framework::error::AppError;
 use service::chobits::message::tts::TtsState;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::{Receiver, Sender, error::SendError};
 use tokio::time::{Duration, Instant, MissedTickBehavior, interval_at};
 
-fn trace_info_from_result(item: &Result<FrameResult, AppError>) -> (TraceKind, String) {
-    match item {
-        Ok(FrameResult::AudioResult(msg)) => {
-            (TraceKind::Audio, format!("{} bytes", msg.data.len()))
-        }
-        Ok(FrameResult::TTSResult(msg)) => {
-            let detail = msg
-                .text
-                .clone()
-                .or_else(|| msg.state.as_ref().map(|s| format!("{:?}", s)))
-                .unwrap_or_default();
-            (TraceKind::TTS, detail)
-        }
-        Ok(FrameResult::STTResult(msg)) => (TraceKind::STT, msg.text.clone().unwrap_or_default()),
-        Ok(FrameResult::LLMResult(msg)) => (TraceKind::LLM, msg.text.clone().unwrap_or_default()),
-        Ok(FrameResult::HelloResult(_)) => (TraceKind::Hello, String::new()),
-        Ok(FrameResult::McpResult(_)) => (TraceKind::MCP, String::new()),
-        Ok(FrameResult::CloseResult) => (TraceKind::Close, String::new()),
-        Err(_) => (TraceKind::Error, String::new()),
-    }
-}
-
 #[derive(Clone)]
 pub struct TracedSender {
     inner: Sender<Result<FrameResult, AppError>>,
-    log: TraceLog,
-    dir: Direction,
+    observers: Vec<Arc<dyn SessionObserver>>,
+    round_id: Option<String>,
+    seq: Arc<AtomicU64>,
 }
 
 impl TracedSender {
     pub fn new(
         inner: Sender<Result<FrameResult, AppError>>,
-        log: TraceLog,
-        dir: Direction,
+        observers: Vec<Arc<dyn SessionObserver>>,
+        round_id: Option<String>,
+        seq: Arc<AtomicU64>,
     ) -> Self {
-        Self { inner, log, dir }
+        Self {
+            inner,
+            observers,
+            round_id,
+            seq,
+        }
     }
 
     pub async fn send(
         &self,
         item: Result<FrameResult, AppError>,
     ) -> Result<(), SendError<Result<FrameResult, AppError>>> {
-        let (kind, detail) = trace_info_from_result(&item);
-        self.log.push(self.dir, kind, detail);
+        if let Some(ref round_id) = self.round_id {
+            let detail = format!("{:?}", &item);
+            let seq = self.seq.fetch_add(1, Ordering::Relaxed);
+            for observer in &self.observers {
+                observer.on_frame(&FrameContext {
+                    round_id: round_id.clone(),
+                    seq,
+                    direction: FrameDirection::Outbound,
+                    detail: detail.clone(),
+                });
+            }
+        }
         self.inner.send(item).await
     }
 }
 
 pub struct OutputController {
     input_rx: Receiver<Result<FrameResult, AppError>>,
-    output_tx: TracedSender,
+    output_tx: Sender<Result<FrameResult, AppError>>,
     interval: Option<tokio::time::Interval>,
     frame_duration: u64,
     latest_activity_time: Arc<Mutex<Option<i64>>>,
@@ -67,7 +63,7 @@ pub struct OutputController {
 impl OutputController {
     pub fn new(
         input_rx: Receiver<Result<FrameResult, AppError>>,
-        output_tx: TracedSender,
+        output_tx: Sender<Result<FrameResult, AppError>>,
         frame_duration: u64,
         latest_activity_time: Arc<Mutex<Option<i64>>>,
     ) -> Self {

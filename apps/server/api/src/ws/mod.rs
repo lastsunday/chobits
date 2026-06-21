@@ -12,6 +12,7 @@ use crate::{
         mcp_host::{McpHost, UnionMcpHost},
     },
     record::collector::RecordCollector,
+    record::observer::SessionObserver,
     tts::TtsFactory,
     vad::VadFactory,
     ws::{frame::FrameResult, session::Session},
@@ -134,7 +135,7 @@ where
         )))
         .with_config(ctx.session_config.clone())
         .with_audio_config(ctx.audio_config.clone())
-        .with_record(record)
+        .add_observer(Arc::new(record) as Arc<dyn SessionObserver>)
         .build();
     if let Err(e) = session.start().instrument(span.clone()).await {
         error!("{}", e);

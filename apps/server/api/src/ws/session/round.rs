@@ -1,7 +1,7 @@
 use super::super::frame::FrameResult;
 use super::output_controller::TracedSender;
 use crate::llm::client::{ChatRequest, Client};
-use crate::record::collector::RecordCollector;
+use crate::record::observer::{LlmDeltaContext, SessionObserver, TtsDeltaContext};
 use crate::tts::Tts;
 use crate::util::llm::{EMOJI_MAP, analyze_emotion};
 use crate::ws::WsErrorCode;
@@ -32,7 +32,7 @@ pub struct Round {
     pub tts_state: Arc<Mutex<Option<TtsState>>>,
     pub speaking: Arc<AtomicBool>,
     pub end: Arc<AtomicBool>,
-    pub record: Option<RecordCollector>,
+    pub observers: Vec<Arc<dyn SessionObserver>>,
 }
 
 #[derive(Debug)]
@@ -81,7 +81,7 @@ impl Round {
         tx: TracedSender,
         client: Arc<Client>,
         tts: Arc<Box<dyn Tts>>,
-        record: Option<RecordCollector>,
+        observers: Vec<Arc<dyn SessionObserver>>,
     ) -> Self {
         Self {
             parent_id,
@@ -93,7 +93,7 @@ impl Round {
             tts_state: Arc::new(Mutex::new(None)),
             speaking: Arc::new(AtomicBool::new(false)),
             end: Arc::new(AtomicBool::new(false)),
-            record,
+            observers,
         }
     }
 
@@ -120,7 +120,7 @@ impl Round {
         let speaking = self.speaking.clone();
         let end = self.end.clone();
         let text = String::from(text);
-        let record = self.record.clone();
+        let observers = self.observers.clone();
         let round_id = self.id.clone();
         let span = span!(parent:None,Level::DEBUG, "socket", id=%session_id);
         tokio::spawn(
@@ -158,8 +158,6 @@ impl Round {
                     info!(target:"round","send tts state start failure");
                     stop_me.store(true, Ordering::Relaxed);
                 }
-                let mut record_llm_text = String::new();
-                let mut record_tts_pcm: Option<(Vec<f32>, u32)> = None;
                 while let Some(result) = tts_output.next().await {
                     match result {
                         Ok(result) => {
@@ -167,9 +165,18 @@ impl Round {
                                 break;
                             }
                             let text = result.text;
-                            record_llm_text.push_str(&text);
-                            if let Some((pcm, sr)) = &result.raw_pcm {
-                                record_tts_pcm = Some((pcm.clone(), *sr as u32));
+                            for observer in &observers {
+                                observer.on_llm_delta(&LlmDeltaContext {
+                                    round_id: round_id.clone(),
+                                    text: text.clone(),
+                                });
+                                if let Some((pcm, sr)) = &result.raw_pcm {
+                                    observer.on_tts_delta(&TtsDeltaContext {
+                                        round_id: round_id.clone(),
+                                        text: text.clone(),
+                                        raw_pcm: Some((pcm.clone(), *sr as u32)),
+                                    });
+                                }
                             }
                             let emotion = analyze_emotion(&text);
                             let session_id = session_id.clone();
@@ -309,20 +316,6 @@ impl Round {
                         if let Err(e) = result {
                             error!(target:"round","{:?}", e)
                         }
-                    }
-                }
-                // flush record data
-                if let Some(record) = &record {
-                    if !record_llm_text.is_empty() {
-                        record.collect_llm_text(&round_id, &record_llm_text);
-                    }
-                    if let Some((pcm, sr)) = &record_tts_pcm {
-                        record.collect_tts(&round_id, &record_llm_text, Some((pcm.clone(), *sr)));
-                    } else if !record_llm_text.is_empty() {
-                        record.collect_tts(&round_id, &record_llm_text, None);
-                    }
-                    if let Err(e) = record.finish_round(&round_id).await {
-                        error!(target:"round", "record finish_round failed: {:?}", e);
                     }
                 }
                 end.store(true, Ordering::Relaxed);

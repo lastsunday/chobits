@@ -55,6 +55,7 @@ use tracing_test::traced_test;
 use utoipa_axum::router::OpenApiRouter;
 
 use api::record::collector::RecordCollector;
+use api::record::observer::SessionObserver;
 use entity::{prelude::*, round_data};
 use sea_orm::entity::prelude::*;
 
@@ -1854,7 +1855,7 @@ where
 /// cargo test --test session_test -- test_full_flow --exact --ignored --nocapture
 async fn test_full_flow() -> anyhow::Result<()> {
     let (container, state) = setup_database().await;
-    let record = RecordCollector::new(state.conn.clone());
+    let record = Arc::new(RecordCollector::new(state.conn.clone())) as Arc<dyn SessionObserver>;
 
     let audio_config = Arc::new(AudioConfig {
         input_sample_rate: Some(16000),
@@ -1907,7 +1908,7 @@ async fn test_full_flow() -> anyhow::Result<()> {
             max_prompt_len: Some(3000),
         }))
         .with_audio_config(audio_config.clone())
-        .with_record(record)
+        .add_observer(record)
         .build();
 
     session.start().await?;
