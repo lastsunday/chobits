@@ -79,6 +79,7 @@ tasks:
       - ~:build
     options:
       cache: false
+      runInCI: false
 
   downloader-install:
     command: "cargo run --package chobits-server -- downloader install --data-dir ../../data"
