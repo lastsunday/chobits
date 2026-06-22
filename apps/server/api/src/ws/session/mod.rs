@@ -8,7 +8,8 @@ use crate::llm::client::{ClientBuilder, History};
 use crate::mcp::client::device::{DeviceMcpClient, DeviceMcpPhase};
 use crate::mcp::mcp_host::{McpHost, UnionMcpHost};
 use crate::record::observer::{
-    AsrContext, FrameContext, FrameDirection, RoundEndContext, RoundStartContext, SessionObserver,
+    AsrContext, FrameContext, FrameDirection, RoundEndContext, RoundMode, RoundStartContext,
+    SessionObserver,
 };
 use crate::tts::Tts;
 use chrono::Local;
@@ -103,6 +104,7 @@ impl SessionBuilder {
             seq: Arc::new(AtomicU64::new(1)),
             observers: self.observers,
             phase: Phase::Hello,
+            current_mode: RoundMode::Auto,
             latest_activity_time: Arc::new(Mutex::new(None)),
             history: Arc::new(Mutex::new(History {
                 preamble: Some(system_prompt.to_string()),
@@ -130,6 +132,7 @@ pub struct Session {
     seq: Arc<AtomicU64>,
     pub observers: Vec<Arc<dyn SessionObserver>>,
     phase: Phase,
+    current_mode: RoundMode,
     latest_activity_time: Arc<Mutex<Option<i64>>>,
     history: Arc<Mutex<History>>,
     output_cancel_token: CancellationToken,
@@ -179,9 +182,10 @@ impl Session {
         }
     }
 
-    pub async fn new_round(&mut self) {
+    pub async fn new_round(&mut self, mode: RoundMode) {
         info!(target:"session", "new round");
         self.stop_round().await;
+        self.current_mode = mode;
         let tx = self
             .output_tx
             .clone()
@@ -205,8 +209,9 @@ impl Session {
         for observer in &self.observers {
             observer.on_round_start(&RoundStartContext {
                 round_id: round_id.clone(),
-                user_id: Some(self.id.clone()),
+                session_id: Some(self.id.clone()),
                 client_info: None,
+                mode,
             });
         }
         self.current_round = Some(Box::new(Round::new(
@@ -250,12 +255,14 @@ impl Session {
         if let Some(round_id) = self.current_round.as_ref().map(|r| r.id.clone()) {
             let seq = self.seq.load(Ordering::Relaxed);
             for observer in &self.observers {
-                observer.on_frame(&FrameContext {
-                    round_id: round_id.clone(),
-                    seq,
-                    direction: FrameDirection::Inbound,
-                    detail: format!("{:?}", frame),
-                });
+                observer
+                    .on_frame(&FrameContext {
+                        round_id: round_id.clone(),
+                        seq,
+                        direction: FrameDirection::Inbound,
+                        detail: format!("{:?}", frame),
+                    })
+                    .await;
             }
         }
 
@@ -267,7 +274,7 @@ impl Session {
             }
             Frame::Abort(_) => {
                 info!(target:"session","abort");
-                self.new_round().await;
+                self.new_round(self.current_mode).await;
                 return;
             }
             Frame::Ping { .. } | Frame::Pong { .. } => return,

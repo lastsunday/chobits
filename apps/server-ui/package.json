@@ -7,5 +7,15 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit --project tsconfig.app.json",
     "preview": "vite preview"
+  },
+  "dependencies": {
+    "@dnd-kit/react": "^0.5.0",
+    "@tabler/icons-react": "^3.44.0",
+    "@types/styled-components": "^5.1.36",
+    "@waveform-playlist/browser": "^13.1.1",
+    "@waveform-playlist/core": "^12.2.0",
+    "styled-components": "^6.4.2",
+    "tone": "^15.1.22",
+    "wavesurfer.js": "^7.12.8"
   }
 }

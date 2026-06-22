@@ -6,14 +6,10 @@ use utoipa::ToSchema;
 use crate::schema::date_time_with_time_zone_or_null_schema;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize, ToSchema)]
-#[sea_orm(table_name = "round")]
+#[sea_orm(table_name = "session")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: String,
-    pub session_id: String,
-    pub mode: String,
-    #[sea_orm(column_type = "JsonBinary", nullable)]
-    pub client_info: Option<Json>,
     #[schema(schema_with = date_time_with_time_zone_or_null_schema)]
     pub create_datetime: Option<DateTimeWithTimeZone>,
     #[schema(schema_with = date_time_with_time_zone_or_null_schema)]

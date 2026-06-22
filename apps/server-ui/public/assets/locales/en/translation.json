@@ -48,37 +48,35 @@
   "logout": "Logout",
   "sessions": {
     "title": "Sessions",
-    "filter_user_id": "Filter by User ID",
-    "table": {
-      "id": "ID",
-      "user_id": "User",
-      "created": "Created",
-      "actions": "Actions"
-    },
+    "search": "Search Session ID",
+    "search_btn": "Search",
+    "date_from": "From",
+    "date_to": "To",
+    "sort_created_desc": "Newest first",
+    "sort_created_asc": "Oldest first",
+    "turn_count": "{{count}} turns",
+    "show_all": "Show all {{count}}",
+    "collapse": "Collapse",
+    "select_hint": "Select a session to view details",
     "detail": {
       "title": "Session Detail",
-      "round_id": "Round ID",
-      "user_id": "User ID",
+      "session_id": "Session ID",
       "created": "Created",
       "updated": "Updated",
-      "input_audio": "Input Audio",
-      "asr": "ASR",
-      "llm": "LLM",
-      "tts": "TTS",
+      "turn_count": "{{count}} turns",
       "play": "Play",
-      "no_audio": "No Audio",
-      "frames": "Frames",
       "back": "Back to List"
     },
-    "frame_table": {
-      "seq": "#",
-      "dir": "Direction",
-      "kind": "Kind",
-      "detail": "Detail"
+    "mode": {
+      "auto": "Auto",
+      "manual": "Manual",
+      "realtime": "Real-Time",
+      "text": "Text"
     },
     "timeline": {
       "business": "Business Events",
-      "frames": "Frames"
+      "frames": "Frames",
+      "no_data": "No playable data"
     }
   }
 }

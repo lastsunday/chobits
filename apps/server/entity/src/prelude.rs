@@ -4,4 +4,5 @@ pub use super::config::Entity as Config;
 pub use super::frame::Entity as Frame;
 pub use super::round::Entity as Round;
 pub use super::round_data::Entity as RoundData;
+pub use super::session::Entity as Session;
 pub use super::user::Entity as User;

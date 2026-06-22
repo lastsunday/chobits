@@ -92,6 +92,10 @@ async fn test_full_flow() -> anyhow::Result<()> {
         .add_observer(record)
         .build();
 
+    for observer in &session.observers {
+        observer.on_session_start(&session_id).await;
+    }
+
     session.start().await?;
     let mut output = session.output_frame().await;
 
@@ -152,9 +156,8 @@ async fn test_full_flow() -> anyhow::Result<()> {
 
     assert_eq!(rounds.len(), 1, "expected 1 round");
     assert_eq!(
-        rounds[0].user_id,
-        Some(session_id.clone()),
-        "round.user_id should match session_id"
+        rounds[0].session_id, session_id,
+        "round.session_id should match session_id"
     );
 
     let llm = data

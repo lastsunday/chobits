@@ -137,6 +137,9 @@ where
         .with_audio_config(ctx.audio_config.clone())
         .add_observer(Arc::new(record) as Arc<dyn SessionObserver>)
         .build();
+    for observer in &session.observers {
+        observer.on_session_start(&ctx.session_id).await;
+    }
     if let Err(e) = session.start().instrument(span.clone()).await {
         error!("{}", e);
         let result = write.close().await;

@@ -44,12 +44,15 @@ impl Session {
                             match mode {
                                 service::chobits::message::listen::ListenMode::Auto => {
                                     self.phase = Phase::Listen(ListenMode::Auto);
+                                    self.current_mode = RoundMode::Auto;
                                 }
                                 service::chobits::message::listen::ListenMode::Manual => {
                                     self.phase = Phase::Listen(ListenMode::Manual);
+                                    self.current_mode = RoundMode::Manual;
                                 }
                                 service::chobits::message::listen::ListenMode::RealTime => {
                                     self.phase = Phase::Listen(ListenMode::RealTime);
+                                    self.current_mode = RoundMode::RealTime;
                                 }
                             }
                             Box::pin(self.accept_frame(frame)).await;
@@ -67,12 +70,15 @@ impl Session {
                                 match mode {
                                     service::chobits::message::listen::ListenMode::Auto => {
                                         self.phase = Phase::Listen(ListenMode::Auto);
+                                        self.current_mode = RoundMode::Auto;
                                     }
                                     service::chobits::message::listen::ListenMode::Manual => {
                                         self.phase = Phase::Listen(ListenMode::Manual);
+                                        self.current_mode = RoundMode::Manual;
                                     }
                                     service::chobits::message::listen::ListenMode::RealTime => {
                                         self.phase = Phase::Listen(ListenMode::RealTime);
+                                        self.current_mode = RoundMode::RealTime;
                                     }
                                 }
                                 Box::pin(self.accept_frame(frame)).await;
@@ -81,6 +87,7 @@ impl Session {
                                 // eps32-c3 default listen mode is none
                                 // set listen mode to realtime
                                 self.phase = Phase::Listen(ListenMode::RealTime);
+                                self.current_mode = RoundMode::RealTime;
                                 Box::pin(self.accept_frame(frame)).await;
                             }
                         }
@@ -124,8 +131,9 @@ impl Session {
                             match mode {
                                 service::chobits::message::listen::ListenMode::Auto => {
                                     self.phase = Phase::Listen(ListenMode::Auto);
+                                    self.current_mode = RoundMode::Auto;
                                     self.update_latest_activity_time().await;
-                                    self.new_round().await;
+                                    self.new_round(RoundMode::Auto).await;
                                     if let Some(round) = &mut self.current_round {
                                         round.accept_command(Command::Wake { text: "Hello" }).await;
                                         let silence_voice_timeout = self
@@ -140,10 +148,12 @@ impl Session {
                                 }
                                 service::chobits::message::listen::ListenMode::Manual => {
                                     self.phase = Phase::Listen(ListenMode::Manual);
+                                    self.current_mode = RoundMode::Manual;
                                     self.listener.reset(None).await;
                                 }
                                 service::chobits::message::listen::ListenMode::RealTime => {
                                     self.phase = Phase::Listen(ListenMode::RealTime);
+                                    self.current_mode = RoundMode::RealTime;
                                 }
                             }
                         } else {
@@ -234,6 +244,7 @@ impl Session {
                             match mode {
                                 service::chobits::message::listen::ListenMode::Auto => {
                                     self.phase = Phase::Listen(ListenMode::Auto);
+                                    self.current_mode = RoundMode::Auto;
                                     let silence_voice_timeout = self
                                         .config
                                         .silence_voice_timeout
@@ -243,11 +254,12 @@ impl Session {
                                 }
                                 service::chobits::message::listen::ListenMode::Manual => {
                                     self.phase = Phase::Listen(ListenMode::Manual);
+                                    self.current_mode = RoundMode::Manual;
                                     self.listener.reset(None).await;
-                                    self.new_round().await;
                                 }
                                 service::chobits::message::listen::ListenMode::RealTime => {
                                     self.phase = Phase::Listen(ListenMode::RealTime);
+                                    self.current_mode = RoundMode::RealTime;
                                 }
                             }
                         } else {
@@ -266,7 +278,7 @@ impl Session {
                         let text = &listen_message.text;
                         match text {
                             Some(text) => {
-                                self.new_round().await;
+                                self.new_round(RoundMode::Text).await;
                                 //if match walk word
                                 if let Some(round) = &mut self.current_round {
                                     // handle send text
@@ -314,13 +326,16 @@ impl Session {
                             match mode {
                                 service::chobits::message::listen::ListenMode::Auto => {
                                     self.phase = Phase::Listen(ListenMode::Auto);
+                                    self.current_mode = RoundMode::Auto;
                                 }
                                 service::chobits::message::listen::ListenMode::Manual => {
                                     self.phase = Phase::Listen(ListenMode::Manual);
+                                    self.current_mode = RoundMode::Manual;
                                     self.listener.reset(None).await;
                                 }
                                 service::chobits::message::listen::ListenMode::RealTime => {
                                     self.phase = Phase::Listen(ListenMode::RealTime);
+                                    self.current_mode = RoundMode::RealTime;
                                 }
                             }
                         } else {
@@ -335,7 +350,7 @@ impl Session {
                         match text {
                             Some(text) => {
                                 self.update_latest_activity_time().await;
-                                self.new_round().await;
+                                self.new_round(self.current_mode).await;
                                 //if match walk word
                                 if let Some(round) = &mut self.current_round {
                                     // TODO: detech voice id
@@ -476,10 +491,12 @@ impl Session {
             .audio_config
             .input_sample_rate
             .expect("input sample rate is empty");
+
+        self.new_round(self.current_mode).await;
+
         let command = self.listener.get_result().await;
         match command {
             Ok(command) => {
-                self.new_round().await;
                 info!(                                target:"session",
 "command = {:?}", command.clone());
                 let round_id = self
@@ -502,7 +519,7 @@ impl Session {
                 let is_speech_clear = self.is_speech_clear(&command.text, command.prob);
                 if let Some(round) = &mut self.current_round {
                     if is_speech_clear {
-                        round.accept_command(Command::Chat { text }).await;
+                        round.accept_command(Command::AsrChat { text }).await;
                     } else {
                         round.accept_command(Command::ListenUnclear { text }).await;
                     }
@@ -512,6 +529,7 @@ impl Session {
             }
             Err(e) => {
                 error!("{:?}", e);
+                self.stop_round().await;
             }
         }
     }

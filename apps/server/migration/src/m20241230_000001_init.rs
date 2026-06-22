@@ -43,10 +43,23 @@ impl MigrationTrait for Migration {
         manager
             .create_table(
                 Table::create()
+                    .table(Session::Table)
+                    .if_not_exists()
+                    .col(string_uniq(Session::Id))
+                    .col(timestamp_with_time_zone_null(Session::CreateDatetime))
+                    .col(timestamp_with_time_zone_null(Session::UpdateDatetime))
+                    .primary_key(Index::create().name("pk-session-id").col(Session::Id))
+                    .to_owned(),
+            )
+            .await?;
+        manager
+            .create_table(
+                Table::create()
                     .table(Round::Table)
                     .if_not_exists()
                     .col(string_uniq(Round::Id))
-                    .col(string_null(Round::UserId))
+                    .col(string(Round::SessionId))
+                    .col(string(Round::Mode))
                     .col(json_binary_null(Round::ClientInfo))
                     .col(timestamp_with_time_zone_null(Round::CreateDatetime))
                     .col(timestamp_with_time_zone_null(Round::UpdateDatetime))
@@ -110,6 +123,9 @@ impl MigrationTrait for Migration {
             .drop_table(Table::drop().table(Round::Table).to_owned())
             .await?;
         manager
+            .drop_table(Table::drop().table(Session::Table).to_owned())
+            .await?;
+        manager
             .drop_table(Table::drop().table(Config::Table).to_owned())
             .await?;
         manager
@@ -142,10 +158,19 @@ enum User {
 }
 
 #[derive(DeriveIden)]
+enum Session {
+    Table,
+    Id,
+    CreateDatetime,
+    UpdateDatetime,
+}
+
+#[derive(DeriveIden)]
 enum Round {
     Table,
     Id,
-    UserId,
+    SessionId,
+    Mode,
     ClientInfo,
     CreateDatetime,
     UpdateDatetime,

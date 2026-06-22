@@ -1,487 +1,344 @@
 import { getAudioBlob } from '@/api';
-import type { Frame } from '@/data/frame';
-import type { Round } from '@/data/round';
 import type { RoundData } from '@/data/round-data';
-import { Badge, Box, Paper, Stack, Text, Tooltip } from '@mantine/core';
-import { useEffect, useMemo, useState } from 'react';
+import { ActionIcon, Box, Group, Stack, Text, Badge } from '@mantine/core';
+import { IconPlayerPlayFilled, IconPlayerPauseFilled, IconPlayerStop, IconZoomIn, IconZoomOut } from '@tabler/icons-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-
-// --- types ----------------------------------------------------
-
-interface BusinessItem {
-  id: string;
-  ts: number;
-  type: string;
-  text: string | null;
-  dataId: string | null;
-}
-
-interface FrameGroup {
-  key: string;
-  startTs: number;
-  endTs: number;
-  frameType: string;
-  dir: 'inbound' | 'outbound';
-  count: number;
-  seq: number;
-}
-
-type TimelineItem =
-  | { kind: 'group'; group: FrameGroup }
-  | { kind: 'single'; frame: Frame; frameType: string };
-
-// --- helpers ---------------------------------------------------
-
-function parseFrameType(detail: string): string {
-  const m = detail.match(/^(?:Frame::|Ok\()?(\w+)/);
-  return m?.[1] ?? '?';
-}
-
-function isType(detail: string, name: string): boolean {
-  return detail.startsWith(`Frame::${name}`) || detail.startsWith(`Ok(${name}`);
-}
-
-function getTs(e: { create_datetime: string | null }): number {
-  return new Date(e.create_datetime ?? 0).getTime();
-}
-
-// --- AudioButton ------------------------------------------------
-
-function AudioButton({ roundId, dataId, label }: { roundId: string; dataId: string; label: string }) {
-  const [url, setUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    let objUrl: string | null = null;
-    getAudioBlob(roundId, dataId)
-      .then((blob) => {
-        objUrl = URL.createObjectURL(blob);
-        setUrl(objUrl);
-      })
-      .catch(() => {});
-    return () => {
-      if (objUrl) URL.revokeObjectURL(objUrl);
-    };
-  }, [roundId, dataId]);
-
-  if (!url) return <Text size="xs" c="dimmed">{label}</Text>;
-
-  return (
-    <Stack gap={2}>
-      <Text size="xs">{label}</Text>
-      <audio src={url} controls style={{ height: 24, maxWidth: 160 }} />
-    </Stack>
-  );
-}
-
-// --- color / label helpers ---------------------------------------
-
-function businessColor(type: string): string {
-  switch (type) {
-    case 'input_audio': return 'grape';
-    case 'asr': return 'blue';
-    case 'llm': return 'teal';
-    case 'tts': return 'pink';
-    default: return 'gray';
-  }
-}
-
-function businessLabel(type: string): string {
-  switch (type) {
-    case 'input_audio': return 'Voice';
-    case 'asr': return 'ASR';
-    case 'llm': return 'LLM';
-    case 'tts': return 'TTS';
-    default: return type;
-  }
-}
-
-// --- sub-components ----------------------------------------------
-
-function formatTime(ms: number): string {
-  const s = Math.floor(ms / 1000);
-  const min = Math.floor(s / 60);
-  const sec = s % 60;
-  return min > 0 ? `${min}m${sec}s` : `${sec}s`;
-}
-
-function XAxis({
-  timeRange,
-  pct,
-}: {
-  timeRange: { min: number; duration: number };
-  pct: (ts: number) => number;
-}) {
-  const ticks = useMemo(() => {
-    const count = 6;
-    const step = timeRange.duration / count;
-    const result: { ts: number; left: number }[] = [];
-    for (let i = 0; i <= count; i++) {
-      const ts = timeRange.min + step * i;
-      result.push({ ts, left: pct(ts) });
-    }
-    return result;
-  }, [timeRange, pct]);
-
-  return (
-    <Box style={{ position: 'relative', height: 20 }}>
-      {ticks.map((tick, i) => (
-        <Box
-          key={i}
-          style={{
-            position: 'absolute',
-            left: `${tick.left}%`,
-            top: 0,
-            transform: 'translateX(-50%)',
-          }}
-        >
-          <Text size="xs" c="dimmed" style={{ fontSize: 10 }}>
-            {formatTime(tick.ts)}
-          </Text>
-        </Box>
-      ))}
-    </Box>
-  );
-}
-
-function BusinessBlock({
-  item,
-  roundId,
-  left,
-}: {
-  item: BusinessItem;
-  roundId: string;
-  left: number;
-}) {
-  const { t } = useTranslation();
-  const color = businessColor(item.type);
-  const label = businessLabel(item.type);
-
-  return (
-    <Tooltip label={item.text ?? label}>
-      <Paper
-        withBorder
-        shadow="sm"
-        p="xs"
-        radius="md"
-        style={{
-          position: 'absolute',
-          left: `${left}%`,
-          top: 18,
-          transform: 'translateX(-50%)',
-          minWidth: 60,
-          maxWidth: 200,
-          borderLeft: `3px solid var(--mantine-color-${color}-6)`,
-        }}
-      >
-        <Stack gap={2}>
-          <Badge size="sm" color={color} variant="light">
-            {label}
-          </Badge>
-          {item.type === 'input_audio' && item.dataId && (
-            <AudioButton roundId={roundId} dataId={item.dataId} label={t('sessions.detail.play')} />
-          )}
-          {item.type === 'tts' && (
-            <>
-              {item.text && (
-                <Text size="xs" lineClamp={2} style={{ maxWidth: 160 }}>
-                  {item.text}
-                </Text>
-              )}
-              {item.dataId && (
-                <AudioButton roundId={roundId} dataId={item.dataId} label={t('sessions.detail.play')} />
-              )}
-            </>
-          )}
-          {(item.type === 'asr' || item.type === 'llm') && item.text && (
-            <Text size="xs" lineClamp={2} style={{ maxWidth: 160 }}>
-              {item.text}
-            </Text>
-          )}
-        </Stack>
-      </Paper>
-    </Tooltip>
-  );
-}
-
-function FrameGroupBlock({
-  group,
-  left,
-  width,
-  roundId,
-  findDataId,
-}: {
-  group: FrameGroup;
-  left: number;
-  width: number;
-  roundId: string;
-  findDataId: (ts: number, dataType: string) => string | null;
-}) {
-  const { t } = useTranslation();
-  const color = group.dir === 'inbound' ? 'yellow' : 'cyan';
-  const dataType = group.frameType === 'Voice' ? 'input_audio' : 'tts';
-  const dataId = findDataId(group.startTs, dataType);
-
-  return (
-    <Tooltip label={`${group.frameType} \u00d7${group.count}`}>
-      <Paper
-        withBorder
-        shadow="sm"
-        p={4}
-        radius="sm"
-        style={{
-          position: 'absolute',
-          left: `${left}%`,
-          width: `${Math.max(width, 2)}%`,
-          top: group.dir === 'inbound' ? 14 : 50,
-          minWidth: 50,
-          maxWidth: 180,
-          borderTop: `2px solid var(--mantine-color-${color}-6)`,
-          opacity: 0.85,
-        }}
-      >
-        <Stack gap={2} align="center">
-          <Badge size="sm" color={color} variant="light">
-            {group.frameType} \u00d7{group.count}
-          </Badge>
-          {dataId && (
-            <AudioButton roundId={roundId} dataId={dataId} label={t('sessions.detail.play')} />
-          )}
-        </Stack>
-      </Paper>
-    </Tooltip>
-  );
-}
-
-function FrameMarker({
-  frame,
-  frameType,
-  left,
-}: {
-  frame: Frame;
-  frameType: string;
-  left: number;
-}) {
-  const color = frame.dir === 'inbound' ? 'yellow' : 'cyan';
-  const topPos = frame.dir === 'inbound' ? '12px' : '52px';
-  const arrow = frame.dir === 'inbound' ? '\u25B2' : '\u25BC';
-
-  return (
-    <Tooltip label={`#${frame.seq} ${frame.dir} ${frameType}`}>
-      <Box
-        style={{
-          position: 'absolute',
-          left: `${left}%`,
-          top: topPos,
-          transform: 'translateX(-50%)',
-          cursor: 'pointer',
-        }}
-      >
-        <Badge size="xs" color={color} variant="filled" style={{ fontSize: 9, padding: '0 2px' }}>
-          {arrow}{frameType.slice(0, 4)}
-        </Badge>
-      </Box>
-    </Tooltip>
-  );
-}
-
-// --- main component -----------------------------------------------
+import WaveSurfer from 'wavesurfer.js';
+import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions';
+import TimelinePlugin from 'wavesurfer.js/dist/plugins/timeline';
 
 interface TimelineProps {
-  round: Round;
+  roundId: string;
   dataItems: RoundData[];
-  frames: Frame[];
 }
 
-export function Timeline({ round, dataItems, frames }: TimelineProps) {
+const stepLabels: Record<string, string> = {
+  input_audio: '语音输入',
+  asr: '语音识别',
+  text: '文本输入',
+  llm: '大模型',
+  tts: '语音合成',
+};
+
+const stepColors: Record<string, string> = {
+  input_audio: '#40c057',
+  asr: '#15aabf',
+  text: '#fab005',
+  llm: '#7950f2',
+  tts: '#fa5252',
+};
+
+function formatBadgeText(data: RoundData): string {
+  const label = stepLabels[data.data_type] ?? data.data_type;
+  const meta = data.metadata;
+  const audioDurMs = meta?.audio_duration_ms as number | undefined;
+  const procMs = meta?.duration_ms as number | undefined;
+
+  if (data.data_type === 'input_audio') {
+    const dur = audioDurMs != null ? ` ${(audioDurMs / 1000).toFixed(1)}s` : '';
+    return `${label}${dur}`;
+  }
+
+  if (data.data_type === 'tts') {
+    const dur = audioDurMs != null ? ` ${(audioDurMs / 1000).toFixed(1)}s` : '';
+    const proc = procMs != null ? ` ⏱${(procMs / 1000).toFixed(procMs < 1000 ? 1 : 0)}s` : '';
+    return `${label}${dur}${proc}`;
+  }
+
+  if (data.text) {
+    const txt = data.text.length <= 10
+      ? ` "${data.text}"`
+      : ` "${data.text.slice(0, 10)}..."(${data.text.length}字)`;
+    const proc = procMs != null ? ` ⏱${(procMs / 1000).toFixed(procMs < 1000 ? 1 : 0)}s` : '';
+    return `${label}${txt}${proc}`;
+  }
+
+  return label;
+}
+
+interface ClipData {
+  id: string;
+  dataType: string;
+  color: string;
+  startMs: number;
+  endMs: number;
+  durationMs: number;
+  label: string;
+}
+
+function writeStr(view: DataView, off: number, s: string) {
+  for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i));
+}
+
+function audioBufferToWavBlob(buf: AudioBuffer): Blob {
+  const numCh = buf.numberOfChannels;
+  const sr = buf.sampleRate;
+  const bits = 16;
+  const bytesPer = bits / 8;
+  const blockAlign = numCh * bytesPer;
+  const dataLen = buf.length * blockAlign;
+  const totalLen = 44 + dataLen;
+  const ab = new ArrayBuffer(totalLen);
+  const v = new DataView(ab);
+  writeStr(v, 0, 'RIFF');
+  v.setUint32(4, totalLen - 8, true);
+  writeStr(v, 8, 'WAVE');
+  writeStr(v, 12, 'fmt ');
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true);
+  v.setUint16(22, numCh, true);
+  v.setUint32(24, sr, true);
+  v.setUint32(28, sr * blockAlign, true);
+  v.setUint16(32, blockAlign, true);
+  v.setUint16(34, bits, true);
+  writeStr(v, 36, 'data');
+  v.setUint32(40, dataLen, true);
+  let off = 44;
+  const chs: Float32Array[] = [];
+  for (let c = 0; c < numCh; c++) chs.push(buf.getChannelData(c));
+  for (let i = 0; i < buf.length; i++) {
+    for (let c = 0; c < numCh; c++) {
+      const s = Math.max(-1, Math.min(1, chs[c][i]));
+      v.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+      off += 2;
+    }
+  }
+  return new Blob([ab], { type: 'audio/wav' });
+}
+
+export function Timeline({ roundId, dataItems }: TimelineProps) {
   const { t } = useTranslation();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const wsRef = useRef<WaveSurfer | null>(null);
+  const blobUrlRef = useRef<string | null>(null);
 
-  // Build ordered business items
-  const business: BusinessItem[] = useMemo(
-    () =>
-      dataItems
-        .map((d) => ({
-          id: d.id,
-          ts: getTs(d),
-          type: d.data_type,
-          text: d.text,
-          dataId: d.id,
-        }))
-        .sort((a, b) => a.ts - b.ts),
-    [dataItems],
-  );
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isReady, setIsReady] = useState(false);
+  const [pixelsPerSecond, setPixelsPerSecond] = useState(80);
 
-  // Build frame groups (consecutive same-type / same-dir grouped)
-  const groups: TimelineItem[] = useMemo(() => {
-    const result: TimelineItem[] = [];
-    const voice: Frame[] = [];
-    const audio: Frame[] = [];
+  const sorted = useMemo(() => {
+    return [...dataItems]
+      .filter((d) => d.metadata?.duration_ms != null)
+      .sort((a, b) => ((a.metadata?.duration_ms as number) ?? 0) - ((b.metadata?.duration_ms as number) ?? 0));
+  }, [dataItems]);
 
-    const flushVoice = () => {
-      if (voice.length === 0) return;
-      result.push({
-        kind: 'group',
-        group: {
-          key: `voice-${voice[0].id}`,
-          startTs: getTs(voice[0]),
-          endTs: getTs(voice[voice.length - 1]),
-          frameType: 'Voice',
-          dir: 'inbound',
-          count: voice.length,
-          seq: voice[0].seq,
-        },
-      });
-      voice.length = 0;
-    };
+  const t0Ms = useMemo(() => {
+    let min = Infinity;
+    for (const d of sorted) min = Math.min(min, (d.metadata?.duration_ms as number) ?? 0);
+    return isFinite(min) ? min : 0;
+  }, [sorted]);
 
-    const flushAudio = () => {
-      if (audio.length === 0) return;
-      result.push({
-        kind: 'group',
-        group: {
-          key: `audio-${audio[0].id}`,
-          startTs: getTs(audio[0]),
-          endTs: getTs(audio[audio.length - 1]),
-          frameType: 'AudioResult',
-          dir: 'outbound',
-          count: audio.length,
-          seq: audio[0].seq,
-        },
-      });
-      audio.length = 0;
-    };
-
-    for (const f of frames) {
-      const detail = f.detail ?? '';
-      if (isType(detail, 'Voice')) {
-        flushAudio();
-        voice.push(f);
-      } else if (isType(detail, 'AudioResult')) {
-        flushVoice();
-        audio.push(f);
-      } else if (isType(detail, 'Hello') || isType(detail, 'HelloResult')) {
-        flushVoice(); flushAudio();
-        result.push({ kind: 'single', frame: f, frameType: parseFrameType(detail) });
-      } else if (isType(detail, 'Close') || isType(detail, 'CloseResult')) {
-        flushVoice(); flushAudio();
-        result.push({ kind: 'single', frame: f, frameType: 'Close' });
-      } else if (isType(detail, 'Abort')) {
-        flushVoice(); flushAudio();
-        result.push({ kind: 'single', frame: f, frameType: 'Abort' });
+  const clips = useMemo(() => {
+    const result: ClipData[] = [];
+    for (let i = 0; i < sorted.length; i++) {
+      const d = sorted[i];
+      const dt = (d.metadata?.duration_ms as number) ?? 0;
+      let durMs: number;
+      if (d.data_type === 'input_audio' || d.data_type === 'tts') {
+        durMs = (d.metadata?.audio_duration_ms as number) ?? 500;
       } else {
-        flushVoice(); flushAudio();
-        result.push({ kind: 'single', frame: f, frameType: parseFrameType(detail) });
+        const next = sorted[i + 1];
+        if (next) {
+          durMs = ((next.metadata?.duration_ms as number) ?? 0) - dt;
+        } else {
+          durMs = 300;
+        }
       }
+      durMs = Math.max(durMs, 10);
+      const startMs = dt - t0Ms;
+      result.push({
+        id: d.id,
+        dataType: d.data_type,
+        color: stepColors[d.data_type] ?? '#868e96',
+        startMs,
+        endMs: startMs + durMs,
+        durationMs: durMs,
+        label: stepLabels[d.data_type] ?? d.data_type,
+      });
     }
-    flushVoice();
-    flushAudio();
-
     return result;
-  }, [frames]);
+  }, [sorted, t0Ms]);
 
-  // Compute time range
-  const timeRange = useMemo(() => {
-    const allTs: number[] = [];
-    for (const b of business) allTs.push(b.ts);
-    for (const item of groups) {
-      if (item.kind === 'group') {
-        allTs.push(item.group.startTs);
-        allTs.push(item.group.endTs);
-      } else {
-        allTs.push(getTs(item.frame));
+  const totalDurationMs = useMemo(() => {
+    if (clips.length === 0) return 1000;
+    return Math.max(...clips.map((c) => c.endMs), 1000);
+  }, [clips]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    container.innerHTML = '';
+    let cancelled = false;
+
+    (async () => {
+      const audioSteps = sorted.filter(
+        (d) => (d.data_type === 'input_audio' || d.data_type === 'tts') && d.create_datetime,
+      );
+      const audioMap = new Map<string, AudioBuffer>();
+
+      for (const d of audioSteps) {
+        try {
+          const blob = await getAudioBlob(d.round_id, d.id);
+          const arrayBuf = await blob.arrayBuffer();
+          const dec = new AudioContext();
+          const ab = await dec.decodeAudioData(arrayBuf);
+          await dec.close();
+          audioMap.set(d.id, ab);
+        } catch {
+          // skip failed clips
+        }
       }
-    }
-    if (allTs.length === 0) return { min: 0, max: 1, duration: 1 };
-    let min = allTs[0];
-    let max = allTs[0];
-    for (const t of allTs) {
-      if (t < min) min = t;
-      if (t > max) max = t;
-    }
-    if (min === max) return { min, max: max + 1, duration: 1 };
-    return { min, max, duration: max - min };
-  }, [business, groups]);
 
-  const pct = (ts: number) => ((ts - timeRange.min) / timeRange.duration) * 100;
-  const widthPct = (start: number, end: number) =>
-    ((end - start) / timeRange.duration) * 100;
+      if (cancelled) return;
 
-  const findDataId = (ts: number, dataType: string): string | null => {
-    let best: BusinessItem | null = null;
-    let bestDist = Infinity;
-    for (const b of business) {
-      if (b.type !== dataType) continue;
-      const dist = Math.abs(b.ts - ts);
-      if (dist < bestDist) {
-        bestDist = dist;
-        best = b;
+      const sampleRate = 44100;
+      const totalSamples = Math.ceil((totalDurationMs / 1000) * sampleRate);
+
+      let combined: AudioBuffer;
+      if (totalSamples < 1) return;
+
+      const offline = new OfflineAudioContext(1, totalSamples, sampleRate);
+      for (const clip of clips) {
+        const buf = audioMap.get(clip.id);
+        if (!buf) continue;
+        const src = offline.createBufferSource();
+        src.buffer = buf;
+        src.connect(offline.destination);
+        src.start(clip.startMs / 1000);
       }
-    }
-    return best?.dataId ?? null;
-  };
+
+      try {
+        combined = await offline.startRendering();
+      } catch {
+        if (cancelled) return;
+        combined = offline.createBuffer(1, totalSamples, sampleRate);
+      }
+
+      if (cancelled) return;
+
+      const wavBlob = audioBufferToWavBlob(combined);
+
+      const regions = RegionsPlugin.create();
+      const timeline = TimelinePlugin.create({
+        height: 20,
+        formatTimeCallback: (sec: number) => `${sec.toFixed(0)}s`,
+      });
+
+      const ws = WaveSurfer.create({
+        container,
+        waveColor: '#dee2e6',
+        progressColor: '#4a9eff',
+        fillParent: true,
+        minPxPerSec: 10,
+        autoScroll: true,
+        autoCenter: false,
+        plugins: [regions, timeline],
+        backend: 'WebAudio',
+      });
+
+      await ws.loadBlob(wavBlob);
+
+      if (cancelled) { ws.destroy(); return; }
+
+      for (const clip of clips) {
+        const el = document.createElement('span');
+        el.textContent = clip.label;
+        el.style.cssText = 'font-size:10px;color:#fff;font-weight:600;line-height:1.4';
+        regions.addRegion({
+          start: clip.startMs / 1000,
+          end: clip.endMs / 1000,
+          color: clip.color + '30',
+          content: el,
+          drag: false,
+          resize: false,
+        });
+      }
+
+      ws.zoom(pixelsPerSecond);
+
+      ws.on('play', () => setIsPlaying(true));
+      ws.on('pause', () => setIsPlaying(false));
+      ws.on('finish', () => setIsPlaying(false));
+
+      wsRef.current = ws;
+      setIsReady(true);
+    })();
+
+    return () => {
+      cancelled = true;
+      wsRef.current?.destroy();
+      wsRef.current = null;
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = null;
+      }
+      setIsReady(false);
+      setIsPlaying(false);
+    };
+  }, [roundId]);
+
+  useEffect(() => {
+    wsRef.current?.zoom(pixelsPerSecond);
+  }, [pixelsPerSecond]);
+
+  const handlePlay = () => wsRef.current?.play();
+  const handlePause = () => wsRef.current?.pause();
+  const handleStop = () => wsRef.current?.stop();
 
   return (
-    <Box style={{ overflowX: 'auto', overflowY: 'visible' }}>
-      <Box style={{ position: 'relative', minWidth: 600, width: '100%' }}>
-        <XAxis timeRange={timeRange} pct={pct} />
+    <Stack gap={4}>
+      <Group justify="flex-end" gap={4}>
+        <ActionIcon variant="subtle" color="gray" size="sm" onClick={() => setPixelsPerSecond((z) => Math.max(z / 1.5, 10))}>
+          <IconZoomOut />
+        </ActionIcon>
+        <ActionIcon variant="subtle" color="gray" size="sm" onClick={() => setPixelsPerSecond((z) => Math.min(z * 1.5, 1000))}>
+          <IconZoomIn />
+        </ActionIcon>
+        <ActionIcon variant="subtle" color="gray" size="sm" onClick={handlePlay} disabled={isPlaying}>
+          <IconPlayerPlayFilled />
+        </ActionIcon>
+        <ActionIcon variant="subtle" color="gray" size="sm" onClick={handlePause} disabled={!isPlaying}>
+          <IconPlayerPauseFilled />
+        </ActionIcon>
+        <ActionIcon variant="subtle" color="gray" size="sm" onClick={handleStop} disabled={!isPlaying}>
+          <IconPlayerStop />
+        </ActionIcon>
+      </Group>
 
-        {/* Track 1: Business Events */}
-        <Box
-          style={{
-            position: 'relative',
-            height: 80,
-            borderBottom: '1px solid var(--mantine-color-gray-3)',
-            marginTop: 4,
-          }}
-        >
-          <Text size="xs" c="dimmed" style={{ position: 'absolute', left: 0, top: -2, fontSize: 10 }}>
-            {t('sessions.timeline.business')}
-          </Text>
-          {business.map((b) => (
-            <BusinessBlock
-              key={b.id}
-              item={b}
-              roundId={round.id}
-              left={pct(b.ts)}
-            />
+      {sorted.length > 0 && (
+        <Group gap={4} align="center" wrap="wrap">
+          {sorted.map((d, i) => (
+            <Group key={d.id} gap={2} wrap="nowrap">
+              {i > 0 && <Text c="dimmed" size="xs">→</Text>}
+              <Badge
+                color={stepColors[d.data_type] ?? 'gray'}
+                variant="light"
+                size="sm"
+                style={{ textTransform: 'none' }}
+              >
+                {formatBadgeText(d)}
+              </Badge>
+            </Group>
           ))}
-        </Box>
+        </Group>
+      )}
 
-        {/* Track 2: Frames */}
-        <Box
-          style={{
-            position: 'relative',
-            height: 100,
-            marginTop: 4,
-          }}
-        >
-          <Text size="xs" c="dimmed" style={{ position: 'absolute', left: 0, top: -2, fontSize: 10 }}>
-            {t('sessions.timeline.frames')}
-          </Text>
-          {groups.map((item) => {
-            if (item.kind === 'group') {
-              const g = item.group;
-              return (
-                <FrameGroupBlock
-                  key={g.key}
-                  group={g}
-                  left={pct(g.startTs)}
-                  width={widthPct(g.startTs, g.endTs)}
-                  roundId={round.id}
-                  findDataId={findDataId}
-                />
-              );
-            }
-            return (
-              <FrameMarker
-                key={item.frame.id}
-                frame={item.frame}
-                frameType={item.frameType}
-                left={pct(getTs(item.frame))}
-              />
-            );
-          })}
-        </Box>
-      </Box>
-    </Box>
+      <Box
+        ref={containerRef}
+        style={{
+          minHeight: 80,
+          borderRadius: 4,
+          overflow: 'hidden',
+        }}
+      />
+
+      {!isReady && sorted.length > 0 && (
+        <Text size="sm" c="dimmed" ta="center" py="sm">
+          {t('loading')}
+        </Text>
+      )}
+    </Stack>
   );
 }

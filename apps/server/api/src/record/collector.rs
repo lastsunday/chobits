@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
+use std::time::Instant;
 
 use async_trait::async_trait;
 use sea_orm::{ActiveValue::Set, DatabaseConnection, entity::prelude::*};
@@ -11,6 +12,7 @@ use super::wav::pcm_f32_to_wav;
 use entity::frame;
 use entity::round;
 use entity::round_data;
+use entity::session;
 use framework::id::gen_id;
 
 const MAX_FRAMES_PER_ROUND: usize = 5000;
@@ -21,20 +23,78 @@ struct FrameEntry {
     detail: String,
 }
 
+struct RoundStep {
+    step: String,
+    text: String,
+    pcm: Vec<f32>,
+    sample_rate: Option<u32>,
+    confidence: Option<f32>,
+    first_event_at: Instant,
+    last_event_at: Instant,
+    has_text: bool,
+    has_pcm: bool,
+}
+
 struct RoundBuffer {
     round_id: String,
-    user_id: Option<String>,
+    session_id: Option<String>,
     client_info: Option<JsonValue>,
-
-    input_audio_wav: Option<Vec<u8>>,
-    asr_text: Option<String>,
-    asr_confidence: Option<f32>,
-
-    llm_text: String,
-    tts_text: String,
-    tts_raw_pcm: Option<(Vec<f32>, u32)>,
-
+    mode: String,
+    round_start_at: Instant,
+    steps: Vec<RoundStep>,
     frames: Vec<FrameEntry>,
+}
+
+impl RoundBuffer {
+    fn step_idx(&self, name: &str) -> Option<usize> {
+        self.steps.iter().position(|s| s.step == name)
+    }
+
+    fn step_mut(&mut self, name: &str) -> &mut RoundStep {
+        let idx = if let Some(pos) = self.step_idx(name) {
+            pos
+        } else {
+            let now = Instant::now();
+            let pos = self.steps.len();
+            self.steps.push(RoundStep {
+                step: name.to_string(),
+                text: String::new(),
+                pcm: Vec::new(),
+                sample_rate: None,
+                confidence: None,
+                first_event_at: now,
+                last_event_at: now,
+                has_text: false,
+                has_pcm: false,
+            });
+            pos
+        };
+        let s = &mut self.steps[idx];
+        s.last_event_at = Instant::now();
+        s
+    }
+
+    fn elapsed_ms(&self, name: &str) -> Option<i64> {
+        self.step_idx(name).map(|idx| {
+            let s = &self.steps[idx];
+            let elapsed = s.first_event_at.duration_since(self.round_start_at);
+            elapsed.as_millis() as i64
+        })
+    }
+
+    fn step_has(&self, name: &str, field: fn(&RoundStep) -> bool) -> bool {
+        self.steps.iter().any(|s| s.step == name && field(s))
+    }
+
+    fn step_text(&self, name: &str) -> Option<String> {
+        self.steps.iter().find(|s| s.step == name).and_then(|s| {
+            if s.has_text && !s.text.is_empty() {
+                Some(s.text.clone())
+            } else {
+                None
+            }
+        })
+    }
 }
 
 #[derive(Clone)]
@@ -51,29 +111,23 @@ impl RecordCollector {
         }
     }
 
-    pub fn conn(&self) -> &DatabaseConnection {
-        &self.conn
-    }
-
     fn start_round(
         &self,
         round_id: String,
-        user_id: Option<String>,
+        session_id: Option<String>,
         client_info: Option<JsonValue>,
+        mode: &str,
     ) {
         let mut pending = self.pending.lock().expect("pending lock");
         pending.insert(
             round_id.clone(),
             RoundBuffer {
                 round_id,
-                user_id,
+                session_id,
                 client_info,
-                input_audio_wav: None,
-                asr_text: None,
-                asr_confidence: None,
-                llm_text: String::new(),
-                tts_text: String::new(),
-                tts_raw_pcm: None,
+                mode: mode.to_string(),
+                round_start_at: Instant::now(),
+                steps: Vec::new(),
                 frames: Vec::new(),
             },
         );
@@ -87,47 +141,77 @@ impl RecordCollector {
         text: String,
         confidence: f32,
     ) {
-        let wav = pcm_f32_to_wav(&voice_pcm, sample_rate);
         let mut pending = self.pending.lock().expect("pending lock");
         if let Some(buf) = pending.get_mut(round_id) {
-            buf.input_audio_wav = Some(wav);
-            buf.asr_text = Some(text);
-            buf.asr_confidence = Some(confidence);
+            let io = buf.step_mut("input_audio");
+            io.pcm = voice_pcm;
+            io.sample_rate = Some(sample_rate);
+            io.has_pcm = true;
+
+            let asr = buf.step_mut("asr");
+            asr.text = text;
+            asr.confidence = Some(confidence);
+            asr.has_text = true;
+        }
+    }
+
+    fn collect_text(&self, round_id: &str, text: &str) {
+        let mut pending = self.pending.lock().expect("pending lock");
+        if let Some(buf) = pending.get_mut(round_id) {
+            let t = buf.step_mut("text");
+            t.text = text.to_string();
+            t.has_text = true;
         }
     }
 
     fn collect_llm_text(&self, round_id: &str, text: &str) {
         let mut pending = self.pending.lock().expect("pending lock");
         if let Some(buf) = pending.get_mut(round_id) {
-            buf.llm_text.push_str(text);
+            let llm = buf.step_mut("llm");
+            llm.text.push_str(text);
+            llm.has_text = true;
         }
     }
 
     fn collect_tts(&self, round_id: &str, text: &str, raw_pcm: Option<(Vec<f32>, u32)>) {
         let mut pending = self.pending.lock().expect("pending lock");
         if let Some(buf) = pending.get_mut(round_id) {
-            buf.tts_text.push_str(text);
+            let tts = buf.step_mut("tts");
+            tts.text.push_str(text);
+            tts.has_text = true;
             if let Some((new_pcm, sr)) = raw_pcm {
-                match &mut buf.tts_raw_pcm {
-                    Some((existing_pcm, _)) => existing_pcm.extend(new_pcm),
-                    None => buf.tts_raw_pcm = Some((new_pcm, sr)),
-                }
+                tts.pcm.extend(new_pcm);
+                tts.sample_rate = Some(sr);
+                tts.has_pcm = true;
             }
         }
     }
 
-    fn record_frame(&self, round_id: &str, seq: u64, is_inbound: bool, detail: &str) {
-        let mut pending = self.pending.lock().expect("pending lock");
-        if let Some(buf) = pending.get_mut(round_id) {
-            if buf.frames.len() >= MAX_FRAMES_PER_ROUND {
+    async fn record_frame(&self, round_id: &str, seq: u64, is_inbound: bool, detail: &str) {
+        let frame_to_insert = {
+            let mut pending = self.pending.lock().expect("pending lock");
+            if let Some(buf) = pending.get_mut(round_id) {
+                if buf.frames.len() >= MAX_FRAMES_PER_ROUND {
+                    return;
+                }
+                buf.frames.push(FrameEntry {
+                    seq,
+                    is_inbound,
+                    detail: detail.to_string(),
+                });
                 return;
             }
-            buf.frames.push(FrameEntry {
-                seq,
-                is_inbound,
-                detail: detail.to_string(),
-            });
-        }
+            let dir_str = if is_inbound { "inbound" } else { "outbound" };
+            frame::ActiveModel {
+                round_id: Set(round_id.to_string()),
+                seq: Set(seq as i32),
+                dir: Set(dir_str.to_string()),
+                kind: Set("frame".to_string()),
+                detail: Set(Some(detail.to_string())),
+                ..Default::default()
+            }
+        };
+        let _ = frame_to_insert.insert(&self.conn).await;
     }
 
     async fn finish_round(&self, round_id: &str) -> Result<(), anyhow::Error> {
@@ -148,101 +232,156 @@ impl RecordCollector {
     ) -> Result<(), anyhow::Error> {
         let now = chrono::Local::now().fixed_offset();
 
-        let llm_text = (!buffer.llm_text.is_empty()).then_some(buffer.llm_text.as_str());
-        let tts_text = (!buffer.tts_text.is_empty()).then_some(buffer.tts_text.as_str());
-
-        // Insert round
         round::ActiveModel {
             id: Set(buffer.round_id.clone()),
-            user_id: Set(buffer.user_id.clone()),
+            session_id: Set(buffer.session_id.clone().unwrap_or_default()),
             client_info: Set(buffer.client_info.clone()),
+            mode: Set(buffer.mode.clone()),
             create_datetime: Set(Some(now)),
             update_datetime: Set(Some(now)),
         }
         .insert(conn)
         .await?;
 
-        // Insert round_data: input_audio + asr
-        if let Some(wav) = &buffer.input_audio_wav {
-            let meta = serde_json::json!({
-                "format": "wav",
-            });
+        let has_input_audio = buffer.step_has("input_audio", |s| s.has_pcm);
+        let has_asr_text = buffer.step_has("asr", |s| s.has_text);
+
+        if has_input_audio {
+            let io = buffer
+                .steps
+                .iter()
+                .find(|s| s.step == "input_audio")
+                .unwrap();
+            let wav = pcm_f32_to_wav(&io.pcm, io.sample_rate.unwrap_or(16000));
+            let mut meta = serde_json::json!({"format": "wav"});
+            let sr = io.sample_rate.unwrap_or(16000) as f64;
+            if !io.pcm.is_empty() {
+                let dur_ms = (io.pcm.len() as f64 / sr * 1000.0) as i64;
+                meta["audio_duration_ms"] = serde_json::json!(dur_ms);
+                meta["duration_ms"] = serde_json::json!(-dur_ms);
+            }
             round_data::ActiveModel {
                 id: Set(gen_id()),
                 round_id: Set(buffer.round_id.clone()),
                 data_type: Set("input_audio".to_string()),
-                data: Set(Some(wav.clone())),
-                text: Set(buffer.asr_text.clone()),
+                data: Set(Some(wav)),
+                text: Set(buffer.step_text("asr")),
                 metadata: Set(Some(meta)),
                 ..Default::default()
             }
             .insert(conn)
             .await?;
-        } else if let Some(text) = &buffer.asr_text {
-            let meta = buffer
-                .asr_confidence
-                .map(|c| serde_json::json!({"confidence": c}));
+        }
+        if has_asr_text {
+            let confidence = buffer
+                .steps
+                .iter()
+                .find(|s| s.step == "asr")
+                .and_then(|s| s.confidence);
+            let mut meta = confidence
+                .map(|c| serde_json::json!({"confidence": c}))
+                .unwrap_or(serde_json::json!({}));
+            if let Some(ms) = buffer.elapsed_ms("asr") {
+                meta["duration_ms"] = serde_json::json!(ms);
+            }
             round_data::ActiveModel {
                 id: Set(gen_id()),
                 round_id: Set(buffer.round_id.clone()),
                 data_type: Set("asr".to_string()),
                 data: Set(None),
-                text: Set(Some(text.clone())),
-                metadata: Set(meta),
-                ..Default::default()
-            }
-            .insert(conn)
-            .await?;
-        }
-
-        // Insert round_data: llm
-        if let Some(text) = llm_text {
-            round_data::ActiveModel {
-                id: Set(gen_id()),
-                round_id: Set(buffer.round_id.clone()),
-                data_type: Set("llm".to_string()),
-                data: Set(None),
-                text: Set(Some(text.to_string())),
-                metadata: Set(None),
-                ..Default::default()
-            }
-            .insert(conn)
-            .await?;
-        }
-
-        // Insert round_data: tts
-        if let Some((pcm, sample_rate)) = &buffer.tts_raw_pcm {
-            let wav = pcm_f32_to_wav(pcm, *sample_rate);
-            let meta = serde_json::json!({
-                "format": "wav",
-                "sample_rate": sample_rate,
-            });
-            round_data::ActiveModel {
-                id: Set(gen_id()),
-                round_id: Set(buffer.round_id.clone()),
-                data_type: Set("tts".to_string()),
-                data: Set(Some(wav)),
-                text: Set(tts_text.map(String::from)),
+                text: Set(buffer.step_text("asr")),
                 metadata: Set(Some(meta)),
                 ..Default::default()
             }
             .insert(conn)
             .await?;
-        } else if let Some(text) = tts_text {
+        }
+
+        let has_text = buffer.step_has("text", |s| s.has_text);
+        if has_text {
+            let text = buffer.steps.iter().find(|s| s.step == "text").unwrap();
+            let mut meta = serde_json::json!({});
+            if let Some(ms) = buffer.elapsed_ms("text") {
+                meta["duration_ms"] = serde_json::json!(ms);
+            }
             round_data::ActiveModel {
                 id: Set(gen_id()),
                 round_id: Set(buffer.round_id.clone()),
-                data_type: Set("tts".to_string()),
+                data_type: Set("text".to_string()),
                 data: Set(None),
-                text: Set(Some(text.to_string())),
-                metadata: Set(None),
+                text: Set(Some(text.text.clone())),
+                metadata: Set(Some(meta)),
                 ..Default::default()
             }
             .insert(conn)
             .await?;
         }
 
-        // Insert frames
+        if let Some(text) = buffer.step_text("llm") {
+            let mut meta = serde_json::json!({});
+            if let Some(ms) = buffer.elapsed_ms("llm") {
+                meta["duration_ms"] = serde_json::json!(ms);
+            }
+            round_data::ActiveModel {
+                id: Set(gen_id()),
+                round_id: Set(buffer.round_id.clone()),
+                data_type: Set("llm".to_string()),
+                data: Set(None),
+                text: Set(Some(text)),
+                metadata: Set(Some(meta)),
+                ..Default::default()
+            }
+            .insert(conn)
+            .await?;
+        }
+
+        let has_tts_pcm = buffer.step_has("tts", |s| s.has_pcm);
+        let has_tts_text = buffer.step_has("tts", |s| s.has_text);
+
+        if has_tts_pcm {
+            let tts = buffer.steps.iter().find(|s| s.step == "tts").unwrap();
+            let wav = pcm_f32_to_wav(&tts.pcm, tts.sample_rate.unwrap_or(24000));
+            let mut meta = serde_json::json!({
+                "format": "wav",
+                "sample_rate": tts.sample_rate,
+            });
+            let sr = tts.sample_rate.unwrap_or(24000) as f64;
+            if !tts.pcm.is_empty() {
+                meta["audio_duration_ms"] =
+                    serde_json::json!((tts.pcm.len() as f64 / sr * 1000.0) as i64);
+            }
+            if let Some(ms) = buffer.elapsed_ms("tts") {
+                meta["duration_ms"] = serde_json::json!(ms);
+            }
+            round_data::ActiveModel {
+                id: Set(gen_id()),
+                round_id: Set(buffer.round_id.clone()),
+                data_type: Set("tts".to_string()),
+                data: Set(Some(wav)),
+                text: Set(buffer.step_text("tts")),
+                metadata: Set(Some(meta)),
+                ..Default::default()
+            }
+            .insert(conn)
+            .await?;
+        } else if has_tts_text {
+            let mut meta = serde_json::json!({});
+            if let Some(ms) = buffer.elapsed_ms("tts") {
+                meta["duration_ms"] = serde_json::json!(ms);
+            }
+            round_data::ActiveModel {
+                id: Set(gen_id()),
+                round_id: Set(buffer.round_id.clone()),
+                data_type: Set("tts".to_string()),
+                data: Set(None),
+                text: Set(buffer.step_text("tts")),
+                metadata: Set(Some(meta)),
+                ..Default::default()
+            }
+            .insert(conn)
+            .await?;
+        }
+
         for entry in &buffer.frames {
             let dir_str = if entry.is_inbound {
                 "inbound"
@@ -267,12 +406,27 @@ impl RecordCollector {
 
 #[async_trait]
 impl SessionObserver for RecordCollector {
+    async fn on_session_start(&self, session_id: &str) {
+        session::ActiveModel {
+            id: Set(session_id.to_string()),
+            ..Default::default()
+        }
+        .insert(&self.conn)
+        .await
+        .ok();
+    }
+
     fn on_round_start(&self, ctx: &RoundStartContext) {
         self.start_round(
             ctx.round_id.clone(),
-            ctx.user_id.clone(),
+            ctx.session_id.clone(),
             ctx.client_info.clone(),
+            ctx.mode.as_str(),
         );
+    }
+
+    fn on_text_input(&self, ctx: &TextInputContext) {
+        self.collect_text(&ctx.round_id, &ctx.text);
     }
 
     fn on_asr(&self, ctx: &AsrContext) {
@@ -293,9 +447,10 @@ impl SessionObserver for RecordCollector {
         self.collect_tts(&ctx.round_id, &ctx.text, ctx.raw_pcm.clone());
     }
 
-    fn on_frame(&self, ctx: &FrameContext) {
+    async fn on_frame(&self, ctx: &FrameContext) {
         let is_inbound = matches!(ctx.direction, FrameDirection::Inbound);
-        self.record_frame(&ctx.round_id, ctx.seq, is_inbound, &ctx.detail);
+        self.record_frame(&ctx.round_id, ctx.seq, is_inbound, &ctx.detail)
+            .await;
     }
 
     async fn on_round_end(&self, ctx: &RoundEndContext) -> Result<(), anyhow::Error> {

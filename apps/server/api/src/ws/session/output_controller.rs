@@ -46,12 +46,14 @@ impl TracedSender {
             let detail = format!("{:?}", &item);
             let seq = self.seq.fetch_add(1, Ordering::Relaxed);
             for observer in &self.observers {
-                observer.on_frame(&FrameContext {
-                    round_id: round_id.clone(),
-                    seq,
-                    direction: FrameDirection::Outbound,
-                    detail: detail.clone(),
-                });
+                observer
+                    .on_frame(&FrameContext {
+                        round_id: round_id.clone(),
+                        seq,
+                        direction: FrameDirection::Outbound,
+                        detail: detail.clone(),
+                    })
+                    .await;
             }
         }
         tokio::select! {

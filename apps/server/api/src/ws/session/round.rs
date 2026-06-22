@@ -1,7 +1,9 @@
 use super::super::frame::FrameResult;
 use super::output_controller::TracedSender;
 use crate::llm::client::{ChatRequest, Client};
-use crate::record::observer::{LlmDeltaContext, RoundEndContext, SessionObserver, TtsDeltaContext};
+use crate::record::observer::{
+    LlmDeltaContext, RoundEndContext, SessionObserver, TextInputContext, TtsDeltaContext,
+};
 use crate::tts::Tts;
 use crate::util::llm::{EMOJI_MAP, analyze_emotion};
 use crate::ws::WsErrorCode;
@@ -41,6 +43,7 @@ pub struct Round {
 #[derive(Debug)]
 pub enum Command<'a> {
     Chat { text: &'a str },
+    AsrChat { text: &'a str },
     Wake { text: &'a str },
     ListenUnclear { text: &'a str },
 }
@@ -108,9 +111,18 @@ impl Round {
 
     pub async fn accept_command<'a>(&mut self, command: Command<'a>) {
         match command {
-            Command::Chat { text } | Command::Wake { text } | Command::ListenUnclear { text } => {
+            Command::Chat { text } => {
+                for observer in &self.observers {
+                    observer.on_text_input(&TextInputContext {
+                        round_id: self.id.clone(),
+                        text: text.to_string(),
+                    });
+                }
                 self.llm_tts_handle(text).await
             }
+            Command::AsrChat { text }
+            | Command::Wake { text }
+            | Command::ListenUnclear { text } => self.llm_tts_handle(text).await,
         }
     }
 
