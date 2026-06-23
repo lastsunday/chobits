@@ -4,7 +4,6 @@ pub mod data;
 pub mod database;
 pub mod deadlock;
 pub mod error;
-pub mod i18n;
 pub mod id;
 pub mod info;
 pub mod log;

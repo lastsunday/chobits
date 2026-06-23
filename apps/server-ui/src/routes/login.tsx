@@ -66,7 +66,6 @@ function RouteComponent() {
 
       await navigate({ to: search.redirect || fallback })
     } catch (error) {
-      console.error('Error logging in: ', error)
       notifications.show({
         color: "red",
         title: t('error'),

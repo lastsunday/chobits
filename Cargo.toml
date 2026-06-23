@@ -95,7 +95,6 @@ rust-embed = "8.11.0"
 # audio start
 symphonia = "0.5.5"
 wavers = "1.5.1"
-resampler = "0.4.1"
 rubato = "0.16.0"
 # audio end
 # llm start

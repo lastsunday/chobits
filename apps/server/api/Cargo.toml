@@ -30,7 +30,6 @@ figment = { workspace = true, features = ["env", "toml"] }
 either = { workspace = true, features = ["serde"] }
 # config end
 serde = { workspace = true, features = ["derive"] }
-serde_yaml = { workspace = true }
 anyhow = { workspace = true }
 sea-orm = { workspace = true, features = [
   "with-chrono",
@@ -78,8 +77,6 @@ futures = { workspace = true }
 async-trait = { workspace = true }
 # audio start
 symphonia = { workspace = true }
-wavers = { workspace = true }
-resampler = { workspace = true }
 # audio end
 # llm start
 candle-core = { workspace = true }
@@ -120,8 +117,6 @@ ruma-client = { workspace = true, features = [
 ] }
 # matrix end
 
-tracing-test = { workspace = true }
-
 [dev-dependencies]
 tower = { workspace = true, features = ["util"] }
 cucumber = { workspace = true, features = ["tracing", "output-json"] }
@@ -131,6 +126,8 @@ mime = { workspace = true }
 sse-stream = { workspace = true }
 testcontainers = { workspace = true }
 testcontainers-modules = { workspace = true, features = ["postgres", "gitea"] }
+wavers = { workspace = true }
+tracing-test = { workspace = true }
 
 [build-dependencies]
 # llm start

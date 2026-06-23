@@ -112,7 +112,6 @@ function RouteComponent() {
         })
       }
     } catch (error) {
-      console.error('Error logging in: ', error)
       notifications.show({
         color: "red",
         title: t('error'),

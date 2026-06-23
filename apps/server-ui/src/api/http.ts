@@ -2,12 +2,6 @@ import { getAccessToken, getRefreshToken, setStoredToken, Token } from "@/hooks/
 import i18n from "@/i18n/config";
 import axios, { HttpStatusCode } from "axios";
 
-export interface ApiResult<T> {
-  code: number;
-  message: string;
-  data: T;
-}
-
 export const instance = axios.create({
   baseURL: import.meta.env.VITE_BASE_URL,
   headers: {

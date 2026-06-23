@@ -200,7 +200,6 @@ dependencies = [
  "mime",
  "opus",
  "regex",
- "resampler",
  "rig-core",
  "rmcp",
  "rubato",
@@ -211,7 +210,6 @@ dependencies = [
  "serde",
  "serde-aux",
  "serde_json",
- "serde_yaml",
  "service",
  "sherpa-onnx",
  "sse-stream",
@@ -6771,12 +6769,6 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
 ]
-
-[[package]]
-name = "resampler"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80f5ab61459422b1a350caae1aadef48ebae234b12e80248e9ba9557018ef060"
 
 [[package]]
 name = "rfc6979"

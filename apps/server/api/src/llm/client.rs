@@ -204,7 +204,10 @@ impl Client {
                                     }
                                 }
                             }
-                            Err(_) => todo!(),
+                            Err(e) => {
+                                tracing::error!("LLM stream error: {:?}", e);
+                                break;
+                            }
                         }
                     }
                     drop(tx);

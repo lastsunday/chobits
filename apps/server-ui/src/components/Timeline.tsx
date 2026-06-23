@@ -392,8 +392,6 @@ export function Timeline({ roundId, dataItems }: TimelineProps) {
       });
     }
     result.sort((a, b) => a.startMs - b.startMs || a.seq - b.seq);
-    if (result.length > 0) {
-    }
     return result;
   }, [framesData, ttsSyncPositions, t0Ms, totalDurationMs]);
 
