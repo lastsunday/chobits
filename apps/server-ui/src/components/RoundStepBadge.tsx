@@ -10,11 +10,11 @@ const stepLabel: Record<string, string> = {
 };
 
 const stepColor: Record<string, string> = {
-  input_audio: 'gray',
-  asr: 'gray',
-  text: 'gray',
-  llm: 'gray',
-  tts: 'gray',
+  input_audio: 'green',
+  asr: 'cyan',
+  text: 'yellow',
+  llm: 'violet',
+  tts: 'red',
 };
 
 function truncate(text: string, maxLen: number): string {

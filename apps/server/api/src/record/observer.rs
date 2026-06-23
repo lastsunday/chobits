@@ -79,6 +79,8 @@ pub trait SessionObserver: Send + Sync {
 
     fn on_asr(&self, ctx: &AsrContext);
 
+    fn on_asr_complete(&self, _round_id: &str) {}
+
     fn on_llm_delta(&self, ctx: &LlmDeltaContext);
 
     fn on_tts_delta(&self, ctx: &TtsDeltaContext);

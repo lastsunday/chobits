@@ -73,6 +73,8 @@
       "realtime": "实时",
       "text": "文本"
     },
+    "latency_waterfall": "处理耗时",
+    "bottleneck": "瓶颈",
     "timeline": {
       "business": "业务事件",
       "frames": "帧记录",

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use sea_orm::{ActiveValue::Set, DatabaseConnection, entity::prelude::*};
@@ -41,6 +41,7 @@ struct RoundBuffer {
     client_info: Option<JsonValue>,
     mode: String,
     round_start_at: Instant,
+    round_creation_at: Instant,
     steps: Vec<RoundStep>,
     frames: Vec<FrameEntry>,
 }
@@ -82,6 +83,14 @@ impl RoundBuffer {
         })
     }
 
+    fn process_ms(&self, name: &str) -> Option<i64> {
+        self.step_idx(name).map(|idx| {
+            let s = &self.steps[idx];
+            let elapsed = s.first_event_at.duration_since(self.round_creation_at);
+            elapsed.as_millis() as i64
+        })
+    }
+
     fn step_has(&self, name: &str, field: fn(&RoundStep) -> bool) -> bool {
         self.steps.iter().any(|s| s.step == name && field(s))
     }
@@ -119,6 +128,7 @@ impl RecordCollector {
         mode: &str,
     ) {
         let mut pending = self.pending.lock().expect("pending lock");
+        let now = Instant::now();
         pending.insert(
             round_id.clone(),
             RoundBuffer {
@@ -126,7 +136,8 @@ impl RecordCollector {
                 session_id,
                 client_info,
                 mode: mode.to_string(),
-                round_start_at: Instant::now(),
+                round_start_at: now,
+                round_creation_at: now,
                 steps: Vec::new(),
                 frames: Vec::new(),
             },
@@ -147,11 +158,28 @@ impl RecordCollector {
             io.pcm = voice_pcm;
             io.sample_rate = Some(sample_rate);
             io.has_pcm = true;
+            let dur =
+                Duration::from_millis((io.pcm.len() as f64 / sample_rate as f64 * 1000.0) as u64);
+            io.first_event_at = io
+                .first_event_at
+                .checked_sub(dur)
+                .unwrap_or(io.first_event_at);
 
             let asr = buf.step_mut("asr");
             asr.text = text;
             asr.confidence = Some(confidence);
             asr.has_text = true;
+        }
+    }
+
+    fn align_round_start(&self, round_id: &str) {
+        let mut pending = self.pending.lock().expect("pending lock");
+        if let Some(buf) = pending.get_mut(round_id)
+            && let Some(io) = buf.steps.iter().find(|s| s.step == "input_audio")
+            && buf.round_start_at != io.first_event_at
+        {
+            buf.round_creation_at = buf.round_start_at;
+            buf.round_start_at = io.first_event_at;
         }
     }
 
@@ -258,7 +286,10 @@ impl RecordCollector {
             if !io.pcm.is_empty() {
                 let dur_ms = (io.pcm.len() as f64 / sr * 1000.0) as i64;
                 meta["audio_duration_ms"] = serde_json::json!(dur_ms);
-                meta["duration_ms"] = serde_json::json!(-dur_ms);
+                meta["duration_ms"] = serde_json::json!(dur_ms);
+            }
+            if let Some(ms) = buffer.elapsed_ms("input_audio") {
+                meta["elapsed_ms"] = serde_json::json!(ms);
             }
             round_data::ActiveModel {
                 id: Set(gen_id()),
@@ -282,6 +313,9 @@ impl RecordCollector {
                 .map(|c| serde_json::json!({"confidence": c}))
                 .unwrap_or(serde_json::json!({}));
             if let Some(ms) = buffer.elapsed_ms("asr") {
+                meta["elapsed_ms"] = serde_json::json!(ms);
+            }
+            if let Some(ms) = buffer.process_ms("asr") {
                 meta["duration_ms"] = serde_json::json!(ms);
             }
             round_data::ActiveModel {
@@ -302,6 +336,9 @@ impl RecordCollector {
             let text = buffer.steps.iter().find(|s| s.step == "text").unwrap();
             let mut meta = serde_json::json!({});
             if let Some(ms) = buffer.elapsed_ms("text") {
+                meta["elapsed_ms"] = serde_json::json!(ms);
+            }
+            if let Some(ms) = buffer.process_ms("text") {
                 meta["duration_ms"] = serde_json::json!(ms);
             }
             round_data::ActiveModel {
@@ -320,6 +357,9 @@ impl RecordCollector {
         if let Some(text) = buffer.step_text("llm") {
             let mut meta = serde_json::json!({});
             if let Some(ms) = buffer.elapsed_ms("llm") {
+                meta["elapsed_ms"] = serde_json::json!(ms);
+            }
+            if let Some(ms) = buffer.process_ms("llm") {
                 meta["duration_ms"] = serde_json::json!(ms);
             }
             round_data::ActiveModel {
@@ -351,6 +391,9 @@ impl RecordCollector {
                     serde_json::json!((tts.pcm.len() as f64 / sr * 1000.0) as i64);
             }
             if let Some(ms) = buffer.elapsed_ms("tts") {
+                meta["elapsed_ms"] = serde_json::json!(ms);
+            }
+            if let Some(ms) = buffer.process_ms("tts") {
                 meta["duration_ms"] = serde_json::json!(ms);
             }
             round_data::ActiveModel {
@@ -367,6 +410,9 @@ impl RecordCollector {
         } else if has_tts_text {
             let mut meta = serde_json::json!({});
             if let Some(ms) = buffer.elapsed_ms("tts") {
+                meta["elapsed_ms"] = serde_json::json!(ms);
+            }
+            if let Some(ms) = buffer.process_ms("tts") {
                 meta["duration_ms"] = serde_json::json!(ms);
             }
             round_data::ActiveModel {
@@ -437,6 +483,10 @@ impl SessionObserver for RecordCollector {
             ctx.text.clone(),
             ctx.confidence,
         );
+    }
+
+    fn on_asr_complete(&self, round_id: &str) {
+        self.align_round_start(round_id);
     }
 
     fn on_llm_delta(&self, ctx: &LlmDeltaContext) {

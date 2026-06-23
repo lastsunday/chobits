@@ -1,6 +1,6 @@
 import { getAudioBlob } from '@/api';
 import type { RoundData } from '@/data/round-data';
-import { ActionIcon, Box, Group, Stack, Text, Badge } from '@mantine/core';
+import { ActionIcon, Box, Group, Stack, Text } from '@mantine/core';
 import { IconPlayerPlayFilled, IconPlayerPauseFilled, IconPlayerStop, IconZoomIn, IconZoomOut } from '@tabler/icons-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -28,34 +28,6 @@ const stepColors: Record<string, string> = {
   llm: '#7950f2',
   tts: '#fa5252',
 };
-
-function formatBadgeText(data: RoundData): string {
-  const label = stepLabels[data.data_type] ?? data.data_type;
-  const meta = data.metadata;
-  const audioDurMs = meta?.audio_duration_ms as number | undefined;
-  const procMs = meta?.duration_ms as number | undefined;
-
-  if (data.data_type === 'input_audio') {
-    const dur = audioDurMs != null ? ` ${(audioDurMs / 1000).toFixed(1)}s` : '';
-    return `${label}${dur}`;
-  }
-
-  if (data.data_type === 'tts') {
-    const dur = audioDurMs != null ? ` ${(audioDurMs / 1000).toFixed(1)}s` : '';
-    const proc = procMs != null ? ` ⏱${(procMs / 1000).toFixed(procMs < 1000 ? 1 : 0)}s` : '';
-    return `${label}${dur}${proc}`;
-  }
-
-  if (data.text) {
-    const txt = data.text.length <= 10
-      ? ` "${data.text}"`
-      : ` "${data.text.slice(0, 10)}..."(${data.text.length}字)`;
-    const proc = procMs != null ? ` ⏱${(procMs / 1000).toFixed(procMs < 1000 ? 1 : 0)}s` : '';
-    return `${label}${txt}${proc}`;
-  }
-
-  return label;
-}
 
 interface ClipData {
   id: string;
@@ -119,13 +91,23 @@ export function Timeline({ roundId, dataItems }: TimelineProps) {
 
   const sorted = useMemo(() => {
     return [...dataItems]
-      .filter((d) => d.metadata?.duration_ms != null)
-      .sort((a, b) => ((a.metadata?.duration_ms as number) ?? 0) - ((b.metadata?.duration_ms as number) ?? 0));
+      .filter((d) => {
+        const pos = (d.metadata?.elapsed_ms as number) ?? (d.metadata?.duration_ms as number);
+        return pos != null;
+      })
+      .sort((a, b) => {
+        const pa = (a.metadata?.elapsed_ms as number) ?? (a.metadata?.duration_ms as number) ?? 0;
+        const pb = (b.metadata?.elapsed_ms as number) ?? (b.metadata?.duration_ms as number) ?? 0;
+        return pa - pb;
+      });
   }, [dataItems]);
 
   const t0Ms = useMemo(() => {
     let min = Infinity;
-    for (const d of sorted) min = Math.min(min, (d.metadata?.duration_ms as number) ?? 0);
+    for (const d of sorted) {
+      const pos = (d.metadata?.elapsed_ms as number) ?? (d.metadata?.duration_ms as number) ?? 0;
+      min = Math.min(min, pos);
+    }
     return isFinite(min) ? min : 0;
   }, [sorted]);
 
@@ -133,14 +115,15 @@ export function Timeline({ roundId, dataItems }: TimelineProps) {
     const result: ClipData[] = [];
     for (let i = 0; i < sorted.length; i++) {
       const d = sorted[i];
-      const dt = (d.metadata?.duration_ms as number) ?? 0;
+      const dt = (d.metadata?.elapsed_ms as number) ?? (d.metadata?.duration_ms as number) ?? 0;
       let durMs: number;
       if (d.data_type === 'input_audio' || d.data_type === 'tts') {
         durMs = (d.metadata?.audio_duration_ms as number) ?? 500;
       } else {
         const next = sorted[i + 1];
         if (next) {
-          durMs = ((next.metadata?.duration_ms as number) ?? 0) - dt;
+          const nextPos = (next.metadata?.elapsed_ms as number) ?? (next.metadata?.duration_ms as number) ?? 0;
+          durMs = nextPos - dt;
         } else {
           durMs = 300;
         }
@@ -245,11 +228,11 @@ export function Timeline({ roundId, dataItems }: TimelineProps) {
       for (const clip of clips) {
         const el = document.createElement('span');
         el.textContent = clip.label;
-        el.style.cssText = 'font-size:10px;color:#fff;font-weight:600;line-height:1.4';
+        el.style.cssText = `font-size:10px;color:${clip.color};background:#fff;padding:0 6px;border-radius:4px;font-weight:600;line-height:1.6;margin:2px 4px;display:inline-block`;
         regions.addRegion({
           start: clip.startMs / 1000,
           end: clip.endMs / 1000,
-          color: clip.color + '30',
+          color: clip.color + '70',
           content: el,
           drag: false,
           resize: false,
@@ -258,9 +241,19 @@ export function Timeline({ roundId, dataItems }: TimelineProps) {
 
       ws.zoom(pixelsPerSecond);
 
+      ws.on('interaction', () => ws.playPause());
+
       ws.on('play', () => setIsPlaying(true));
       ws.on('pause', () => setIsPlaying(false));
       ws.on('finish', () => setIsPlaying(false));
+
+      container.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        setPixelsPerSecond((z) => {
+          const factor = e.deltaY < 0 ? 1.3 : 1 / 1.3;
+          return Math.max(10, Math.min(1000, z * factor));
+        });
+      }, { passive: false });
 
       wsRef.current = ws;
       setIsReady(true);
@@ -307,24 +300,6 @@ export function Timeline({ roundId, dataItems }: TimelineProps) {
         </ActionIcon>
       </Group>
 
-      {sorted.length > 0 && (
-        <Group gap={4} align="center" wrap="wrap">
-          {sorted.map((d, i) => (
-            <Group key={d.id} gap={2} wrap="nowrap">
-              {i > 0 && <Text c="dimmed" size="xs">→</Text>}
-              <Badge
-                color={stepColors[d.data_type] ?? 'gray'}
-                variant="light"
-                size="sm"
-                style={{ textTransform: 'none' }}
-              >
-                {formatBadgeText(d)}
-              </Badge>
-            </Group>
-          ))}
-        </Group>
-      )}
-
       <Box
         ref={containerRef}
         style={{
@@ -338,6 +313,52 @@ export function Timeline({ roundId, dataItems }: TimelineProps) {
         <Text size="sm" c="dimmed" ta="center" py="sm">
           {t('loading')}
         </Text>
+      )}
+
+      {sorted.length > 0 && (
+        <Stack gap={4} mt={8}>
+          {sorted.map((d, i) => {
+            const label = stepLabels[d.data_type] ?? d.data_type;
+            const meta = d.metadata;
+            const procMs = meta?.duration_ms as number | undefined;
+            const audioDurMs = meta?.audio_duration_ms as number | undefined;
+
+            let headerText: string;
+            if (d.data_type === 'input_audio') {
+              headerText = audioDurMs != null ? `✓ ${(audioDurMs / 1000).toFixed(1)}s` : '';
+            } else if (d.data_type === 'tts') {
+              const dataPart = audioDurMs != null ? `✓ ${(audioDurMs / 1000).toFixed(1)}s` : '✓';
+              const proc = procMs != null ? `⏱${(procMs / 1000).toFixed(procMs < 1000 ? 1 : 0)}s` : '';
+              headerText = `${dataPart}${proc ? `｜${proc}` : ''}`;
+            } else {
+              const txt = d.text
+                ? d.text.length <= 10
+                  ? `"${d.text}"`
+                  : `"${d.text.slice(0, 10)}..."(${d.text.length}字)`
+                : '✓';
+              const proc = procMs != null ? `⏱${(procMs / 1000).toFixed(procMs < 1000 ? 1 : 0)}s` : '';
+              headerText = `${txt}${proc ? `｜${proc}` : ''}`;
+            }
+
+            return (
+              <Box key={d.id}>
+                <Group gap={4} wrap="nowrap">
+                  <Text size="xs" fw={600} c={stepColors[d.data_type] ?? 'gray'}>
+                    {i + 1}. {label}
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    {headerText}
+                  </Text>
+                </Group>
+                {d.text && d.data_type !== 'input_audio' && (
+                  <Text pl={16} size="xs" c="dimmed" style={{ lineHeight: 1.5 }}>
+                    &ldquo;{d.text}&rdquo;
+                  </Text>
+                )}
+              </Box>
+            );
+          })}
+        </Stack>
       )}
     </Stack>
   );

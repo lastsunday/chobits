@@ -73,6 +73,8 @@
       "realtime": "Real-Time",
       "text": "Text"
     },
+    "latency_waterfall": "Latency Waterfall",
+    "bottleneck": "Bottleneck",
     "timeline": {
       "business": "Business Events",
       "frames": "Frames",

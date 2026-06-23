@@ -514,6 +514,9 @@ impl Session {
                             confidence: command.prob,
                         });
                     }
+                    for observer in &self.observers {
+                        observer.on_asr_complete(&round_id);
+                    }
                 }
                 let text = command.text.as_str();
                 let is_speech_clear = self.is_speech_clear(&command.text, command.prob);
