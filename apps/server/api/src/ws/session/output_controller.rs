@@ -17,6 +17,7 @@ pub struct TracedSender {
     inner: Sender<Result<FrameResult, AppError>>,
     observers: Vec<Arc<dyn SessionObserver>>,
     round_id: Option<String>,
+    session_id: Option<String>,
     seq: Arc<AtomicU64>,
     cancel_token: CancellationToken,
 }
@@ -26,6 +27,7 @@ impl TracedSender {
         inner: Sender<Result<FrameResult, AppError>>,
         observers: Vec<Arc<dyn SessionObserver>>,
         round_id: Option<String>,
+        session_id: Option<String>,
         seq: Arc<AtomicU64>,
         cancel_token: CancellationToken,
     ) -> Self {
@@ -33,6 +35,7 @@ impl TracedSender {
             inner,
             observers,
             round_id,
+            session_id,
             seq,
             cancel_token,
         }
@@ -43,12 +46,16 @@ impl TracedSender {
         item: Result<FrameResult, AppError>,
     ) -> Result<(), SendError<Result<FrameResult, AppError>>> {
         if let Some(ref round_id) = self.round_id {
-            let detail = format!("{:?}", &item);
+            let detail = match &item {
+                Ok(r) => format!("{r}"),
+                Err(e) => format!("Err({e})"),
+            };
             let seq = self.seq.fetch_add(1, Ordering::Relaxed);
             for observer in &self.observers {
                 observer
                     .on_frame(&FrameContext {
-                        round_id: round_id.clone(),
+                        round_id: Some(round_id.clone()),
+                        session_id: self.session_id.clone(),
                         seq,
                         direction: FrameDirection::Outbound,
                         detail: detail.clone(),

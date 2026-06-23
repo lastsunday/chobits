@@ -203,6 +203,7 @@ impl Session {
             tx.clone(),
             self.observers.clone(),
             Some(round_id.clone()),
+            Some(self.id.clone()),
             self.seq.clone(),
             cancel_token.clone(),
         );
@@ -252,20 +253,7 @@ impl Session {
     }
 
     pub async fn accept_frame<'a>(&mut self, frame: &Frame<'a>) {
-        if let Some(round_id) = self.current_round.as_ref().map(|r| r.id.clone()) {
-            let seq = self.seq.load(Ordering::Relaxed);
-            for observer in &self.observers {
-                observer
-                    .on_frame(&FrameContext {
-                        round_id: round_id.clone(),
-                        seq,
-                        direction: FrameDirection::Inbound,
-                        detail: format!("{:?}", frame),
-                    })
-                    .await;
-            }
-        }
-
+        // Handle close/abort/ping/pong immediately (no recording needed)
         match frame {
             Frame::Close(_) => {
                 info!(target:"session","close");
@@ -281,6 +269,7 @@ impl Session {
             _ => {}
         }
 
+        // Handle MCP (no recording needed)
         if let Frame::Mcp(message) = frame {
             match self.device_mcp_phase {
                 DeviceMcpPhase::ToolCall => {
@@ -308,11 +297,39 @@ impl Session {
             }
             return;
         }
+
+        // Capture round_id before dispatch (so Listen(Stop) belongs to the round it stops)
+        let round_id = self.current_round.as_ref().map(|r| r.id.clone());
+
+        // Dispatch to phase handler (may create new round via new_round)
         let phase = self.phase.clone();
         match phase {
             Phase::Hello => self.handle_phase_hello(frame).await,
             Phase::ListenDetect => self.handle_phase_listen_detect(frame).await,
             Phase::Listen(mode) => self.handle_phase_listen(&mode, frame).await,
+        }
+
+        // Determine final round_id:
+        // - If we captured a round_id before dispatch (e.g., Listen(Stop)), keep it
+        // - If dispatch created a new round, use that round's ID
+        // - Otherwise, it's a session-level frame (round_id = None)
+        let final_round_id = round_id.or_else(|| self.current_round.as_ref().map(|r| r.id.clone()));
+
+        if self.current_mode == RoundMode::Manual {
+            self.current_round = None;
+        }
+
+        let seq = self.seq.fetch_add(1, Ordering::Relaxed);
+        for observer in &self.observers {
+            observer
+                .on_frame(&FrameContext {
+                    round_id: final_round_id.clone(),
+                    session_id: Some(self.id.clone()),
+                    seq,
+                    direction: FrameDirection::Inbound,
+                    detail: format!("{}", frame),
+                })
+                .await;
         }
     }
 

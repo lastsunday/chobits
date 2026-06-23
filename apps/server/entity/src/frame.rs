@@ -10,11 +10,13 @@ use crate::schema::date_time_with_time_zone_or_null_schema;
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = true)]
     pub id: i32,
-    pub round_id: String,
+    pub round_id: Option<String>,
+    pub session_id: Option<String>,
     pub seq: i32,
     pub dir: String,
     pub kind: String,
     pub detail: Option<String>,
+    pub elapsed_us: Option<i64>,
     #[schema(schema_with = date_time_with_time_zone_or_null_schema)]
     pub create_datetime: Option<DateTimeWithTimeZone>,
     #[schema(schema_with = date_time_with_time_zone_or_null_schema)]
@@ -29,6 +31,12 @@ pub enum Relation {
         to = "super::round::Column::Id"
     )]
     Round,
+    #[sea_orm(
+        belongs_to = "super::session::Entity",
+        from = "Column::SessionId",
+        to = "super::session::Column::Id"
+    )]
+    Session,
 }
 
 #[async_trait]

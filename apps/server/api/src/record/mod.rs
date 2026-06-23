@@ -347,18 +347,33 @@ async fn list_frames(
     Path(id): Path<String>,
     Query(params): Query<ListFramesParams>,
 ) -> AppResult<ApiResponse<FrameListResponse>> {
-    let page = params.page.unwrap_or(1).max(1);
-    let page_size = params.page_size.unwrap_or(50).min(500);
-    let paginator = Frame::find()
-        .filter(frame::Column::RoundId.eq(&id))
-        .order_by_asc(frame::Column::Seq)
-        .paginate(&conn, page_size);
-    let items = paginator.fetch_page(page - 1).await?;
-    let total = paginator.num_items().await?;
-    Ok(ApiResponse::success(Some(FrameListResponse {
-        items,
-        total,
-        page,
-        page_size,
-    })))
+    let page_size = params.page_size.unwrap_or(0);
+    if page_size == 0 {
+        let items = Frame::find()
+            .filter(frame::Column::RoundId.eq(&id))
+            .order_by_asc(frame::Column::Seq)
+            .all(&conn)
+            .await?;
+        let total = items.len() as u64;
+        Ok(ApiResponse::success(Some(FrameListResponse {
+            items,
+            total,
+            page: 1,
+            page_size: total,
+        })))
+    } else {
+        let page = params.page.unwrap_or(1).max(1);
+        let paginator = Frame::find()
+            .filter(frame::Column::RoundId.eq(&id))
+            .order_by_asc(frame::Column::Seq)
+            .paginate(&conn, page_size);
+        let items = paginator.fetch_page(page - 1).await?;
+        let total = paginator.num_items().await?;
+        Ok(ApiResponse::success(Some(FrameListResponse {
+            items,
+            total,
+            page,
+            page_size,
+        })))
+    }
 }

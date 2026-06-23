@@ -90,11 +90,13 @@ impl MigrationTrait for Migration {
                     .table(Frame::Table)
                     .if_not_exists()
                     .col(integer(Frame::Id).auto_increment().primary_key())
-                    .col(string(Frame::RoundId))
+                    .col(string_null(Frame::RoundId))
+                    .col(string_null(Frame::SessionId))
                     .col(integer(Frame::Seq))
                     .col(string(Frame::Dir))
                     .col(string(Frame::Kind))
                     .col(string_null(Frame::Detail))
+                    .col(big_integer_null(Frame::ElapsedUs))
                     .col(timestamp_with_time_zone_null(Frame::CreateDatetime))
                     .col(timestamp_with_time_zone_null(Frame::UpdateDatetime))
                     .to_owned(),
@@ -190,7 +192,7 @@ enum RoundData {
 }
 
 #[derive(DeriveIden)]
-enum Frame {
+pub enum Frame {
     Table,
     Id,
     RoundId,
@@ -198,6 +200,8 @@ enum Frame {
     Dir,
     Kind,
     Detail,
+    SessionId,
     CreateDatetime,
     UpdateDatetime,
+    ElapsedUs,
 }

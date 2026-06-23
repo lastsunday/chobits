@@ -45,17 +45,19 @@ impl Session {
                                 service::chobits::message::listen::ListenMode::Auto => {
                                     self.phase = Phase::Listen(ListenMode::Auto);
                                     self.current_mode = RoundMode::Auto;
+                                    self.handle_phase_listen_for_auto_mode(frame).await;
                                 }
                                 service::chobits::message::listen::ListenMode::Manual => {
                                     self.phase = Phase::Listen(ListenMode::Manual);
                                     self.current_mode = RoundMode::Manual;
+                                    self.listener.reset(None).await;
                                 }
                                 service::chobits::message::listen::ListenMode::RealTime => {
                                     self.phase = Phase::Listen(ListenMode::RealTime);
                                     self.current_mode = RoundMode::RealTime;
+                                    self.handle_phase_listen_for_realtime_mode(frame).await;
                                 }
                             }
-                            Box::pin(self.accept_frame(frame)).await;
                         } else {
                             error!(
                                 "invalid frame in phase = {:?},frame = {:?}, state = {:?}",
@@ -71,24 +73,26 @@ impl Session {
                                     service::chobits::message::listen::ListenMode::Auto => {
                                         self.phase = Phase::Listen(ListenMode::Auto);
                                         self.current_mode = RoundMode::Auto;
+                                        self.handle_phase_listen_for_auto_mode(frame).await;
                                     }
                                     service::chobits::message::listen::ListenMode::Manual => {
                                         self.phase = Phase::Listen(ListenMode::Manual);
                                         self.current_mode = RoundMode::Manual;
+                                        self.handle_phase_listen_for_manual_mode(frame).await;
                                     }
                                     service::chobits::message::listen::ListenMode::RealTime => {
                                         self.phase = Phase::Listen(ListenMode::RealTime);
                                         self.current_mode = RoundMode::RealTime;
+                                        self.handle_phase_listen_for_realtime_mode(frame).await;
                                     }
                                 }
-                                Box::pin(self.accept_frame(frame)).await;
                             }
                             None => {
                                 // eps32-c3 default listen mode is none
                                 // set listen mode to realtime
                                 self.phase = Phase::Listen(ListenMode::RealTime);
                                 self.current_mode = RoundMode::RealTime;
-                                Box::pin(self.accept_frame(frame)).await;
+                                self.handle_phase_listen_for_realtime_mode(frame).await;
                             }
                         }
                     }

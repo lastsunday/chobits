@@ -21,6 +21,8 @@ struct FrameEntry {
     seq: u64,
     is_inbound: bool,
     detail: String,
+    session_id: Option<String>,
+    received_at: Instant,
 }
 
 struct RoundStep {
@@ -110,6 +112,7 @@ impl RoundBuffer {
 pub struct RecordCollector {
     conn: DatabaseConnection,
     pending: Arc<StdMutex<HashMap<String, RoundBuffer>>>,
+    orphaned_frames: Arc<StdMutex<HashMap<String, Vec<FrameEntry>>>>,
 }
 
 impl RecordCollector {
@@ -117,6 +120,7 @@ impl RecordCollector {
         Self {
             conn,
             pending: Arc::new(StdMutex::new(HashMap::new())),
+            orphaned_frames: Arc::new(StdMutex::new(HashMap::new())),
         }
     }
 
@@ -215,10 +219,20 @@ impl RecordCollector {
         }
     }
 
-    async fn record_frame(&self, round_id: &str, seq: u64, is_inbound: bool, detail: &str) {
-        let frame_to_insert = {
+    async fn record_frame(
+        &self,
+        round_id: Option<&str>,
+        session_id: Option<&str>,
+        seq: u64,
+        is_inbound: bool,
+        detail: &str,
+    ) {
+        let dir_str = if is_inbound { "inbound" } else { "outbound" };
+
+        // If there's a round_id, try the pending buffer first
+        if let Some(rid) = round_id {
             let mut pending = self.pending.lock().expect("pending lock");
-            if let Some(buf) = pending.get_mut(round_id) {
+            if let Some(buf) = pending.get_mut(rid) {
                 if buf.frames.len() >= MAX_FRAMES_PER_ROUND {
                     return;
                 }
@@ -226,20 +240,44 @@ impl RecordCollector {
                     seq,
                     is_inbound,
                     detail: detail.to_string(),
+                    session_id: session_id.map(|s| s.to_string()),
+                    received_at: Instant::now(),
                 });
                 return;
             }
-            let dir_str = if is_inbound { "inbound" } else { "outbound" };
-            frame::ActiveModel {
-                round_id: Set(round_id.to_string()),
-                seq: Set(seq as i32),
-                dir: Set(dir_str.to_string()),
-                kind: Set("frame".to_string()),
-                detail: Set(Some(detail.to_string())),
-                ..Default::default()
-            }
-        };
-        let _ = frame_to_insert.insert(&self.conn).await;
+        }
+
+        // No round_id yet (before the first round is created) —
+        // buffer as orphaned, will be flushed when a round starts
+        if round_id.is_none()
+            && let Some(sid) = session_id
+        {
+            let mut orphaned = self.orphaned_frames.lock().expect("orphaned lock");
+            orphaned
+                .entry(sid.to_string())
+                .or_default()
+                .push(FrameEntry {
+                    seq,
+                    is_inbound,
+                    detail: detail.to_string(),
+                    session_id: Some(sid.to_string()),
+                    received_at: Instant::now(),
+                });
+            return;
+        }
+
+        // No session_id either — fallback: insert directly
+        let _ = frame::ActiveModel {
+            round_id: Set(round_id.map(|s| s.to_string())),
+            session_id: Set(session_id.map(|s| s.to_string())),
+            seq: Set(seq as i32),
+            dir: Set(dir_str.to_string()),
+            kind: Set("frame".to_string()),
+            detail: Set(Some(detail.to_string())),
+            ..Default::default()
+        }
+        .insert(&self.conn)
+        .await;
     }
 
     async fn finish_round(&self, round_id: &str) -> Result<(), anyhow::Error> {
@@ -434,12 +472,18 @@ impl RecordCollector {
             } else {
                 "outbound"
             };
+            let elapsed_ms = entry
+                .received_at
+                .saturating_duration_since(buffer.round_start_at)
+                .as_micros() as i64;
             frame::ActiveModel {
-                round_id: Set(buffer.round_id.clone()),
+                round_id: Set(Some(buffer.round_id.clone())),
+                session_id: Set(entry.session_id.clone()),
                 seq: Set(entry.seq as i32),
                 dir: Set(dir_str.to_string()),
                 kind: Set("frame".to_string()),
                 detail: Set(Some(entry.detail.clone())),
+                elapsed_us: Set(Some(elapsed_ms)),
                 ..Default::default()
             }
             .insert(conn)
@@ -469,6 +513,21 @@ impl SessionObserver for RecordCollector {
             ctx.client_info.clone(),
             ctx.mode.as_str(),
         );
+
+        // Flush orphaned frames to the new round,
+        // keeping their original received_at timestamps (monotonic clock)
+        if let Some(ref session_id) = ctx.session_id {
+            let mut orphaned = self.orphaned_frames.lock().expect("orphaned lock");
+            if let Some(mut frames) = orphaned.remove(session_id) {
+                drop(orphaned);
+                if !frames.is_empty() {
+                    let mut pending = self.pending.lock().expect("pending lock");
+                    if let Some(buf) = pending.get_mut(&ctx.round_id) {
+                        buf.frames.append(&mut frames);
+                    }
+                }
+            }
+        }
     }
 
     fn on_text_input(&self, ctx: &TextInputContext) {
@@ -499,8 +558,14 @@ impl SessionObserver for RecordCollector {
 
     async fn on_frame(&self, ctx: &FrameContext) {
         let is_inbound = matches!(ctx.direction, FrameDirection::Inbound);
-        self.record_frame(&ctx.round_id, ctx.seq, is_inbound, &ctx.detail)
-            .await;
+        self.record_frame(
+            ctx.round_id.as_deref(),
+            ctx.session_id.as_deref(),
+            ctx.seq,
+            is_inbound,
+            &ctx.detail,
+        )
+        .await;
     }
 
     async fn on_round_end(&self, ctx: &RoundEndContext) -> Result<(), anyhow::Error> {

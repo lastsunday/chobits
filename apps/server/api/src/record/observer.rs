@@ -59,7 +59,8 @@ pub struct TtsDeltaContext {
 }
 
 pub struct FrameContext {
-    pub round_id: String,
+    pub round_id: Option<String>,
+    pub session_id: Option<String>,
     pub seq: u64,
     pub direction: FrameDirection,
     pub detail: String,
