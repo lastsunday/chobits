@@ -19,6 +19,7 @@ use tokio::sync::{
     mpsc::{Sender, channel},
 };
 use tokio_stream::wrappers::ReceiverStream;
+use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, Level, error, span, trace};
 
 #[derive(Clone)]
@@ -69,6 +70,7 @@ impl Client {
     pub fn chat(
         &self,
         request: ChatRequest,
+        cancel: CancellationToken,
     ) -> impl Stream<Item = core::result::Result<String, ModelError>> + Unpin + Send + 'static {
         let (tx, rx) = channel::<core::result::Result<String, ModelError>>(10);
         let session_id = self.session_id.clone();
@@ -81,6 +83,9 @@ impl Client {
         let max_prompt_len = self.max_prompt_len;
         let span = span!(parent:None,Level::DEBUG, "socket", id=%session_id.unwrap_or_default());
         thread::spawn(move || {
+            if cancel.is_cancelled() {
+                return;
+            }
             let output = block_on(
                 async move {
                     let tools = {
@@ -125,7 +130,13 @@ impl Client {
                     }
                     history.chat_history.push(request.message.clone());
                     drop(history);
+                    if cancel.is_cancelled() {
+                        return Err(anyhow::anyhow!("cancelled"));
+                    }
                     while has_next_step {
+                        if cancel.is_cancelled() {
+                            break;
+                        }
                         let history = clone_history.clone();
                         let history = history.lock().await;
                         let preamble = history.preamble.clone();
@@ -143,7 +154,8 @@ impl Client {
                         };
                         trace!("[REQUEST] {:?}", &request);
                         let response = model.stream(request).await;
-                        let messages = handle_response(response, Some(tx.clone())).await;
+                        let messages =
+                            handle_response(response, Some(tx.clone()), cancel.clone()).await;
                         trace!("[RESPONSE] {:?}", messages);
                         match messages {
                             Ok(messages) => {
@@ -239,6 +251,7 @@ pub async fn handle_response(
         CompletionError,
     >,
     tx: Option<Sender<Result<String, ModelError>>>,
+    cancel: CancellationToken,
 ) -> anyhow::Result<Vec<Message>> {
     let mut messages: Vec<Message> = vec![];
     let mut text_collector = String::new();
@@ -246,6 +259,9 @@ pub async fn handle_response(
     match response {
         Ok(mut stream) => {
             while let Some(value) = stream.next().await {
+                if cancel.is_cancelled() {
+                    break;
+                }
                 match value {
                     Ok(StreamedAssistantContent::Text(text)) => {
                         text_collector.push_str(&text.text);

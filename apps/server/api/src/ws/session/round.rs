@@ -137,6 +137,7 @@ impl Round {
         let text = String::from(text);
         let observers = self.observers.clone();
         let round_id = self.id.clone();
+        let cancel = self.cancel.clone();
         let span = span!(parent:None,Level::DEBUG, "socket", id=%session_id);
         self.join_handle = Some(tokio::spawn(
             async move {
@@ -156,8 +157,8 @@ impl Round {
                         content: OneOrMany::one(UserContent::Text(Text { text: text.clone() })),
                     },
                 };
-                let llm_output = client.chat(request);
-                let mut tts_output = tts.stream(Box::pin(llm_output)).await;
+                let llm_output = client.chat(request, cancel.clone());
+                let mut tts_output = tts.stream(Box::pin(llm_output), cancel).await;
                 let speaking = speaking.clone();
                 let stop_me = stop_me.clone();
                 if send_tts_frame_and_change_state(

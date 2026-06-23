@@ -13,6 +13,7 @@ use futures::Stream;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::OnceLock;
+use tokio_util::sync::CancellationToken;
 
 #[async_trait]
 pub trait Tts: Send + Sync {
@@ -21,6 +22,7 @@ pub trait Tts: Send + Sync {
         text_stream: Pin<
             Box<dyn Stream<Item = core::result::Result<String, ModelError>> + Send + Sync>,
         >,
+        cancel: CancellationToken,
     ) -> Pin<Box<dyn Stream<Item = core::result::Result<TtsData, TtsError>> + Send + Sync>>;
 }
 

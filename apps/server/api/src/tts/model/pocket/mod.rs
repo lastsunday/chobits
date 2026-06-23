@@ -11,6 +11,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc::channel;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
+use tokio_util::sync::CancellationToken;
 use tracing::error;
 
 use crate::common::ModelError;
@@ -142,6 +143,7 @@ impl Tts for TtsPocket {
         text_stream: Pin<
             Box<dyn Stream<Item = core::result::Result<String, ModelError>> + Send + Sync>,
         >,
+        cancel: CancellationToken,
     ) -> Pin<Box<dyn Stream<Item = core::result::Result<TtsData, TtsError>> + Send + Sync>> {
         let (tx, rx) = channel::<core::result::Result<TtsData, TtsError>>(10);
 
@@ -176,6 +178,9 @@ impl Tts for TtsPocket {
                 };
 
             while let Some(text_result) = pinned.next().await {
+                if cancel.is_cancelled() {
+                    break;
+                }
                 let text = match text_result {
                     Ok(t) => t,
                     Err(e) => {
@@ -185,6 +190,9 @@ impl Tts for TtsPocket {
                     }
                 };
 
+                if cancel.is_cancelled() {
+                    break;
+                }
                 let tts_clone = tts.clone();
                 let text_clone = text.clone();
                 let reference_audio_clone = reference_audio.clone();

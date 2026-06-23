@@ -105,7 +105,9 @@ impl Session {
                 }
             }
             Frame::Voice { data } => {
-                self.listener.listen(data).await;
+                self.listener
+                    .accept(listener::ListenInput::Audio(data.to_vec()))
+                    .await;
             }
             _ => {
                 error!(
@@ -178,9 +180,19 @@ impl Session {
             Frame::Voice { data } => {
                 let state = self.listener.get_state();
                 match &self.current_round {
-                    Some(_round) => {
-                        self.listener.listen(data).await;
-                        if state == crate::ws::session::listener::ListenState::End {
+                    Some(round) => {
+                        self.listener
+                            .accept(listener::ListenInput::Audio(data.to_vec()))
+                            .await;
+                        let new_state = self.listener.get_state();
+                        if new_state == listener::ListenState::Listening(true)
+                            && state != listener::ListenState::Listening(true)
+                        {
+                            round.stop().await;
+                        }
+                        if state == listener::ListenState::End
+                            || new_state == listener::ListenState::End
+                        {
                             self.handle_listen_end().await;
                             let silence_voice_timeout = self
                                 .config
@@ -200,7 +212,9 @@ impl Session {
                             self.listener.reset(Some(silence_voice_timeout)).await;
                             self.update_latest_activity_time().await;
                         } else {
-                            self.listener.listen(data).await;
+                            self.listener
+                                .accept(listener::ListenInput::Audio(data.to_vec()))
+                                .await;
                         }
                     }
                 }
@@ -274,22 +288,20 @@ impl Session {
                         }
                     }
                     ListenState::Stop => {
-                        self.listener
-                            .set_state(crate::ws::session::listener::ListenState::End);
-                        self.handle_listen_end().await;
+                        if self.current_mode != RoundMode::Text {
+                            self.listener
+                                .set_state(crate::ws::session::listener::ListenState::End);
+                            self.handle_listen_end().await;
+                        }
                     }
                     ListenState::Detect => {
                         let text = &listen_message.text;
                         match text {
                             Some(text) => {
-                                self.new_round(RoundMode::Text).await;
-                                //if match walk word
-                                if let Some(round) = &mut self.current_round {
-                                    // handle send text
-                                    round.accept_command(Command::Chat { text }).await;
-                                } else {
-                                    panic!("current round is none");
-                                }
+                                self.listener
+                                    .accept(listener::ListenInput::Text(text.to_string()))
+                                    .await;
+                                self.handle_listen_end().await;
                             }
                             None => {
                                 error!(
@@ -308,7 +320,17 @@ impl Session {
                 }
             }
             Frame::Voice { data } => {
-                self.listener.listen(data).await;
+                let state = self.listener.get_state();
+                self.listener
+                    .accept(listener::ListenInput::Audio(data.to_vec()))
+                    .await;
+                let new_state = self.listener.get_state();
+                if new_state == listener::ListenState::Listening(true)
+                    && state != listener::ListenState::Listening(true)
+                    && let Some(round) = &self.current_round
+                {
+                    round.stop().await;
+                }
             }
             _ => {
                 error!(
@@ -360,11 +382,8 @@ impl Session {
                                     // TODO: detech voice id
                                     self.listener
                                         .set_state(crate::ws::session::listener::ListenState::End);
-                                    let command = self.listener.get_result().await;
-                                    match command {
-                                        Ok(_command) => {
-                                            // TODO: handle command
-                                            //say hello
+                                    match self.listener.get_result().await {
+                                        Ok(_) => {
                                             round.accept_command(Command::Wake { text }).await;
                                         }
                                         Err(e) => {
@@ -400,9 +419,19 @@ impl Session {
             Frame::Voice { data } => {
                 let state = self.listener.get_state();
                 match &self.current_round {
-                    Some(_round) => {
-                        self.listener.listen(data).await;
-                        if state == crate::ws::session::listener::ListenState::End {
+                    Some(round) => {
+                        self.listener
+                            .accept(listener::ListenInput::Audio(data.to_vec()))
+                            .await;
+                        let new_state = self.listener.get_state();
+                        if new_state == listener::ListenState::Listening(true)
+                            && state != listener::ListenState::Listening(true)
+                        {
+                            round.stop().await;
+                        }
+                        if state == listener::ListenState::End
+                            || new_state == listener::ListenState::End
+                        {
                             self.handle_listen_end().await;
                             let silence_voice_timeout = self
                                 .config
@@ -422,7 +451,9 @@ impl Session {
                             self.listener.reset(Some(silence_voice_timeout)).await;
                             self.update_latest_activity_time().await;
                         } else {
-                            self.listener.listen(data).await;
+                            self.listener
+                                .accept(listener::ListenInput::Audio(data.to_vec()))
+                                .await;
                         }
                     }
                 }
@@ -496,13 +527,18 @@ impl Session {
             .input_sample_rate
             .expect("input sample rate is empty");
 
-        self.new_round(self.current_mode).await;
-
-        let command = self.listener.get_result().await;
-        match command {
-            Ok(command) => {
-                info!(                                target:"session",
-"command = {:?}", command.clone());
+        let result = self.listener.get_result().await;
+        match result {
+            Ok(listener::ListenResult::Text(text)) => {
+                self.new_round(RoundMode::Text).await;
+                if let Some(round) = &mut self.current_round {
+                    round.accept_command(Command::Chat { text: &text }).await;
+                } else {
+                    panic!("current round is none");
+                }
+            }
+            Ok(listener::ListenResult::Audio { text, prob }) => {
+                self.new_round(self.current_mode).await;
                 let round_id = self
                     .current_round
                     .as_ref()
@@ -514,21 +550,20 @@ impl Session {
                             round_id: round_id.clone(),
                             voice_pcm: voice_pcm.clone(),
                             sample_rate,
-                            text: command.text.clone(),
-                            confidence: command.prob,
+                            text: text.clone(),
+                            confidence: prob,
                         });
                     }
                     for observer in &self.observers {
                         observer.on_asr_complete(&round_id);
                     }
                 }
-                let text = command.text.as_str();
-                let is_speech_clear = self.is_speech_clear(&command.text, command.prob);
+                let is_speech_clear = self.is_speech_clear(&text, prob);
                 if let Some(round) = &mut self.current_round {
                     if is_speech_clear {
-                        round.accept_command(Command::AsrChat { text }).await;
+                        round.accept_command(Command::AsrChat { text: &text }).await;
                     } else {
-                        round.accept_command(Command::ListenUnclear { text }).await;
+                        round.accept_command(Command::ListenUnclear { text: &text }).await;
                     }
                 } else {
                     panic!("current round is none");
