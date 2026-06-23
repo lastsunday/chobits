@@ -195,27 +195,9 @@ importers:
 
   apps/server-ui:
     dependencies:
-      '@dnd-kit/react':
-        specifier: ^0.5.0
-        version: 0.5.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       '@tabler/icons-react':
         specifier: ^3.44.0
         version: 3.44.0(react@19.2.6)
-      '@types/styled-components':
-        specifier: ^5.1.36
-        version: 5.1.36
-      '@waveform-playlist/browser':
-        specifier: ^13.1.1
-        version: 13.1.1(@dnd-kit/abstract@0.5.0)(@dnd-kit/dom@0.5.0)(@dnd-kit/react@0.5.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(styled-components@6.4.2(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(tone@15.1.22)
-      '@waveform-playlist/core':
-        specifier: ^12.2.0
-        version: 12.2.0
-      styled-components:
-        specifier: ^6.4.2
-        version: 6.4.2(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
-      tone:
-        specifier: ^15.1.22
-        version: 15.1.22
       wavesurfer.js:
         specifier: ^7.12.8
         version: 7.12.8
@@ -380,27 +362,6 @@ packages:
     resolution: {integrity: sha512-QxULHAm7cNu72w97JUNCBFODFaXpbDg+dP8b/oWFAZ2MTRppA3U00Y2L1HqaS4J6yBqxwa/Y3nMBaxVKbB/NsA==}
     engines: {node: '>=20.19.0'}
 
-  '@dnd-kit/abstract@0.5.0':
-    resolution: {integrity: sha512-hi13iMJgjPX/KDYVKg5VeDIhmYiV6buc9bAX+tCLYf4QdyYjPbsXjn2sPo6m7fQ6SGJBEFgHJ2PemeKDUbwBaA==}
-
-  '@dnd-kit/collision@0.5.0':
-    resolution: {integrity: sha512-xUqRn3lS7oqLkT0AnnHS/STh/Czvwe1UapZFYiLbsUGxopMsQd4teaPCzPouOThoMdGEe+dHWjfqJl6t9iG4mQ==}
-
-  '@dnd-kit/dom@0.5.0':
-    resolution: {integrity: sha512-f2xFJp5SYQ8EW/Fbtaa8iBb66hpkWc7qa8vU826KW11/tb44sH+AisZnGtwOOTWTQ0GraqBDr5ixTErww+eKXw==}
-
-  '@dnd-kit/geometry@0.5.0':
-    resolution: {integrity: sha512-ubHQS1CiSDH8ssYH2xG5BnpwPSFP1tStXXjug7/Ba6qnQdu/EUH47l6QXKIksQnnanfVfDf0aGeevRxgZlj28A==}
-
-  '@dnd-kit/react@0.5.0':
-    resolution: {integrity: sha512-abQPLI8lmfVE+v/n+pqy5WFxrw6T2Yg0UQZsL78dp5DKci7dKTVDjvLWqvass+XTFtzJmsZEjk1NdqE6xG8Jiw==}
-    peerDependencies:
-      react: ^18.0.0 || ^19.0.0
-      react-dom: ^18.0.0 || ^19.0.0
-
-  '@dnd-kit/state@0.5.0':
-    resolution: {integrity: sha512-y7XbabQqjF58Lk8YmDQuR8l6QjN+Kh4qlGEjUvHuIeasLk1QP+9L5diXS98VMxQIivyMmUtX2//f+3N7qPJX4w==}
-
   '@emnapi/core@1.10.0':
     resolution: {integrity: sha512-yq6OkJ4p82CAfPl0u9mQebQHKPJkY7WrIuk205cTYnYe+k2Z8YBh11FrbRG/H6ihirqcacOgl2BIO8oyMQLeXw==}
 
@@ -409,12 +370,6 @@ packages:
 
   '@emnapi/wasi-threads@1.2.1':
     resolution: {integrity: sha512-uTII7OYF+/Mes/MrcIOYp5yOtSMLBWSIoLPpcgwipoiKbli6k322tcoFsxoIIxPDqW01SQGAgko4EzZi2BNv2w==}
-
-  '@emotion/is-prop-valid@1.4.0':
-    resolution: {integrity: sha512-QgD4fyscGcbbKwJmqNvUMSE02OsHUa+lAWKdEUIJKgqe5IwRSKd7+KhibEWdaKwgjLj0DRSHA9biAIqGBk05lw==}
-
-  '@emotion/memoize@0.9.0':
-    resolution: {integrity: sha512-30FAj7/EoJ5mwVPOWhAyCX+FPfMDrVecJAM+Iw9NRoSl4BBAQeqj4cApHHUXOVvIPgLVDsCFoz/hGD+5QQD1GQ==}
 
   '@eslint-community/eslint-utils@4.9.1':
     resolution: {integrity: sha512-phrYmNiYppR7znFEdqgfWHXR6NCkZEK7hwWDHZUjit/2/U0r6XvkDl0SYnoM51Hq7FhCGdLDT6zxCCOY1hexsQ==}
@@ -977,13 +932,6 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@phosphor-icons/react@2.1.10':
-    resolution: {integrity: sha512-vt8Tvq8GLjheAZZYa+YG/pW7HDbov8El/MANW8pOAz4eGxrwhnbfrQZq0Cp4q8zBEu8NIhHdnr+r8thnfRSNYA==}
-    engines: {node: '>=10'}
-    peerDependencies:
-      react: '>= 16.8'
-      react-dom: '>= 16.8'
-
   '@playwright/test@1.60.0':
     resolution: {integrity: sha512-O71yZIbAh/PxDMNGns37GHBIfrVkEVyn+AXyIa5dOTfb4/xNvRWV+Vv/NMbNCtODB/pO7vLlF2OTmMVLhmr7Ag==}
     engines: {node: '>=18'}
@@ -991,9 +939,6 @@ packages:
 
   '@polka/url@1.0.0-next.29':
     resolution: {integrity: sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww==}
-
-  '@preact/signals-core@1.14.3':
-    resolution: {integrity: sha512-m0K3vnbSLC5rHs2ZVfeAMvBtT1zIyq4mxx5OlNncSgMj5Iz6W5Rn3kPrDxAC+iIKmiVe0lSl6U37t5ZkEWoVAw==}
 
   '@quansync/fs@1.0.0':
     resolution: {integrity: sha512-4TJ3DFtlf1L5LDMaM6CanJ/0lckGNtJcMjQ1NAV6zDmA0tEHKZtxNKin8EgPaVX1YzljbxckyT2tJrpQKAtngQ==}
@@ -1408,11 +1353,6 @@ packages:
   '@types/estree@1.0.9':
     resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
 
-  '@types/hoist-non-react-statics@3.3.7':
-    resolution: {integrity: sha512-PQTyIulDkIDro8P+IHbKCsw7U2xxBYflVzW/FgWdCAePD9xGSidgA76/GeJ6lBKoblyhf9pBY763gbrN+1dI8g==}
-    peerDependencies:
-      '@types/react': '*'
-
   '@types/http-cache-semantics@4.2.0':
     resolution: {integrity: sha512-L3LgimLHXtGkWikKnsPg0/VFx9OGZaC+eN1u4r+OB1XRqH3meBIAVC2zr1WdMH+RHmnRkqliQAOHNJ/E0j/e0Q==}
 
@@ -1432,9 +1372,6 @@ packages:
 
   '@types/react@19.2.15':
     resolution: {integrity: sha512-eRwcGNHve+E8qtEQSSRl6urh+rFop4v8gm6O8rGv25CodbvFdLjA1vVQ1KkiFE0w0UPOnb8tDiFKL5lp0rtY5Q==}
-
-  '@types/styled-components@5.1.36':
-    resolution: {integrity: sha512-pGMRNY5G2rNDKEv2DOiFYa7Ft1r0jrhmgBwHhOMzPTgCjO76bCot0/4uEfqj7K0Jf1KdQmDtAuaDk9EAs9foSw==}
 
   '@typescript-eslint/eslint-plugin@8.59.4':
     resolution: {integrity: sha512-PegsU+XfyJJNjd4+u/k6f9yTyp0lEXXiPopUNobZcIAUJFGICFLN+sP0Rb3JehVmiij1Ph0dFGYqODoRo/2+6A==}
@@ -1632,64 +1569,6 @@ packages:
   '@volar/typescript@2.4.28':
     resolution: {integrity: sha512-Ja6yvWrbis2QtN4ClAKreeUZPVYMARDYZl9LMEv1iQ1QdepB6wn0jTRxA9MftYmYa4DQ4k/DaSZpFPUfxl8giw==}
 
-  '@waveform-playlist/browser@13.1.1':
-    resolution: {integrity: sha512-vTqp3nFSGR1LmTt1B9FrC1hrW7/b2bxk9YHshtKLbiD352U79Qb3FbYQztbmX9IBN5231uMN6KoGRc6dxtE8tQ==}
-    peerDependencies:
-      '@dnd-kit/abstract': ^0.3.0
-      '@dnd-kit/dom': ^0.3.0
-      '@dnd-kit/react': ^0.3.0
-      '@waveform-playlist/annotations': 12.0.1
-      '@waveform-playlist/recording': 12.1.1
-      react: ^18.2.0 || ^19.0.0
-      react-dom: ^18.2.0 || ^19.0.0
-      styled-components: ^6.0.0
-      tone: ^15.0.0
-    peerDependenciesMeta:
-      '@waveform-playlist/annotations':
-        optional: true
-      '@waveform-playlist/recording':
-        optional: true
-
-  '@waveform-playlist/core@12.0.0':
-    resolution: {integrity: sha512-k/lAgwp3LdEb4mg7NNSASJN2r32NTg6dBMy1SM5Wy01PAL1CoT/8uXO/glLhnhtB5C5Mf2JXgsvtc8RNdfr4RA==}
-
-  '@waveform-playlist/core@12.2.0':
-    resolution: {integrity: sha512-jDUCp68YuRn9/2TvzDohyyrNNlisym7qzuEm0PHcEdnZdeqGCYEugKz0YEwvFomA4hSUPyfQPCYtqKWDtQMm2g==}
-
-  '@waveform-playlist/engine@13.3.0':
-    resolution: {integrity: sha512-ee4eN647SEKxRq2mxMQ6xBzKBgId3Q3oRWlhtUyMvqloYyjJhJmZIvGUHN3lUlAZoLWd/GoEos4UjzbMkJ0gng==}
-    peerDependencies:
-      '@waveform-playlist/core': '>=7.0.0'
-
-  '@waveform-playlist/loaders@12.0.0':
-    resolution: {integrity: sha512-6MVCOy8yHoALNH9j61AI3BOr4UJQI/1rT3R4SVtnsmRCN+rQbOK+ll3h7FHnzQ/XKExsJpTziiR1iYl0s9d4gA==}
-
-  '@waveform-playlist/media-element-playout@12.0.0':
-    resolution: {integrity: sha512-fF6Mo8SJr/fimbVnYDEv+p3EN5TMf/HS5x2UW/EAOqC3f+VxQSB1XwCo1mmJ7oBvxAExeU3GGoxDO3/D6DRFUQ==}
-
-  '@waveform-playlist/playout@12.4.0':
-    resolution: {integrity: sha512-qn0nSpEdiXOGrLrbwsjHaU9YrXY2+iyhHhlPL0mm61cHG6W9Jxqf5zRRI3H3G9LfS+tccKWWrDXAWNNnMgBtUA==}
-    peerDependencies:
-      '@waveform-playlist/engine': '>=7.0.0'
-      tone: ^15.0.0
-    peerDependenciesMeta:
-      '@waveform-playlist/engine':
-        optional: true
-
-  '@waveform-playlist/ui-components@13.0.1':
-    resolution: {integrity: sha512-Lp49dIXto0duCy35CVC5WPuxDcHaZCZMRA9BsUfCy+wwZnyX4fDU2msxNkOur13UUxr/NJYzeqI8g9hUVQ5/QA==}
-    peerDependencies:
-      '@dnd-kit/react': ^0.3.0
-      react: '>=17.0.0'
-      react-dom: '>=17.0.0'
-      styled-components: '>=5.0.0'
-    peerDependenciesMeta:
-      '@dnd-kit/react':
-        optional: true
-
-  '@waveform-playlist/worklets@12.2.0':
-    resolution: {integrity: sha512-Mh5dZcMUrdMxkTPVKM4ZpE1S2kpgQv4/n13hw7R8KHoKjnbk0cqmgHJrBed9C4MAr9h6WOt8Mf9/vlwrbAKHoA==}
-
   '@xhmikosr/archive-type@8.1.0':
     resolution: {integrity: sha512-EXOjEbnZFE5c/nFMf4FOrEURVanzHpnkPYmnmr78u02/8hAhE0FMq8p9TK1IM0/bFr5VcyBUY0gfLm8f7dKy+Q==}
     engines: {node: '>=20'}
@@ -1821,10 +1700,6 @@ packages:
 
   asynckit@0.4.0:
     resolution: {integrity: sha512-Oei9OH4tRh0YqU3GxhX79dM/mwVgvbZJaSNaRk+bshkj0S5cfHcgYakreBjrHwatXKbz+IoIdYLxrKim2MjW0Q==}
-
-  automation-events@7.1.19:
-    resolution: {integrity: sha512-cD+TLhJTI0q4AI3ktd353lrGZiVa9AchowSDzQzzGjSoYe22js4vlS32VUtWuaulghi1Yq0KYNWKk9wWuGymPA==}
-    engines: {node: '>=18.2.0'}
 
   autoprefixer@10.5.0:
     resolution: {integrity: sha512-FMhOoZV4+qR6aTUALKX2rEqGG+oyATvwBt9IIzVR5rMa2HRWPkxf+P+PAJLD1I/H5/II+HuZcBJYEFBpq39ong==}
@@ -2300,9 +2175,6 @@ packages:
     resolution: {integrity: sha512-kVscqXk4OCp68SZ0dkgEKVi6/8ij300KBWTJq32P/dYeWTSwK41WyTxalN1eRmA5Z9UU/LX9D7FWSmV9SAYx6g==}
     engines: {node: '>=0.10.0'}
 
-  eventemitter3@5.0.4:
-    resolution: {integrity: sha512-mlsTRyGaPBjPedk6Bvw+aqbsXDtoAyAzm5MO7JgU+yVRyMQ5O8bD4Kcci7BS85f93veegeCPkL8R4GLClnjLFw==}
-
   events-universal@1.0.1:
     resolution: {integrity: sha512-LUd5euvbMLpwOF8m6ivPCbhQeSiYVNb8Vs0fQ8QjXo0JTkEHpz8pxdQf0gStltaPpw0Cca8b39KxvK9cfKRiAw==}
 
@@ -2535,9 +2407,6 @@ packages:
 
   hermes-parser@0.25.1:
     resolution: {integrity: sha512-6pEjquH3rqaI6cYAXYPcz9MS4rY6R4ngRgrgfDshRptUZIc3lw0MCIJIGDj9++mfySOuPTHB4nrSW99BCvOPIA==}
-
-  hoist-non-react-statics@3.3.2:
-    resolution: {integrity: sha512-/gGivxi8JPKWNm/W0jSmzcMPpfpPLc3dY/6GxhX2hQ9iGj3aDfklV4ET7NjKpSinLpJ5vafa9iiGIEZg10SfBw==}
 
   html-encoding-sniffer@6.0.0:
     resolution: {integrity: sha512-CV9TW3Y3f8/wT0BRFc1/KAVQ3TUHiXmaAb6VW9vtiMFf7SLoMd1PdAc4W3KFOFETBJUb90KatHqlsZMWV+R9Gg==}
@@ -3269,12 +3138,6 @@ packages:
     resolution: {integrity: sha512-WuyALRjWPDGtt/wzJiadO5AXY+8hZ80hVpe6MyivgraREW751X3SbhRvG3eLKOYN+8VEvqLcf3wdnt44Z4S4SA==}
     engines: {node: '>=10'}
 
-  react-async-hook@4.0.0:
-    resolution: {integrity: sha512-97lgjFkOcHCTYSrsKBpsXg3iVWM0LnzedB749iP76sb3/8Ouu4nHIkCLEOrQWHVYqrYxjF05NN6GHoXWFkB3Kw==}
-    engines: {node: '>=8', npm: '>=5'}
-    peerDependencies:
-      react: '>=16.8'
-
   react-dom@19.2.6:
     resolution: {integrity: sha512-0prMI+hvBbPjsWnxDLxlCGyM8PN6UuWjEUCYmZhO67xIV9Xasa/r/vDnq+Xyq4Lo27g8QSbO5YzARu0D1Sps3g==}
     peerDependencies:
@@ -3491,9 +3354,6 @@ packages:
     resolution: {integrity: sha512-vzn8aSqKgytVik0iwdBEi+zevbTYZogewTUM6dtpmGwEcdzbub/TX4bCzRhebDCRC3QzXgJsLRKB2V/Oof7HXg==}
     engines: {node: '>=0.10.0'}
 
-  soundfont2@0.5.0:
-    resolution: {integrity: sha512-dcmNVtHT/Y8BOOrtmjt7hn6Bk6bB1g+O2bWB9fa6emW7kfwiEiEL4VvGQfwVt8g0m58LyoqVyuQ4ZFukMLwGHQ==}
-
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
     engines: {node: '>=0.10.0'}
@@ -3511,9 +3371,6 @@ packages:
 
   stackback@0.0.2:
     resolution: {integrity: sha512-1XMJE5fQo1jGH6Y/7ebnwPOBEkIEnT4QF32d5R1+VXdXveM0IBMJt8zfaxX1P3QhVwrYe+576+jkANtSS2mBbw==}
-
-  standardized-audio-context@25.3.77:
-    resolution: {integrity: sha512-Ki9zNz6pKcC5Pi+QPjPyVsD9GwJIJWgryji0XL9cAJXMGyn+dPOf6Qik1AHei0+UNVcc4BOCa0hWLBzlwqsW/A==}
 
   std-env@4.1.0:
     resolution: {integrity: sha512-Rq7ybcX2RuC55r9oaPVEW7/xu3tj8u4GeBYHBWCychFtzMIr86A7e3PPEBPT37sHStKX3+TiX/Fr/ACmJLVlLQ==}
@@ -3566,25 +3423,6 @@ packages:
   strtok3@10.3.5:
     resolution: {integrity: sha512-ki4hZQfh5rX0QDLLkOCj+h+CVNkqmp/CMf8v8kZpkNVK6jGQooMytqzLZYUVYIZcFZ6yDB70EfD8POcFXiF5oA==}
     engines: {node: '>=18'}
-
-  styled-components@6.4.2:
-    resolution: {integrity: sha512-xZBhBJsMtGqb+aKcwKgaT+BtuFums9VynX2JRvXJGTx5UfZzN12rk5r4nVdhXYvRw+hE7yiYxVrOqJZaK2+Txg==}
-    engines: {node: '>= 16'}
-    peerDependencies:
-      css-to-react-native: '>= 3.2.0'
-      react: '>= 16.8.0'
-      react-dom: '>= 16.8.0'
-      react-native: '>= 0.68.0'
-    peerDependenciesMeta:
-      css-to-react-native:
-        optional: true
-      react-dom:
-        optional: true
-      react-native:
-        optional: true
-
-  stylis@4.3.6:
-    resolution: {integrity: sha512-yQ3rwFWRfwNUY7H5vpU0wfdkNSnvnJinhF9830Swlaxl03zsOjCfmX0ugac+3LtK0lYSgwL/KXc8oYL3mG4YFQ==}
 
   sugarss@5.0.1:
     resolution: {integrity: sha512-ctS5RYCBVvPoZAnzIaX5QSShK8ZiZxD5HUqSxlusvEMC+QZQIPCPOIJg6aceFX+K2rf4+SH89eu++h1Zmsr2nw==}
@@ -3656,9 +3494,6 @@ packages:
   token-types@6.1.2:
     resolution: {integrity: sha512-dRXchy+C0IgK8WPC6xvCHFRIWYUbqqdEIKPaKo/AcTUNzwLTK6AH7RjdLWsEZcAN/TBdtfUw3PYEgPr5VPr6ww==}
     engines: {node: '>=14.16'}
-
-  tone@15.1.22:
-    resolution: {integrity: sha512-TCScAGD4sLsama5DjvTUXlLDXSqPealhL64nsdV1hhr6frPWve0DeSo63AKnSJwgfg55fhvxj0iPPRwPN5o0ag==}
 
   totalist@3.0.1:
     resolution: {integrity: sha512-sf4i37nQ2LBx4m3wB74y+ubopq6W/dIzXg0FDGjsYnZHVa1Da8FH853wlL2gtUhg+xJXjfk3kUZS3BRoQeoQBQ==}
@@ -3879,10 +3714,6 @@ packages:
   util-deprecate@1.0.2:
     resolution: {integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==}
 
-  uuid@13.0.2:
-    resolution: {integrity: sha512-vzi9uRZ926x4XV73S/4qQaTwPXM2JBj6/6lI/byHH1jOpCzb0zDbfytgA9LcN/hzb2l7WQSQnxITOVx5un/wGw==}
-    hasBin: true
-
   v8-compile-cache-lib@3.0.1:
     resolution: {integrity: sha512-wa7YjyUGfNZngI/vtK0UHAN+lgDCxBPCylVXGp0zu59Fz5aiGtNXaq3DhIov063MorB+VfufLh3JlF2KdTK3xg==}
 
@@ -3999,9 +3830,6 @@ packages:
   w3c-xmlserializer@5.0.0:
     resolution: {integrity: sha512-o8qghlI8NZHU1lLPrpi2+Uq7abh4GGPpYANlalzWxyWteJOCsr/P+oPBA49TOLu5FTZO4d3F9MnWJfiMo4BkmA==}
     engines: {node: '>=18'}
-
-  waveform-data@4.5.2:
-    resolution: {integrity: sha512-1wDQ2LmaCM76xXXkOamWui1dp7uS2UHVeNccuHDS/qnoOrczrXR6g7Q9m/UjlibHfukxBrceoRIVTKKY1tDLdA==}
 
   wavesurfer.js@7.12.8:
     resolution: {integrity: sha512-G3nxzcC4X+ZWrLtcIV17kCWHVq3ysJCS4dS0YkGKILrQ2esAb8cScw965zKNKYxUvpiZsPK93KLWgWTYdIBQiw==}
@@ -4272,45 +4100,6 @@ snapshots:
 
   '@csstools/css-tokenizer@4.0.0': {}
 
-  '@dnd-kit/abstract@0.5.0':
-    dependencies:
-      '@dnd-kit/geometry': 0.5.0
-      '@dnd-kit/state': 0.5.0
-      tslib: 2.8.1
-
-  '@dnd-kit/collision@0.5.0':
-    dependencies:
-      '@dnd-kit/abstract': 0.5.0
-      '@dnd-kit/geometry': 0.5.0
-      tslib: 2.8.1
-
-  '@dnd-kit/dom@0.5.0':
-    dependencies:
-      '@dnd-kit/abstract': 0.5.0
-      '@dnd-kit/collision': 0.5.0
-      '@dnd-kit/geometry': 0.5.0
-      '@dnd-kit/state': 0.5.0
-      tslib: 2.8.1
-
-  '@dnd-kit/geometry@0.5.0':
-    dependencies:
-      '@dnd-kit/state': 0.5.0
-      tslib: 2.8.1
-
-  '@dnd-kit/react@0.5.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)':
-    dependencies:
-      '@dnd-kit/abstract': 0.5.0
-      '@dnd-kit/dom': 0.5.0
-      '@dnd-kit/state': 0.5.0
-      react: 19.2.6
-      react-dom: 19.2.6(react@19.2.6)
-      tslib: 2.8.1
-
-  '@dnd-kit/state@0.5.0':
-    dependencies:
-      '@preact/signals-core': 1.14.3
-      tslib: 2.8.1
-
   '@emnapi/core@1.10.0':
     dependencies:
       '@emnapi/wasi-threads': 1.2.1
@@ -4326,12 +4115,6 @@ snapshots:
     dependencies:
       tslib: 2.8.1
     optional: true
-
-  '@emotion/is-prop-valid@1.4.0':
-    dependencies:
-      '@emotion/memoize': 0.9.0
-
-  '@emotion/memoize@0.9.0': {}
 
   '@eslint-community/eslint-utils@4.9.1(eslint@10.4.0(jiti@2.7.0))':
     dependencies:
@@ -4735,18 +4518,11 @@ snapshots:
   '@oxc-resolver/binding-win32-x64-msvc@11.20.0':
     optional: true
 
-  '@phosphor-icons/react@2.1.10(react-dom@19.2.6(react@19.2.6))(react@19.2.6)':
-    dependencies:
-      react: 19.2.6
-      react-dom: 19.2.6(react@19.2.6)
-
   '@playwright/test@1.60.0':
     dependencies:
       playwright: 1.60.0
 
   '@polka/url@1.0.0-next.29': {}
-
-  '@preact/signals-core@1.14.3': {}
 
   '@quansync/fs@1.0.0':
     dependencies:
@@ -5104,11 +4880,6 @@ snapshots:
 
   '@types/estree@1.0.9': {}
 
-  '@types/hoist-non-react-statics@3.3.7(@types/react@19.2.15)':
-    dependencies:
-      '@types/react': 19.2.15
-      hoist-non-react-statics: 3.3.2
-
   '@types/http-cache-semantics@4.2.0': {}
 
   '@types/json-schema@7.0.15': {}
@@ -5125,12 +4896,6 @@ snapshots:
 
   '@types/react@19.2.15':
     dependencies:
-      csstype: 3.2.3
-
-  '@types/styled-components@5.1.36':
-    dependencies:
-      '@types/hoist-non-react-statics': 3.3.7(@types/react@19.2.15)
-      '@types/react': 19.2.15
       csstype: 3.2.3
 
   '@typescript-eslint/eslint-plugin@8.59.4(@typescript-eslint/parser@8.59.4(eslint@10.4.0(jiti@2.7.0))(typescript@6.0.3))(eslint@10.4.0(jiti@2.7.0))(typescript@6.0.3)':
@@ -5441,69 +5206,6 @@ snapshots:
       path-browserify: 1.0.1
       vscode-uri: 3.1.0
 
-  '@waveform-playlist/browser@13.1.1(@dnd-kit/abstract@0.5.0)(@dnd-kit/dom@0.5.0)(@dnd-kit/react@0.5.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(styled-components@6.4.2(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(tone@15.1.22)':
-    dependencies:
-      '@dnd-kit/abstract': 0.5.0
-      '@dnd-kit/dom': 0.5.0
-      '@dnd-kit/react': 0.5.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
-      '@waveform-playlist/core': 12.2.0
-      '@waveform-playlist/engine': 13.3.0(@waveform-playlist/core@12.2.0)
-      '@waveform-playlist/loaders': 12.0.0
-      '@waveform-playlist/media-element-playout': 12.0.0
-      '@waveform-playlist/playout': 12.4.0(@waveform-playlist/engine@13.3.0(@waveform-playlist/core@12.2.0))(tone@15.1.22)
-      '@waveform-playlist/ui-components': 13.0.1(@dnd-kit/react@0.5.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(@waveform-playlist/engine@13.3.0(@waveform-playlist/core@12.2.0))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(styled-components@6.4.2(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(tone@15.1.22)
-      '@waveform-playlist/worklets': 12.2.0
-      react: 19.2.6
-      react-dom: 19.2.6(react@19.2.6)
-      styled-components: 6.4.2(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
-      tone: 15.1.22
-      uuid: 13.0.2
-      waveform-data: 4.5.2
-
-  '@waveform-playlist/core@12.0.0': {}
-
-  '@waveform-playlist/core@12.2.0': {}
-
-  '@waveform-playlist/engine@13.3.0(@waveform-playlist/core@12.2.0)':
-    dependencies:
-      '@waveform-playlist/core': 12.2.0
-
-  '@waveform-playlist/loaders@12.0.0':
-    dependencies:
-      '@waveform-playlist/core': 12.0.0
-      eventemitter3: 5.0.4
-
-  '@waveform-playlist/media-element-playout@12.0.0':
-    dependencies:
-      '@waveform-playlist/core': 12.0.0
-
-  '@waveform-playlist/playout@12.4.0(@waveform-playlist/engine@13.3.0(@waveform-playlist/core@12.2.0))(tone@15.1.22)':
-    dependencies:
-      '@waveform-playlist/core': 12.2.0
-      soundfont2: 0.5.0
-      tone: 15.1.22
-    optionalDependencies:
-      '@waveform-playlist/engine': 13.3.0(@waveform-playlist/core@12.2.0)
-
-  '@waveform-playlist/ui-components@13.0.1(@dnd-kit/react@0.5.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(@waveform-playlist/engine@13.3.0(@waveform-playlist/core@12.2.0))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(styled-components@6.4.2(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(tone@15.1.22)':
-    dependencies:
-      '@phosphor-icons/react': 2.1.10(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
-      '@waveform-playlist/core': 12.2.0
-      '@waveform-playlist/loaders': 12.0.0
-      '@waveform-playlist/playout': 12.4.0(@waveform-playlist/engine@13.3.0(@waveform-playlist/core@12.2.0))(tone@15.1.22)
-      react: 19.2.6
-      react-async-hook: 4.0.0(react@19.2.6)
-      react-dom: 19.2.6(react@19.2.6)
-      styled-components: 6.4.2(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
-      waveform-data: 4.5.2
-    optionalDependencies:
-      '@dnd-kit/react': 0.5.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
-    transitivePeerDependencies:
-      - '@waveform-playlist/engine'
-      - tone
-
-  '@waveform-playlist/worklets@12.2.0': {}
-
   '@xhmikosr/archive-type@8.1.0':
     dependencies:
       file-type: 21.3.4
@@ -5714,11 +5416,6 @@ snapshots:
   async-function@1.0.0: {}
 
   asynckit@0.4.0: {}
-
-  automation-events@7.1.19:
-    dependencies:
-      '@babel/runtime': 7.29.7
-      tslib: 2.8.1
 
   autoprefixer@10.5.0(postcss@8.5.15):
     dependencies:
@@ -6301,8 +5998,6 @@ snapshots:
 
   esutils@2.0.3: {}
 
-  eventemitter3@5.0.4: {}
-
   events-universal@1.0.1:
     dependencies:
       bare-events: 2.9.1
@@ -6549,10 +6244,6 @@ snapshots:
   hermes-parser@0.25.1:
     dependencies:
       hermes-estree: 0.25.1
-
-  hoist-non-react-statics@3.3.2:
-    dependencies:
-      react-is: 16.13.1
 
   html-encoding-sniffer@6.0.0:
     dependencies:
@@ -7284,10 +6975,6 @@ snapshots:
 
   quick-lru@5.1.1: {}
 
-  react-async-hook@4.0.0(react@19.2.6):
-    dependencies:
-      react: 19.2.6
-
   react-dom@19.2.6(react@19.2.6):
     dependencies:
       react: 19.2.6
@@ -7532,8 +7219,6 @@ snapshots:
     dependencies:
       is-plain-obj: 1.1.0
 
-  soundfont2@0.5.0: {}
-
   source-map-js@1.2.1: {}
 
   source-map-support@0.5.21:
@@ -7546,12 +7231,6 @@ snapshots:
   source-map@0.7.6: {}
 
   stackback@0.0.2: {}
-
-  standardized-audio-context@25.3.77:
-    dependencies:
-      '@babel/runtime': 7.29.7
-      automation-events: 7.1.19
-      tslib: 2.8.1
 
   std-env@4.1.0: {}
 
@@ -7635,17 +7314,6 @@ snapshots:
     dependencies:
       '@tokenizer/token': 0.3.0
 
-  styled-components@6.4.2(react-dom@19.2.6(react@19.2.6))(react@19.2.6):
-    dependencies:
-      '@emotion/is-prop-valid': 1.4.0
-      csstype: 3.2.3
-      react: 19.2.6
-      stylis: 4.3.6
-    optionalDependencies:
-      react-dom: 19.2.6(react@19.2.6)
-
-  stylis@4.3.6: {}
-
   sugarss@5.0.1(postcss@8.5.15):
     dependencies:
       postcss: 8.5.15
@@ -7713,11 +7381,6 @@ snapshots:
       '@borewit/text-codec': 0.2.2
       '@tokenizer/token': 0.3.0
       ieee754: 1.2.1
-
-  tone@15.1.22:
-    dependencies:
-      standardized-audio-context: 25.3.77
-      tslib: 2.8.1
 
   totalist@3.0.1: {}
 
@@ -7949,8 +7612,6 @@ snapshots:
 
   util-deprecate@1.0.2: {}
 
-  uuid@13.0.2: {}
-
   v8-compile-cache-lib@3.0.1: {}
 
   vite-plugin-dts@5.0.1(rolldown@1.0.2)(typescript@6.0.3)(vite@8.0.14(@types/node@25.9.1)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.15))):
@@ -8027,8 +7688,6 @@ snapshots:
   w3c-xmlserializer@5.0.0:
     dependencies:
       xml-name-validator: 5.0.0
-
-  waveform-data@4.5.2: {}
 
   wavesurfer.js@7.12.8: {}
 

@@ -7,7 +7,7 @@ i18n
   .use(initReactI18next)
   .init({
     fallbackLng: 'zh',
-    debug: true,
+    debug: import.meta.env.DEV,
     backend: {
       loadPath: '/assets/locales/{{lng}}/{{ns}}.json',
     }

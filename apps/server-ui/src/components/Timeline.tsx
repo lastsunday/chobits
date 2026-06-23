@@ -369,7 +369,6 @@ export function Timeline({ roundId, dataItems }: TimelineProps) {
       ? Math.max(...frameList.map((f) => f.seekMs), 0)
       : 0;
     const result = Math.max(clipMax, frameMax, 1000);
-    console.log(`[Timeline:${roundId.slice(-6)}] totalDurationMs: clipMax=${clipMax}, frameMax=${frameMax}, result=${result}`);
     return result;
   }, [clips, frameList, t0Ms]);
 
@@ -392,10 +391,8 @@ export function Timeline({ roundId, dataItems }: TimelineProps) {
         color: f.dir === 'inbound' ? '#228be6' : '#fab005',
       });
     }
-    console.log(`[Timeline:${roundId.slice(-6)}] frameMarkers: total=${framesData.items.length}, null_elapsed=${nullElapsed}, filtered=${filteredCount}, markers=${result.length}, t0Ms=${t0Ms}, totalDurationMs=${totalDurationMs}`);
     result.sort((a, b) => a.startMs - b.startMs || a.seq - b.seq);
     if (result.length > 0) {
-      console.log(`[Timeline:${roundId.slice(-6)}]  sorted: first_seq=${result[0].seq} startMs=${result[0].startMs}`, `last_seq=${result[result.length-1].seq} startMs=${result[result.length-1].startMs}`);
     }
     return result;
   }, [framesData, ttsSyncPositions, t0Ms, totalDurationMs]);
@@ -562,9 +559,6 @@ export function Timeline({ roundId, dataItems }: TimelineProps) {
     }
 
     const result = idx >= 0 ? frameMarkers[idx].seq : null;
-    if (currentTime > 0 || result != null) {
-      console.log(`[Timeline:${roundId.slice(-6)}] currentFrameSeq: time=${currentTime.toFixed(4)}s, markers=${frameMarkers.length}, idx=${idx}, seq=${result}`);
-    }
     return result;
   }, [frameMarkers, currentTime]);
 
@@ -574,7 +568,6 @@ export function Timeline({ roundId, dataItems }: TimelineProps) {
   }, [currentFrameSeq, showFrames]);
 
   useEffect(() => {
-    console.log(`[Timeline:${roundId.slice(-6)}] showFrames effect: isReady=${isReady}, frameList=${frameList.length}`);
     if (isReady && frameList.length > 0) {
       setShowFrames(true);
     }

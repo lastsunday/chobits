@@ -218,16 +218,6 @@ async fn ota(
             url: None,
         }),
         activation: None,
-        // TODO: fill activate logic
-        // activation: Some(Activation {
-        //     code: activation_code.clone(),
-        //     message: format!(
-        //         "{} {}",
-        //         t("ota.activation_message", &headers),
-        //         activation_code
-        //     ),
-        //     challenge: String::from(device_id),
-        // }),
     })) //
 }
 

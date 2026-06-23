@@ -1,6 +1,6 @@
 import { getUser, resetPassword } from '@/api';
 import { UserResult } from '@/data/user-result';
-import { AppShell, AppShellHeader, AppShellNavbar, AppShellMain, Burger, Button, Group, Menu, MenuTarget, MenuDropdown, Modal, PasswordInput, Text } from '@mantine/core';
+import { AppShell, AppShellHeader, AppShellNavbar, AppShellMain, Burger, Button, Group, Modal, PasswordInput, Text } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { createFileRoute, Outlet, redirect, useRouter, useRouterState } from '@tanstack/react-router';
@@ -142,13 +142,7 @@ function RouteComponent() {
       <AppShellNavbar p="md">
         <nav className={classes.navbar}>
           <div className={classes.section}>
-            <Menu withArrow width={200}>
-              <MenuTarget>
-                <UserButton className="w-full" name={user?.name ?? ''} image='' email='' />
-              </MenuTarget>
-              <MenuDropdown>
-              </MenuDropdown>
-            </Menu>
+            <UserButton className="w-full" name={user?.name ?? ''} image='' email='' />
           </div>
           <div className={classes.navbarMain}>
             {links}
