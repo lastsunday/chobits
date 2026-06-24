@@ -1,11 +1,9 @@
+use super::round::OutputMessage;
 use crate::ws::WsErrorCode;
-use crate::{
-    asr::Asr, common::ModelError, config::audio::AudioConfig, vad::Vad, ws::frame::FrameResult,
-};
+use crate::{asr::Asr, common::ModelError, config::audio::AudioConfig, vad::Vad};
 use async_trait::async_trait;
 use chrono::Local;
 use framework::err;
-use framework::error::AppError;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::Sender;
@@ -26,7 +24,7 @@ pub trait Listener: Send + Sync {
     fn get_state(&self) -> ListenState;
     async fn get_result(&mut self) -> core::result::Result<ListenResult, ModelError>;
     async fn reset(&mut self, silence_voice_timeout: Option<i64>);
-    async fn set_sender(&mut self, tx: Sender<Result<FrameResult, AppError>>);
+    async fn set_sender(&mut self, tx: Sender<OutputMessage>);
 
     async fn get_voice_data(&self) -> Vec<f32> {
         Vec::new()
@@ -61,7 +59,7 @@ pub struct DefaultListener {
     silence_voice_timeout: Option<i64>,
     latest_speaking_time: Option<i64>,
     audio_config: Arc<AudioConfig>,
-    error_tx: Option<Sender<Result<FrameResult, AppError>>>,
+    error_tx: Option<Sender<OutputMessage>>,
     /// Ring buffer for prefix padding (~300ms of raw audio).
     prefix_buffer: Vec<f32>,
     /// Whether prefix has been flushed for current speech turn.
@@ -237,7 +235,10 @@ impl Listener for DefaultListener {
                 tracing::error!("{:?}", e);
                 if let Some(tx) = &self.error_tx {
                     let _ = tx
-                        .send(Err(err!(WsErrorCode::AsrFailure).with_extra(e.to_string())))
+                        .send(OutputMessage {
+                            epoch: 0,
+                            payload: Err(err!(WsErrorCode::AsrFailure).with_extra(e.to_string())),
+                        })
                         .await;
                 }
                 Err(e)
@@ -264,7 +265,7 @@ impl Listener for DefaultListener {
         self.pending_text = None;
     }
 
-    async fn set_sender(&mut self, tx: Sender<Result<FrameResult, AppError>>) {
+    async fn set_sender(&mut self, tx: Sender<OutputMessage>) {
         self.error_tx = Some(tx);
     }
 

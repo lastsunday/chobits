@@ -1,6 +1,6 @@
 use super::frame::{Frame, FrameResult};
 use super::session::listener::Listener;
-use super::session::round::{Command, Round};
+use super::session::round::{Command, OutputMessage, Round, TracedSender};
 use crate::config::audio::AudioConfig;
 use crate::config::session::SessionConfig;
 use crate::llm::Model;
@@ -13,8 +13,6 @@ use crate::record::observer::{
 };
 use crate::tts::Tts;
 use chrono::Local;
-use core::result::Result;
-use framework::error::AppError;
 use futures::Stream;
 use rig::message::ToolResult;
 use service::chobits::message::hello::{AudioParam, HelloMessage};
@@ -22,7 +20,6 @@ use service::chobits::message::listen::ListenState;
 use service::chobits::message::{AudioFormat, Transport};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::{Sender, channel};
 use tokio_stream::wrappers::ReceiverStream;
@@ -30,7 +27,6 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 pub mod listener;
-pub mod output_controller;
 pub mod round;
 
 #[derive(Default)]
@@ -110,7 +106,7 @@ impl SessionBuilder {
                 preamble: Some(system_prompt.to_string()),
                 chat_history: vec![],
             })),
-            output_cancel_token: CancellationToken::new(),
+            output_epoch: Arc::new(AtomicU64::new(1)),
             config,
             audio_config,
             listener: self.listener.expect("listener is required"),
@@ -123,7 +119,7 @@ impl SessionBuilder {
     }
 }
 
-type OutputTx = Option<Sender<Result<FrameResult, AppError>>>;
+type OutputTx = Option<Sender<OutputMessage>>;
 
 pub struct Session {
     pub id: String,
@@ -135,7 +131,7 @@ pub struct Session {
     current_mode: RoundMode,
     latest_activity_time: Arc<Mutex<Option<i64>>>,
     history: Arc<Mutex<History>>,
-    output_cancel_token: CancellationToken,
+    output_epoch: Arc<AtomicU64>,
 
     config: Arc<SessionConfig>,
     audio_config: Arc<AudioConfig>,
@@ -174,9 +170,13 @@ impl Session {
     pub async fn stop(&mut self) {
         info!(target:"session", "stop");
         self.stop_round().await;
-        self.output_cancel_token.cancel();
         let tx = self.output_tx.clone().expect("output tx not exists");
-        let result = tx.send(Ok(FrameResult::CloseResult)).await;
+        let result = tx
+            .send(OutputMessage {
+                epoch: 0,
+                payload: Ok(FrameResult::CloseResult),
+            })
+            .await;
         if result.is_err() {
             info!("tx send frame result close result failure");
         }
@@ -199,13 +199,15 @@ impl Session {
             .with_max_prompt_len(self.config.max_prompt_len);
         let round_id = framework::id::gen_id();
         let cancel_token = CancellationToken::new();
-        let traced_tx = output_controller::TracedSender::new(
+        let epoch = self.output_epoch.load(Ordering::Acquire);
+        let traced_tx = TracedSender::new(
             tx.clone(),
             self.observers.clone(),
             Some(round_id.clone()),
             Some(self.id.clone()),
             self.seq.clone(),
             cancel_token.clone(),
+            epoch,
         );
         for observer in &self.observers {
             observer.on_round_start(&RoundStartContext {
@@ -236,12 +238,7 @@ impl Session {
         if let Some(round) = &mut self.current_round {
             let round_id = round.id.clone();
             round.stop().await;
-            // Wait for task to finish (cancellation unblocks any blocked send)
-            if let Some(handle) = round.join_handle.take() {
-                tokio::time::timeout(Duration::from_secs(5), handle)
-                    .await
-                    .ok();
-            }
+            round.join_handle.take();
             for observer in &self.observers {
                 let _ = observer
                     .on_round_end(&RoundEndContext {
@@ -335,41 +332,38 @@ impl Session {
 
     pub async fn output_frame(
         &mut self,
-    ) -> impl Stream<Item = Result<FrameResult, AppError>> + Unpin + Send + 'static {
-        let (controller_input_tx, controller_input_rx) =
-            channel::<Result<FrameResult, AppError>>(64);
-        let (controller_output_tx, controller_output_rx) =
-            channel::<Result<FrameResult, AppError>>(64);
+    ) -> (
+        impl Stream<Item = OutputMessage> + Unpin + Send + 'static,
+        Arc<AtomicU64>,
+        Arc<Mutex<Option<i64>>>,
+        u64,
+    ) {
+        let (output_tx, output_rx) = channel::<OutputMessage>(64);
 
         let frame_duration = self
             .audio_config
             .output_frame_duration
             .expect("output frame duration is empty");
-        let controller = self::output_controller::OutputController::new(
-            controller_input_rx,
-            controller_output_tx,
-            frame_duration,
-            self.latest_activity_time.clone(),
-            self.output_cancel_token.child_token(),
-        );
-        controller.start();
 
         let (device_mcp_call_tool_result_tx, device_mcp_call_tool_result_rx) =
             channel::<anyhow::Result<ToolResult>>(1);
         self.device_mcp_call_tool_result_tx = Some(device_mcp_call_tool_result_tx);
         let mcp_device_client = DeviceMcpClient::new(
             Some(self.id.clone()),
-            controller_input_tx.clone(),
+            output_tx.clone(),
             Arc::new(Mutex::new(device_mcp_call_tool_result_rx)),
         );
         let mcp_device_client = Arc::new(Mutex::new(mcp_device_client));
         let mcp_host = self.mcp_host.clone();
         let mut mcp_host = mcp_host.lock().await;
         mcp_host.set_device_client(mcp_device_client.clone()).await;
-        self.listener.set_sender(controller_input_tx.clone()).await;
-        self.output_tx = Some(controller_input_tx.clone());
+        self.listener.set_sender(output_tx.clone()).await;
+        self.output_tx = Some(output_tx.clone());
 
-        ReceiverStream::new(controller_output_rx)
+        let epoch = self.output_epoch.clone();
+        let activity_time = self.latest_activity_time.clone();
+        let stream = ReceiverStream::new(output_rx);
+        (stream, epoch, activity_time, frame_duration)
     }
 
     pub async fn update_latest_activity_time(&self) {

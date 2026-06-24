@@ -43,16 +43,19 @@ impl Session {
                         if let Some(mode) = mode {
                             match mode {
                                 service::chobits::message::listen::ListenMode::Auto => {
+                                    self.interrupt_output().await;
                                     self.phase = Phase::Listen(ListenMode::Auto);
                                     self.current_mode = RoundMode::Auto;
                                     self.handle_phase_listen_for_auto_mode(frame).await;
                                 }
                                 service::chobits::message::listen::ListenMode::Manual => {
+                                    self.interrupt_output().await;
                                     self.phase = Phase::Listen(ListenMode::Manual);
                                     self.current_mode = RoundMode::Manual;
                                     self.listener.reset(None).await;
                                 }
                                 service::chobits::message::listen::ListenMode::RealTime => {
+                                    self.interrupt_output().await;
                                     self.phase = Phase::Listen(ListenMode::RealTime);
                                     self.current_mode = RoundMode::RealTime;
                                     self.handle_phase_listen_for_realtime_mode(frame).await;
@@ -136,6 +139,7 @@ impl Session {
                         if let Some(mode) = mode {
                             match mode {
                                 service::chobits::message::listen::ListenMode::Auto => {
+                                    self.interrupt_output().await;
                                     self.phase = Phase::Listen(ListenMode::Auto);
                                     self.current_mode = RoundMode::Auto;
                                     self.update_latest_activity_time().await;
@@ -153,11 +157,13 @@ impl Session {
                                     }
                                 }
                                 service::chobits::message::listen::ListenMode::Manual => {
+                                    self.interrupt_output().await;
                                     self.phase = Phase::Listen(ListenMode::Manual);
                                     self.current_mode = RoundMode::Manual;
                                     self.listener.reset(None).await;
                                 }
                                 service::chobits::message::listen::ListenMode::RealTime => {
+                                    self.interrupt_output().await;
                                     self.phase = Phase::Listen(ListenMode::RealTime);
                                     self.current_mode = RoundMode::RealTime;
                                 }
@@ -261,6 +267,7 @@ impl Session {
                         if let Some(mode) = mode {
                             match mode {
                                 service::chobits::message::listen::ListenMode::Auto => {
+                                    self.interrupt_output().await;
                                     self.phase = Phase::Listen(ListenMode::Auto);
                                     self.current_mode = RoundMode::Auto;
                                     let silence_voice_timeout = self
@@ -271,11 +278,13 @@ impl Session {
                                     self.listener.reset(Some(silence_voice_timeout)).await;
                                 }
                                 service::chobits::message::listen::ListenMode::Manual => {
+                                    self.interrupt_output().await;
                                     self.phase = Phase::Listen(ListenMode::Manual);
                                     self.current_mode = RoundMode::Manual;
                                     self.listener.reset(None).await;
                                 }
                                 service::chobits::message::listen::ListenMode::RealTime => {
+                                    self.interrupt_output().await;
                                     self.phase = Phase::Listen(ListenMode::RealTime);
                                     self.current_mode = RoundMode::RealTime;
                                 }
@@ -351,15 +360,18 @@ impl Session {
                         if let Some(mode) = mode {
                             match mode {
                                 service::chobits::message::listen::ListenMode::Auto => {
+                                    self.interrupt_output().await;
                                     self.phase = Phase::Listen(ListenMode::Auto);
                                     self.current_mode = RoundMode::Auto;
                                 }
                                 service::chobits::message::listen::ListenMode::Manual => {
+                                    self.interrupt_output().await;
                                     self.phase = Phase::Listen(ListenMode::Manual);
                                     self.current_mode = RoundMode::Manual;
                                     self.listener.reset(None).await;
                                 }
                                 service::chobits::message::listen::ListenMode::RealTime => {
+                                    self.interrupt_output().await;
                                     self.phase = Phase::Listen(ListenMode::RealTime);
                                     self.current_mode = RoundMode::RealTime;
                                 }
@@ -514,13 +526,24 @@ impl Session {
             features: None,
             session_id: Some(self.id.clone()),
         };
-        let result = tx.send(Ok(FrameResult::HelloResult(data))).await;
+        let result = tx
+            .send(OutputMessage {
+                epoch: 0,
+                payload: Ok(FrameResult::HelloResult(data)),
+            })
+            .await;
         if result.is_err() {
             info!(target:"session","tx send hello result failure");
         }
     }
 
+    async fn interrupt_output(&mut self) {
+        self.stop_round().await;
+        self.output_epoch.fetch_add(1, Ordering::Release);
+    }
+
     async fn handle_listen_end(&mut self) {
+
         let voice_pcm = self.listener.get_voice_data().await;
         let sample_rate = self
             .audio_config

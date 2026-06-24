@@ -1,12 +1,16 @@
 use super::super::frame::FrameResult;
-use super::output_controller::TracedSender;
 use crate::llm::client::{ChatRequest, Client};
 use crate::record::observer::{
-    LlmDeltaContext, RoundEndContext, SessionObserver, TextInputContext, TtsDeltaContext,
+    FrameContext, FrameDirection, LlmDeltaContext, RoundEndContext, SessionObserver,
+    TextInputContext, TtsDeltaContext,
 };
 use crate::tts::Tts;
 use crate::util::llm::{EMOJI_MAP, analyze_emotion};
 use crate::ws::WsErrorCode;
+pub struct OutputMessage {
+    pub epoch: u64,
+    pub payload: Result<FrameResult, AppError>,
+}
 use anyhow::Context;
 use core::result::Result;
 use framework::err;
@@ -19,8 +23,10 @@ use service::chobits::message::llm::LlmMessage;
 use service::chobits::message::stt::SttMessage;
 use service::chobits::message::tts::{TtsMessage, TtsState};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::Mutex;
+use tokio::sync::mpsc::Sender;
 use tokio::sync::mpsc::error::SendError;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -48,6 +54,69 @@ pub enum Command<'a> {
     ListenUnclear { text: &'a str },
 }
 
+#[derive(Clone)]
+pub struct TracedSender {
+    inner: Sender<OutputMessage>,
+    observers: Vec<Arc<dyn SessionObserver>>,
+    round_id: Option<String>,
+    session_id: Option<String>,
+    seq: Arc<AtomicU64>,
+    cancel_token: CancellationToken,
+    epoch: u64,
+}
+
+impl TracedSender {
+    pub fn new(
+        inner: Sender<OutputMessage>,
+        observers: Vec<Arc<dyn SessionObserver>>,
+        round_id: Option<String>,
+        session_id: Option<String>,
+        seq: Arc<AtomicU64>,
+        cancel_token: CancellationToken,
+        epoch: u64,
+    ) -> Self {
+        Self {
+            inner,
+            observers,
+            round_id,
+            session_id,
+            seq,
+            cancel_token,
+            epoch,
+        }
+    }
+
+    pub async fn send(
+        &self,
+        item: Result<FrameResult, AppError>,
+    ) -> Result<(), SendError<OutputMessage>> {
+        if let Some(ref round_id) = self.round_id {
+            let detail = match &item {
+                Ok(r) => format!("{r}"),
+                Err(e) => format!("Err({e})"),
+            };
+            let seq = self.seq.fetch_add(1, Ordering::Relaxed);
+            for observer in &self.observers {
+                observer
+                    .on_frame(&FrameContext {
+                        round_id: Some(round_id.clone()),
+                        session_id: self.session_id.clone(),
+                        seq,
+                        direction: FrameDirection::Outbound,
+                        detail: detail.clone(),
+                    })
+                    .await;
+            }
+        }
+        tokio::select! {
+            result = self.inner.send(OutputMessage { epoch: self.epoch, payload: item }) => result,
+            _ = self.cancel_token.cancelled() => {
+                Err(SendError(OutputMessage { epoch: self.epoch, payload: Err(err!(WsErrorCode::InternalError)) }))
+            }
+        }
+    }
+}
+
 async fn change_tts_state(tts_state: Arc<Mutex<Option<TtsState>>>, state: TtsState) {
     let mut tts_state = tts_state.lock().await;
     *tts_state = Some(state);
@@ -58,7 +127,7 @@ async fn send_tts_frame(
     session_id: String,
     state: TtsState,
     text: Option<String>,
-) -> Result<(), SendError<Result<FrameResult, AppError>>> {
+) -> Result<(), SendError<OutputMessage>> {
     tx.send(Ok(FrameResult::TTSResult(TtsMessage::new(
         Some(session_id),
         Some(state),
@@ -74,7 +143,7 @@ async fn send_tts_frame_and_change_state(
     session_id: String,
     state: TtsState,
     text: Option<String>,
-) -> Result<(), SendError<Result<FrameResult, AppError>>> {
+) -> Result<(), SendError<OutputMessage>> {
     change_tts_state(tts_state, state.clone()).await;
     send_tts_frame(tx, session_id, state, text).await?;
     Ok(())

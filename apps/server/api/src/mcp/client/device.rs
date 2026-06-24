@@ -3,10 +3,10 @@ use std::sync::{
     atomic::{AtomicI64, Ordering},
 };
 
+use crate::ws::session::round::OutputMessage;
 use crate::{mcp::client::McpClient, ws::frame::FrameResult};
 use anyhow::Context;
 use async_trait::async_trait;
-use framework::error::AppError;
 use rig::{
     OneOrMany,
     completion::ToolDefinition,
@@ -44,7 +44,7 @@ pub struct DeviceMcpClient {
     next_cursor: Option<String>,
     pub tools: Vec<Tool>,
     pub phase: DeviceMcpPhase,
-    output_tx: Sender<Result<FrameResult, AppError>>,
+    output_tx: Sender<OutputMessage>,
     call_tool_result_rx: Arc<Mutex<Receiver<anyhow::Result<ToolResult>>>>,
 }
 
@@ -72,18 +72,21 @@ impl McpClient for DeviceMcpClient {
         });
         let tx = self.output_tx.clone();
         let result = tx
-            .send(Ok(FrameResult::McpResult(McpRequest::new(
-                self.session_id.clone(),
-                JsonRpcRequest {
-                    jsonrpc: JsonRpcVersion2_0,
-                    id,
-                    request: Request {
-                        method: request.method.as_str().to_string(),
-                        params: to_json_object(request.params),
-                        ..Default::default()
+            .send(OutputMessage {
+                epoch: 0,
+                payload: Ok(FrameResult::McpResult(McpRequest::new(
+                    self.session_id.clone(),
+                    JsonRpcRequest {
+                        jsonrpc: JsonRpcVersion2_0,
+                        id,
+                        request: Request {
+                            method: request.method.as_str().to_string(),
+                            params: to_json_object(request.params),
+                            ..Default::default()
+                        },
                     },
-                },
-            ))))
+                ))),
+            })
             .await;
         if result.is_err() {
             Err(anyhow::anyhow!(
@@ -106,7 +109,7 @@ impl McpClient for DeviceMcpClient {
 impl DeviceMcpClient {
     pub fn new(
         session_id: Option<String>,
-        output_tx: Sender<Result<FrameResult, AppError>>,
+        output_tx: Sender<OutputMessage>,
         call_tool_result_rx: Arc<Mutex<Receiver<anyhow::Result<ToolResult>>>>,
     ) -> Self {
         Self {
@@ -286,7 +289,12 @@ impl DeviceMcpClient {
         let tx = self.output_tx.clone();
         let request = self.create_initialize_request().await;
         // mcp request send
-        let result = tx.send(Ok(FrameResult::McpResult(request))).await;
+        let result = tx
+            .send(OutputMessage {
+                epoch: 0,
+                payload: Ok(FrameResult::McpResult(request)),
+            })
+            .await;
         if result.is_err() {
             info!("tx send mcp initialize reqeust failure");
         }
@@ -299,9 +307,12 @@ impl DeviceMcpClient {
     async fn request_mcp_tools_list(&mut self) {
         let tx = self.output_tx.clone();
         let result = tx
-            .send(Ok(FrameResult::McpResult(
-                self.create_tools_list_request().await,
-            )))
+            .send(OutputMessage {
+                epoch: 0,
+                payload: Ok(FrameResult::McpResult(
+                    self.create_tools_list_request().await,
+                )),
+            })
             .await;
         if result.is_err() {
             info!("tx send mcp tools list reqeust failure");

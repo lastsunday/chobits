@@ -240,7 +240,7 @@ impl Bot {
                 observer.on_session_start(&id).await;
             }
             session.start().await?;
-            let mut output = session.output_frame().await;
+            let (mut output, _, _, _) = session.output_frame().await;
             // send hello frame
             session
                 .accept_frame(&Frame::Hello(HelloMessage {
@@ -248,7 +248,7 @@ impl Bot {
                 }))
                 .await;
             if let Some(data) = output.next().await {
-                match data {
+                match data.payload {
                     Ok(frame_result) => {
                         if let FrameResult::HelloResult(HelloMessage {
                             message: _,
@@ -277,7 +277,7 @@ impl Bot {
             tokio::spawn(async move {
                 let id = room_id_clone;
                 while let Some(data) = output.next().await {
-                    match data {
+                    match data.payload {
                         Ok(frame_result) => match frame_result {
                             FrameResult::HelloResult(_hello_message) => todo!(),
                             FrameResult::STTResult(stt_message) => {

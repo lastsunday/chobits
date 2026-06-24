@@ -15,7 +15,7 @@ use crate::{
     record::observer::SessionObserver,
     tts::TtsFactory,
     vad::VadFactory,
-    ws::{frame::FrameResult, session::Session},
+    ws::session::Session,
 };
 
 use axum::{
@@ -25,6 +25,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use axum_extra::{TypedHeader, headers};
+use chrono::Local;
 use framework::error::AppError;
 use framework::id::gen_id;
 use framework::prelude::error as error_code;
@@ -34,7 +35,9 @@ use rmcp::transport::{
     StreamableHttpClientTransport, streamable_http_client::StreamableHttpClientTransportConfig,
 };
 use serde::Serialize;
+use session::round::OutputMessage;
 use session::{SessionBuilder, listener::DefaultListener};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
 use tracing::{Instrument, Level, debug, error, info, span, trace, warn};
@@ -149,10 +152,18 @@ where
         return;
     }
     let session_id_clone = ctx.session_id.clone();
-    let output = session.output_frame().await;
+    let (output_stream, epoch, latest_activity_time, frame_duration) = session.output_frame().await;
     tokio::spawn(async move {
         let span = span!(parent:None,Level::DEBUG, "socket", id=%session_id_clone);
-        on_send(output, write).instrument(span).await
+        on_send(
+            output_stream,
+            epoch,
+            latest_activity_time,
+            frame_duration,
+            write,
+        )
+        .instrument(span)
+        .await
     });
     tokio::spawn(async move {
         let span = span!(parent:None,Level::DEBUG, "socket", id=%ctx.session_id);
@@ -189,13 +200,25 @@ where
 }
 
 async fn on_send<W>(
-    mut output: impl Stream<Item = Result<FrameResult, AppError>> + Unpin + Send + 'static,
+    mut output: impl Stream<Item = OutputMessage> + Unpin + Send + 'static,
+    current_epoch: Arc<AtomicU64>,
+    latest_activity_time: Arc<Mutex<Option<i64>>>,
+    frame_duration: u64,
     mut write: W,
 ) where
     W: Sink<Message> + Unpin + Send + 'static,
 {
-    while let Some(data) = output.next().await {
-        match data {
+    use tokio::time::{Duration, Instant, MissedTickBehavior, interval_at};
+
+    let mut audio_interval: Option<tokio::time::Interval> = None;
+
+    while let Some(msg) = output.next().await {
+        let epoch = current_epoch.load(Ordering::Acquire);
+        if msg.epoch != 0 && msg.epoch < epoch {
+            continue;
+        }
+
+        match msg.payload {
             Ok(frame) => match frame {
                 frame::FrameResult::HelloResult(message) => {
                     if send_text(&mut write, &message).await {
@@ -216,6 +239,9 @@ async fn on_send<W>(
                     }
                 }
                 frame::FrameResult::TTSResult(message) => {
+                    if message.state == Some(service::chobits::message::tts::TtsState::Start) {
+                        audio_interval = None;
+                    }
                     if send_text(&mut write, &message).await {
                         info!("send tts data failure");
                         break;
@@ -228,6 +254,18 @@ async fn on_send<W>(
                     }
                 }
                 frame::FrameResult::AudioResult(audio_message) => {
+                    if let Some(interval) = &mut audio_interval {
+                        interval.tick().await;
+                    } else {
+                        let start = Instant::now() + Duration::from_millis(frame_duration);
+                        let mut intv = interval_at(start, Duration::from_millis(frame_duration));
+                        intv.set_missed_tick_behavior(MissedTickBehavior::Skip);
+                        audio_interval = Some(intv);
+                    }
+                    {
+                        let mut time = latest_activity_time.lock().await;
+                        *time = Some(Local::now().timestamp_millis());
+                    }
                     let data = audio_message.data;
                     if write.send(Message::Binary(data.into())).await.is_err() {
                         info!("send audio data failure");
