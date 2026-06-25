@@ -8,8 +8,8 @@ use crate::llm::client::{ClientBuilder, History};
 use crate::mcp::client::device::{DeviceMcpClient, DeviceMcpPhase};
 use crate::mcp::mcp_host::{McpHost, UnionMcpHost};
 use crate::record::observer::{
-    AsrContext, FrameContext, FrameDirection, RoundEndContext, RoundMode, RoundStartContext,
-    SessionObserver,
+    AsrContext, FrameContext, FrameDirection, RoundEndContext, RoundEndReason, RoundMode,
+    RoundStartContext, SessionObserver,
 };
 use crate::tts::Tts;
 use chrono::Local;
@@ -19,14 +19,15 @@ use service::chobits::message::hello::{AudioParam, HelloMessage};
 use service::chobits::message::listen::ListenState;
 use service::chobits::message::{AudioFormat, Transport};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use tokio::sync::Mutex;
-use tokio::sync::mpsc::{Sender, channel};
+use tokio::sync::mpsc::{Sender, UnboundedSender, channel, unbounded_channel};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 pub mod listener;
+pub mod output_controller;
 pub mod round;
 
 #[derive(Default)]
@@ -101,12 +102,13 @@ impl SessionBuilder {
             observers: self.observers,
             phase: Phase::Hello,
             current_mode: RoundMode::Auto,
-            latest_activity_time: Arc::new(Mutex::new(None)),
+            latest_activity_time: Arc::new(AtomicI64::new(0)),
             history: Arc::new(Mutex::new(History {
                 preamble: Some(system_prompt.to_string()),
                 chat_history: vec![],
             })),
             output_epoch: Arc::new(AtomicU64::new(1)),
+            session_epoch: Arc::new(AtomicU64::new(1)),
             config,
             audio_config,
             listener: self.listener.expect("listener is required"),
@@ -119,7 +121,7 @@ impl SessionBuilder {
     }
 }
 
-type OutputTx = Option<Sender<OutputMessage>>;
+type OutputTx = Option<UnboundedSender<OutputMessage>>;
 
 pub struct Session {
     pub id: String,
@@ -129,9 +131,10 @@ pub struct Session {
     pub observers: Vec<Arc<dyn SessionObserver>>,
     phase: Phase,
     current_mode: RoundMode,
-    latest_activity_time: Arc<Mutex<Option<i64>>>,
+    latest_activity_time: Arc<AtomicI64>,
     history: Arc<Mutex<History>>,
     output_epoch: Arc<AtomicU64>,
+    session_epoch: Arc<AtomicU64>,
 
     config: Arc<SessionConfig>,
     audio_config: Arc<AudioConfig>,
@@ -149,6 +152,7 @@ pub enum Phase {
     Hello,
     ListenDetect,
     Listen(ListenMode),
+    Stop,
 }
 
 #[derive(Debug, Clone)]
@@ -169,14 +173,13 @@ impl Session {
 
     pub async fn stop(&mut self) {
         info!(target:"session", "stop");
+        self.phase = Phase::Stop;
         self.stop_round().await;
         let tx = self.output_tx.clone().expect("output tx not exists");
-        let result = tx
-            .send(OutputMessage {
-                epoch: 0,
-                payload: Ok(FrameResult::CloseResult),
-            })
-            .await;
+        let result = tx.send(OutputMessage {
+            epoch: 0,
+            payload: Ok(FrameResult::CloseResult),
+        });
         if result.is_err() {
             info!("tx send frame result close result failure");
         }
@@ -206,7 +209,6 @@ impl Session {
             Some(round_id.clone()),
             Some(self.id.clone()),
             self.seq.clone(),
-            cancel_token.clone(),
             epoch,
         );
         for observer in &self.observers {
@@ -243,6 +245,7 @@ impl Session {
                 let _ = observer
                     .on_round_end(&RoundEndContext {
                         round_id: round_id.clone(),
+                        reason: RoundEndReason::Interrupted,
                     })
                     .await;
             }
@@ -254,11 +257,13 @@ impl Session {
         match frame {
             Frame::Close(_) => {
                 info!(target:"session","close");
+                self.session_epoch.fetch_add(1, Ordering::Release);
                 self.stop().await;
                 return;
             }
             Frame::Abort(_) => {
                 info!(target:"session","abort");
+                self.session_epoch.fetch_add(1, Ordering::Release);
                 self.new_round(self.current_mode).await;
                 return;
             }
@@ -304,6 +309,7 @@ impl Session {
             Phase::Hello => self.handle_phase_hello(frame).await,
             Phase::ListenDetect => self.handle_phase_listen_detect(frame).await,
             Phase::Listen(mode) => self.handle_phase_listen(&mode, frame).await,
+            Phase::Stop => return,
         }
 
         // Determine final round_id:
@@ -318,15 +324,13 @@ impl Session {
 
         let seq = self.seq.fetch_add(1, Ordering::Relaxed);
         for observer in &self.observers {
-            observer
-                .on_frame(&FrameContext {
-                    round_id: final_round_id.clone(),
-                    session_id: Some(self.id.clone()),
-                    seq,
-                    direction: FrameDirection::Inbound,
-                    detail: format!("{}", frame),
-                })
-                .await;
+            observer.on_frame(&FrameContext {
+                round_id: final_round_id.clone(),
+                session_id: Some(self.id.clone()),
+                seq,
+                direction: FrameDirection::Inbound,
+                detail: format!("{}", frame),
+            });
         }
     }
 
@@ -335,9 +339,13 @@ impl Session {
     ) -> (
         impl Stream<Item = OutputMessage> + Unpin + Send + 'static,
         Arc<AtomicU64>,
-        Arc<Mutex<Option<i64>>>,
+        Arc<AtomicI64>,
         u64,
+        Arc<AtomicU64>,
     ) {
+        // Unbounded input from Session (producer never blocks).
+        // Bounded output to WebSocket (backpressure boundary).
+        let (input_tx, input_rx) = unbounded_channel::<OutputMessage>();
         let (output_tx, output_rx) = channel::<OutputMessage>(64);
 
         let frame_duration = self
@@ -350,30 +358,45 @@ impl Session {
         self.device_mcp_call_tool_result_tx = Some(device_mcp_call_tool_result_tx);
         let mcp_device_client = DeviceMcpClient::new(
             Some(self.id.clone()),
-            output_tx.clone(),
+            input_tx.clone(),
             Arc::new(Mutex::new(device_mcp_call_tool_result_rx)),
         );
         let mcp_device_client = Arc::new(Mutex::new(mcp_device_client));
         let mcp_host = self.mcp_host.clone();
         let mut mcp_host = mcp_host.lock().await;
         mcp_host.set_device_client(mcp_device_client.clone()).await;
-        self.listener.set_sender(output_tx.clone()).await;
-        self.output_tx = Some(output_tx.clone());
+        self.listener.set_sender(input_tx.clone()).await;
+        self.output_tx = Some(input_tx.clone());
+
+        let controller = output_controller::OutputController::new(
+            input_rx,
+            output_tx,
+            self.output_epoch.clone(),
+            self.latest_activity_time.clone(),
+            frame_duration,
+        );
+        controller.spawn();
 
         let epoch = self.output_epoch.clone();
         let activity_time = self.latest_activity_time.clone();
-        let stream = ReceiverStream::new(output_rx);
-        (stream, epoch, activity_time, frame_duration)
+        let session_epoch = self.session_epoch.clone();
+        (
+            ReceiverStream::new(output_rx),
+            epoch,
+            activity_time,
+            frame_duration,
+            session_epoch,
+        )
     }
 
-    pub async fn update_latest_activity_time(&self) {
-        let mut time = self.latest_activity_time.lock().await;
-        *time = Some(Local::now().timestamp_millis());
+    pub fn update_latest_activity_time(&self) {
+        self.latest_activity_time
+            .store(Local::now().timestamp_millis(), Ordering::Release);
     }
 
-    pub async fn get_latest_activity_time(&self) -> Option<i64> {
-        let time = self.latest_activity_time.lock().await;
-        *time
+    pub fn get_latest_activity_time(&self) -> Option<i64> {
+        let time = self.latest_activity_time.load(Ordering::Acquire);
+        if time == 0 { None } else { Some(time) }
     }
 }
 

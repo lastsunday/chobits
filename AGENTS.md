@@ -18,17 +18,17 @@
 - **Web**: Axum 0.8 + tower-http + utoipa-axum (Scalar OpenAPI)
 - **ORM**: Sea-ORM (sqlx-postgres, sqlx-sqlite, with-chrono, with-rust_decimal)
 - **Auth**: jsonwebtoken (HS256, access + refresh token) + bcrypt
-- **Config**: config crate (YAML) + figment (TOML)
+- **Config**: figment (TOML)
 - **ID**: xid (XID 格式)
 - **DB**: SQLite (默认) / PostgreSQL (可选)
 - **Error**: `thiserror` + `#[implement]` 宏
 - **Testing**: cucumber (BDD) + testcontainers
-- **ML**: Candle (candle-core, candle-transformers, candle-onnx, candle-nn)
+- **ML**: Candle (candle-core, candle-transformers, candle-nn)
 - **Audio**: symphonia, wavers, resampler, opus
-- **ASR**: qwen-asr
-- **TTS**: kokoro-tts
+- **ASR**: sherpa-onnx — SenseVoice / Paraformer / Zipformer
+- **TTS**: sherpa-onnx — Mute / PocketTts / Vits / MatchaTts
 - **VAD**: earshot (Silero VAD)
-- **LLM**: rig-core, aha (GGUF 推理)
+- **LLM**: rig-core + Candle — Qwen3 / Echo
 - **MCP**: rmcp (Model Context Protocol, 支持 SSE 与 Streamable HTTP)
 - **Matrix**: ruma + ruma-client (聊天协议)
 - **开发环境**: Nix (Lix) + flake + direnv（可复现开发环境）
@@ -63,7 +63,7 @@
 ├── .node-version              Node.js 版本（由 flake 自动读取）
 ├── application-example.toml   示例配置文件
 ├── packages/                  workspace 占位
-├── libs/                      workspace 占位
+├── libs/                      共享库 (framework, macros, build-metadata)
 ├── apps/
 │   ├── server/                Rust 后端
 │   │   ├── src/               应用入口 (main.rs, clap, logging, runtime, server, signal, restart)
@@ -71,13 +71,15 @@
 │   │   ├── service/src/       业务逻辑层 (chobits/)
 │   │   ├── entity/src/        Sea-ORM Entity
 │   │   ├── migration/src/     数据库迁移
-│   │   ├── web/src/           Web 层 (rust-embed 静态文件服务)
-│   │   ├── framework/         框架层 (auth, config, data, error, logger, middleware, password 等)
-│   │   ├── macros/            proc-macro crate (`#[implement]`, `#[config_example_generator]`)
-│   │   └── build-metadata/    构建元数据 crate (git 信息)
+│   │   └── web/src/           Web 层 (rust-embed 静态文件服务)
 │   ├── server-ui/src/         React 管理后台
 │   ├── server-ui-e2e/         管理后台 E2E 测试 (Playwright)
 │   └── app/                   Flutter 跨平台客户端应用
+├── libs/
+│   ├── framework/             框架层 (auth, config, data, error, logger, middleware, password 等)
+│   │   └── macros/            proc-macro crate (`#[implement]`)
+│   ├── macros/                proc-macro crate (`#[config_example_generator]`)
+│   └── build-metadata/        构建元数据 crate (git 信息)
 ```
 
 新建文件请严格遵循对应的目录位置。
@@ -216,8 +218,9 @@ Client ← Audio Stream
 
 ```
 build-metadata (编译时 git 信息)
+framework-macros (proc-macro: #[implement])
+chobits-macros (proc-macro: #[config_example_generator])
   └── framework (框架层: auth, config, error, database, id, logger, middleware, password, trace)
-       ├── macros (proc-macro: #[implement], #[config_example_generator])
        ├── entity (Sea-ORM 实体)
        ├── migration (数据库迁移)
        ├── web (rust-embed 静态文件)

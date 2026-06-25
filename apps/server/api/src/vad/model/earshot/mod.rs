@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use earshot::Detector;
 
 use crate::{common::ModelError, config::vad::VadConfig, vad::Vad};
@@ -28,16 +27,15 @@ impl VadEarshot {
     }
 }
 
-#[async_trait]
 impl Vad for VadEarshot {
-    async fn accept_waveform(&mut self, samples: &[f32]) -> Result<f32, ModelError> {
+    fn accept_waveform(&mut self, samples: &[f32]) -> Result<f32, ModelError> {
         let sample_rate: i64 = 16000;
         let score = self.detector.predict_f32(samples);
         if !self.is_speech {
             if score >= self.threshold {
                 self.prediction_list.push(score);
             } else {
-                self.clear().await;
+                self.clear();
             }
 
             // avoid some noise trigger speech detect
@@ -48,25 +46,25 @@ impl Vad for VadEarshot {
             self.current_silence_duration = 0.0;
         } else {
             if self.current_silence_duration > self.min_silence_duration {
-                self.clear().await;
+                self.clear();
             }
             self.current_silence_duration += (samples.len() as f32 / sample_rate as f32) * 1000.0;
         }
         Ok(score)
     }
 
-    async fn is_speech(&mut self) -> bool {
+    fn is_speech(&mut self) -> bool {
         self.is_speech
     }
 
-    async fn clear(&mut self) {
+    fn clear(&mut self) {
         self.detector.reset();
         self.is_speech = false;
         self.current_silence_duration = 0.0;
         self.prediction_list.clear();
     }
 
-    async fn window_size(&self) -> usize {
+    fn window_size(&self) -> usize {
         256
     }
 }

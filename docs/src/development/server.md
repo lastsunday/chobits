@@ -26,12 +26,12 @@ _TODO_
 
 ### TTS
 
-| Model               | Memory | File Size | Remark |
-| ------------------- | ------ | --------- | ------ |
-| mzdk100/kokoro      | 0.12GB | 0.37GB    |        |
-| openbmb/VoxCPM-0.5B | 2GB    | 1.61GB    |        |
-| matcha-icefall-zh-baker | — | 72MB (model) + 80MB (vocoder) | 中文单音色 |
-| matcha-icefall-zh-en    | — | 72MB (model) + 52MB (vocoder) + 76MB (espeak-ng-data.tar.bz2) | 中英双语单音色 |
+| Model                        | Memory   | File Size | Remark             |
+| ---------------------------- | -------- | --------- | ------------------ |
+| MatchaTts (sherpa-onnx)      | ~500MB   | 72MB + 76MB (vocoder) | 中文/中英双语 |
+| Vits (sherpa-onnx)           | ~400MB   | 217MB      | 多 speaker 可选  |
+| PocketTts (sherpa-onnx)      | ~300MB   | 150MB      | 轻量级           |
+| Mute                         | 0        | 0          | 静音 (测试用)    |
 
 ## CUDA Toolkit install in fedora 43 & setup env
 

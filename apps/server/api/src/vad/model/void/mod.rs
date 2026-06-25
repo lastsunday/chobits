@@ -1,5 +1,3 @@
-use async_trait::async_trait;
-
 use crate::{common::ModelError, vad::Vad};
 
 #[derive(Clone)]
@@ -11,19 +9,18 @@ impl VadVoid {
     }
 }
 
-#[async_trait]
 impl Vad for VadVoid {
-    async fn accept_waveform(&mut self, _samples: &[f32]) -> Result<f32, ModelError> {
+    fn accept_waveform(&mut self, _samples: &[f32]) -> Result<f32, ModelError> {
         Ok(1.0)
     }
 
-    async fn is_speech(&mut self) -> bool {
+    fn is_speech(&mut self) -> bool {
         true
     }
 
-    async fn clear(&mut self) {}
+    fn clear(&mut self) {}
 
-    async fn window_size(&self) -> usize {
+    fn window_size(&self) -> usize {
         512
     }
 }

@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 use async_trait::async_trait;
 use sea_orm::{ActiveValue::Set, DatabaseConnection, entity::prelude::*};
 use serde_json::Value as JsonValue;
+use tokio::sync::mpsc;
 
 use super::observer::*;
 use super::wav::pcm_f32_to_wav;
@@ -108,19 +109,36 @@ impl RoundBuffer {
     }
 }
 
-#[derive(Clone)]
+struct FlushEvent {
+    buffer: RoundBuffer,
+    reason: RoundEndReason,
+}
+
 pub struct RecordCollector {
     conn: DatabaseConnection,
     pending: Arc<StdMutex<HashMap<String, RoundBuffer>>>,
     orphaned_frames: Arc<StdMutex<HashMap<String, Vec<FrameEntry>>>>,
+    flush_tx: mpsc::UnboundedSender<FlushEvent>,
+    _flush_handle: tokio::task::JoinHandle<()>,
 }
 
 impl RecordCollector {
     pub fn new(conn: DatabaseConnection) -> Self {
+        let (flush_tx, mut flush_rx) = mpsc::unbounded_channel::<FlushEvent>();
+        let bg_conn = conn.clone();
+        let _flush_handle = tokio::spawn(async move {
+            while let Some(event) = flush_rx.recv().await {
+                if let Err(e) = Self::flush_to_db(&bg_conn, &event.buffer, event.reason).await {
+                    tracing::error!("DB flush error: {e}");
+                }
+            }
+        });
         Self {
             conn,
             pending: Arc::new(StdMutex::new(HashMap::new())),
             orphaned_frames: Arc::new(StdMutex::new(HashMap::new())),
+            flush_tx,
+            _flush_handle,
         }
     }
 
@@ -219,7 +237,7 @@ impl RecordCollector {
         }
     }
 
-    async fn record_frame(
+    fn record_frame(
         &self,
         round_id: Option<&str>,
         session_id: Option<&str>,
@@ -227,8 +245,6 @@ impl RecordCollector {
         is_inbound: bool,
         detail: &str,
     ) {
-        let dir_str = if is_inbound { "inbound" } else { "outbound" };
-
         // If there's a round_id, try the pending buffer first
         if let Some(rid) = round_id {
             let mut pending = self.pending.lock().expect("pending lock");
@@ -266,21 +282,28 @@ impl RecordCollector {
             return;
         }
 
-        // No session_id either — fallback: insert directly
-        let _ = frame::ActiveModel {
-            round_id: Set(round_id.map(|s| s.to_string())),
-            session_id: Set(session_id.map(|s| s.to_string())),
-            seq: Set(seq as i32),
-            dir: Set(dir_str.to_string()),
-            kind: Set("frame".to_string()),
-            detail: Set(Some(detail.to_string())),
-            ..Default::default()
-        }
-        .insert(&self.conn)
-        .await;
+        // No session_id either — fallback: spawn DB insert
+        let conn = self.conn.clone();
+        let round_id = round_id.map(|s| s.to_string());
+        let session_id = session_id.map(|s| s.to_string());
+        let detail = detail.to_string();
+        let dir_str = if is_inbound { "inbound" } else { "outbound" };
+        tokio::spawn(async move {
+            let _ = frame::ActiveModel {
+                round_id: Set(round_id),
+                session_id: Set(session_id),
+                seq: Set(seq as i32),
+                dir: Set(dir_str.to_string()),
+                kind: Set("frame".to_string()),
+                detail: Set(Some(detail)),
+                ..Default::default()
+            }
+            .insert(&conn)
+            .await;
+        });
     }
 
-    async fn finish_round(&self, round_id: &str) -> Result<(), anyhow::Error> {
+    fn finish_round(&self, round_id: &str, reason: RoundEndReason) -> Result<(), ()> {
         let buffer = {
             let mut pending = self.pending.lock().expect("pending lock");
             pending.remove(round_id)
@@ -289,20 +312,29 @@ impl RecordCollector {
             return Ok(());
         };
 
-        Self::flush_to_db(&self.conn, &buffer).await
+        self.flush_tx
+            .send(FlushEvent { buffer, reason })
+            .map_err(|_| ())
     }
 
     async fn flush_to_db(
         conn: &DatabaseConnection,
         buffer: &RoundBuffer,
+        reason: RoundEndReason,
     ) -> Result<(), anyhow::Error> {
         let now = chrono::Local::now().fixed_offset();
+
+        let status = match reason {
+            RoundEndReason::Completed => Some("completed".to_string()),
+            RoundEndReason::Interrupted => Some("interrupted".to_string()),
+        };
 
         round::ActiveModel {
             id: Set(buffer.round_id.clone()),
             session_id: Set(buffer.session_id.clone().unwrap_or_default()),
             client_info: Set(buffer.client_info.clone()),
             mode: Set(buffer.mode.clone()),
+            status: Set(status),
             create_datetime: Set(Some(now)),
             update_datetime: Set(Some(now)),
         }
@@ -556,7 +588,7 @@ impl SessionObserver for RecordCollector {
         self.collect_tts(&ctx.round_id, &ctx.text, ctx.raw_pcm.clone());
     }
 
-    async fn on_frame(&self, ctx: &FrameContext) {
+    fn on_frame(&self, ctx: &FrameContext) {
         let is_inbound = matches!(ctx.direction, FrameDirection::Inbound);
         self.record_frame(
             ctx.round_id.as_deref(),
@@ -564,11 +596,11 @@ impl SessionObserver for RecordCollector {
             ctx.seq,
             is_inbound,
             &ctx.detail,
-        )
-        .await;
+        );
     }
 
     async fn on_round_end(&self, ctx: &RoundEndContext) -> Result<(), anyhow::Error> {
-        self.finish_round(&ctx.round_id).await
+        self.finish_round(&ctx.round_id, ctx.reason.clone())
+            .map_err(|_| anyhow::anyhow!("flush channel closed"))
     }
 }

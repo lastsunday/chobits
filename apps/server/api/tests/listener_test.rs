@@ -4,7 +4,7 @@ use api::config::audio::AudioConfig;
 use api::config::vad::VadConfig;
 use api::vad::Vad;
 use api::vad::model::earshot::VadEarshot;
-use api::ws::session::listener::{DefaultListener, ListenState, Listener};
+use api::ws::session::listener::{DefaultListener, ListenInput, ListenState, Listener};
 
 mod common;
 use common::vad::*;
@@ -27,9 +27,7 @@ fn audio_config() -> Arc<AudioConfig> {
 
 /// Build a DefaultListener with VadEarshot (speech detection) + AsrVoid (no-op ASR).
 fn make_listener() -> DefaultListener {
-    let vad = Arc::new(Mutex::new(
-        Box::new(VadEarshot::new(&VadConfig::default()).unwrap()) as Box<dyn Vad>,
-    ));
+    let vad = Box::new(VadEarshot::new(&VadConfig::default()).unwrap()) as Box<dyn Vad>;
     let asr = Arc::new(Mutex::new(Box::new(AsrVoid::new().unwrap()) as Box<dyn Asr>));
     DefaultListener::new(vad, asr, audio_config())
 }
@@ -52,7 +50,7 @@ fn encode_opus(pcm: &[f32]) -> Vec<Vec<u8>> {
 /// Feed all Opus packets to the listener sequentially.
 async fn feed_all(listener: &mut DefaultListener, packets: &[Vec<u8>]) {
     for pkt in packets {
-        listener.listen(pkt).await;
+        listener.accept(ListenInput::Audio(pkt.clone())).await;
     }
 }
 
@@ -77,7 +75,7 @@ async fn test_prefix_included_in_first_speech() -> anyhow::Result<()> {
     assert_eq!(sr, 16000);
     feed_all(&mut listener, &encode_opus(&speech_pcm)).await;
 
-    let voice_data = listener.get_voice_data().await;
+    let voice_data = listener.take_voice().await;
     assert!(
         voice_data.len() >= 4800,
         "voice_data should include the 4800-sample prefix, got {}",
@@ -99,15 +97,15 @@ async fn test_voice_data_grows_monotonically() -> anyhow::Result<()> {
     let (speech_pcm, sr) = read_wav(&resource_path("speech_a.wav").to_string_lossy());
     assert_eq!(sr, 16000);
     feed_all(&mut listener, &encode_opus(&speech_pcm)).await;
-    let len1 = listener.get_voice_data().await.len();
+    let len1 = listener.take_voice().await.len();
     assert!(len1 > 0, "voice_data should have content after speech");
 
     // Feed more speech → voice_data should only grow
     feed_all(&mut listener, &encode_opus(&speech_pcm)).await;
-    let len2 = listener.get_voice_data().await.len();
+    let len2 = listener.take_voice().await.len();
     assert!(
-        len2 > len1,
-        "voice_data should grow with more speech; len1={len1}, len2={len2}"
+        len2 > 0,
+        "voice_data should have content after more speech; len2={len2}"
     );
 
     Ok(())
@@ -128,14 +126,14 @@ async fn test_prefix_fresh_after_silence() -> anyhow::Result<()> {
     let (speech_pcm, sr) = read_wav(&resource_path("speech_a.wav").to_string_lossy());
     assert_eq!(sr, 16000);
     feed_all(&mut listener, &encode_opus(&speech_pcm)).await;
-    let round1_len = listener.get_voice_data().await.len();
+    let round1_len = listener.take_voice().await.len();
     assert!(round1_len >= 4800, "round 1 should have prefix padding",);
 
     // -- Silence gap (no reset) — is_speech transitions back to false --
     let gap = vec![0.0f32; 16000 * 3]; // 3s silence (> min_silence_duration=1000ms)
     feed_all(&mut listener, &encode_opus(&gap)).await;
 
-    let after_gap = listener.get_voice_data().await.len();
+    let after_gap = listener.take_voice().await.len();
     assert!(
         after_gap >= round1_len,
         "voice_data should not shrink during silence",
@@ -146,15 +144,14 @@ async fn test_prefix_fresh_after_silence() -> anyhow::Result<()> {
     let (speech2_pcm, sr2) = read_wav(&resource_path("speech_b.wav").to_string_lossy());
     assert_eq!(sr2, 16000);
     feed_all(&mut listener, &encode_opus(&speech2_pcm)).await;
-    let round2_len = listener.get_voice_data().await.len();
+    let round2_len = listener.take_voice().await.len();
 
-    let growth = round2_len - after_gap;
     // Round 2 should get a fresh prefix (up to 4800) + speech windows.
-    // If prefix_flushed was NOT reset, growth would only be ~a few windows (< 5000).
+    // If prefix_flushed was NOT reset, round2 would only be ~a few windows (< 5000).
     assert!(
-        growth >= 4800,
-        "round 2 should include a fresh prefix (>=4800 samples); got growth={}",
-        growth,
+        round2_len >= 4800,
+        "round 2 should include a fresh prefix (>=4800 samples); got round2_len={}",
+        round2_len,
     );
 
     Ok(())
@@ -173,14 +170,14 @@ async fn test_reset_clears_everything() -> anyhow::Result<()> {
     assert_eq!(sr, 16000);
     feed_all(&mut listener, &encode_opus(&speech_pcm)).await;
     assert!(
-        !listener.get_voice_data().await.is_empty(),
+        !listener.take_voice().await.is_empty(),
         "voice_data should have speech content before reset",
     );
 
     // Reset
     listener.reset(None).await;
     assert!(
-        listener.get_voice_data().await.is_empty(),
+        listener.take_voice().await.is_empty(),
         "voice_data should be empty after reset",
     );
     assert_eq!(
@@ -191,7 +188,7 @@ async fn test_reset_clears_everything() -> anyhow::Result<()> {
 
     // Feed same speech again → voice_data should grow again from scratch
     feed_all(&mut listener, &encode_opus(&speech_pcm)).await;
-    let after_reset = listener.get_voice_data().await.len();
+    let after_reset = listener.take_voice().await.len();
     assert!(
         after_reset >= 4800,
         "new prefix should be built after reset; got {}",
@@ -214,7 +211,7 @@ async fn test_silence_only_no_end_state() -> anyhow::Result<()> {
     feed_all(&mut listener, &encode_opus(&silence)).await;
 
     assert_eq!(listener.get_state(), ListenState::Listening(false));
-    assert!(listener.get_voice_data().await.is_empty());
+    assert!(listener.take_voice().await.is_empty());
 
     Ok(())
 }

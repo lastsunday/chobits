@@ -61,6 +61,7 @@ impl MigrationTrait for Migration {
                     .col(string(Round::SessionId))
                     .col(string(Round::Mode))
                     .col(json_binary_null(Round::ClientInfo))
+                    .col(string_null(Round::Status))
                     .col(timestamp_with_time_zone_null(Round::CreateDatetime))
                     .col(timestamp_with_time_zone_null(Round::UpdateDatetime))
                     .primary_key(Index::create().name("pk-round-id").col(Round::Id))
@@ -174,6 +175,7 @@ enum Round {
     SessionId,
     Mode,
     ClientInfo,
+    Status,
     CreateDatetime,
     UpdateDatetime,
 }

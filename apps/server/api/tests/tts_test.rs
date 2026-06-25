@@ -14,8 +14,6 @@ use common::tts::*;
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// cargo test --test tts_test -- test_tts_default --ignored --nocapture
 async fn test_tts_default() -> anyhow::Result<()> {
     const ENCODE_SAMPLE_RATE: u32 = 16000;
     const MONO_20MS: usize = ENCODE_SAMPLE_RATE as usize * 20 / 1000;
@@ -32,7 +30,8 @@ async fn test_tts_default() -> anyhow::Result<()> {
     .await?;
     let tts = TtsFactory::global().default();
     let text_stream = tts_stream(String::from(TEST_TTS_TEXT));
-    let mut tts_stream = tts.stream(Box::pin(text_stream)).await;
+    let cancel = tokio_util::sync::CancellationToken::new();
+    let mut tts_stream = tts.stream(Box::pin(text_stream), cancel).await;
 
     let mut audio: Vec<Vec<u8>> = Vec::new();
     while let Some(data) = tts_stream.next().await {
@@ -73,7 +72,6 @@ async fn test_tts_default() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[traced_test]
-/// cargo test --test tts_test -- test_tts_mute --nocapture
 async fn test_tts_mute() -> anyhow::Result<()> {
     TtsFactory::init(
         Arc::new(TtsConfig {
@@ -87,7 +85,8 @@ async fn test_tts_mute() -> anyhow::Result<()> {
     .await?;
     let tts = TtsFactory::global().default();
     let text_stream = tts_stream(String::from(TEST_TTS_TEXT));
-    let mut tts_stream = tts.stream(Box::pin(text_stream)).await;
+    let cancel = tokio_util::sync::CancellationToken::new();
+    let mut tts_stream = tts.stream(Box::pin(text_stream), cancel).await;
     let mut audio: Vec<Vec<u8>> = Vec::new();
     while let Some(data) = tts_stream.next().await {
         match data {
@@ -114,8 +113,6 @@ async fn test_tts_mute() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// cargo test --test tts_test -- test_tts_pocket --ignored --nocapture
 async fn test_tts_pocket() -> anyhow::Result<()> {
     let ws_root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -150,7 +147,8 @@ async fn test_tts_pocket() -> anyhow::Result<()> {
 
     let gen_start = std::time::Instant::now();
     let text_stream = tts_stream(String::from(TEST_TTS_TEXT));
-    let mut tts_stream = tts.stream(Box::pin(text_stream)).await;
+    let cancel = tokio_util::sync::CancellationToken::new();
+    let mut tts_stream = tts.stream(Box::pin(text_stream), cancel).await;
 
     let mut all_packets: Vec<Vec<u8>> = Vec::new();
     let mut raw_pcm: Option<(Vec<f32>, i32)> = None;
@@ -209,8 +207,6 @@ async fn test_tts_pocket() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// cargo test --test tts_test -- test_tts_matcha_zh_baker --ignored --nocapture
 async fn test_tts_matcha_zh_baker() -> anyhow::Result<()> {
     let path = ws_root()
         .join("data/tts/model/matcha/matcha-icefall-zh-baker/")
@@ -237,8 +233,6 @@ async fn test_tts_matcha_zh_baker() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// cargo test --test tts_test -- test_tts_matcha_zh_en --ignored --nocapture
 async fn test_tts_matcha_zh_en() -> anyhow::Result<()> {
     let path = ws_root()
         .join("data/tts/model/matcha/matcha-icefall-zh-en/")
@@ -265,8 +259,6 @@ async fn test_tts_matcha_zh_en() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// cargo test --test tts_test -- test_tts_vits_melo_tts_zh_en --ignored --nocapture
 async fn test_tts_vits_melo_tts_zh_en() -> anyhow::Result<()> {
     let path = ws_root()
         .join("data/tts/model/vits/melo-tts-zh_en/")
@@ -295,8 +287,6 @@ async fn test_tts_vits_melo_tts_zh_en() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// cargo test --test tts_test -- test_tts_vits_zh_hf_theresa --ignored --nocapture
 async fn test_tts_vits_zh_hf_theresa() -> anyhow::Result<()> {
     let path = ws_root()
         .join("data/tts/model/vits/zh-hf-theresa/")
@@ -325,8 +315,6 @@ async fn test_tts_vits_zh_hf_theresa() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// cargo test --test tts_test -- test_tts_vits_aishell3 --ignored --nocapture
 async fn test_tts_vits_aishell3() -> anyhow::Result<()> {
     let path = ws_root()
         .join("data/tts/model/vits/aishell3/")

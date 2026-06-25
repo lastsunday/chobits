@@ -6,6 +6,7 @@ use api::{
 };
 use std::{path::PathBuf, sync::Arc};
 use tokio_stream::StreamExt;
+use tokio_util::sync::CancellationToken;
 use tracing::debug;
 use tracing_test::traced_test;
 
@@ -17,10 +18,6 @@ const ASR_TEST_CASES: &[(&str, &str)] = &[("zh", "开放时间"), ("en", "pieces
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// cargo test --test asr_test -- test_asr --ignored --nocapture
-/// asr speed up by release mode
-/// cargo test --test asr_test --release -- test_asr --ignored --nocapture
 async fn test_asr() {
     let wav_file: PathBuf = [
         env!("CARGO_MANIFEST_DIR"),
@@ -57,7 +54,6 @@ async fn test_asr() {
 
 #[tokio::test]
 #[traced_test]
-/// cargo test --test asr_test -- test_asr_model_void  --nocapture
 async fn test_asr_model_void() {
     let mut model = AsrFactory::create_model(&AsrConfig {
         model: Some(AsrModel::Void),
@@ -70,8 +66,6 @@ async fn test_asr_model_void() {
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// cargo test --test asr_test -- test_asr_with_reference_audio --ignored --nocapture
 async fn test_asr_with_reference_audio() {
     for (variant, expected) in ASR_TEST_CASES {
         let wav_path = ws_root().join(format!("data/asr/model/sense_voice/default/{variant}.wav"));
@@ -111,8 +105,6 @@ async fn test_asr_with_reference_audio() {
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// cargo test --test asr_test -- test_tts_asr_loopback --ignored --nocapture
 async fn test_tts_asr_loopback() {
     let tts_path = ws_root()
         .join("data/tts/model/matcha/matcha-icefall-zh-en/")
@@ -146,7 +138,8 @@ async fn test_tts_asr_loopback() {
 
     let tts_start = std::time::Instant::now();
     let text_stream = tts_stream(text.to_string());
-    let mut tts_stream = tts.stream(Box::pin(text_stream)).await;
+    let cancel = tokio_util::sync::CancellationToken::new();
+    let mut tts_stream = tts.stream(Box::pin(text_stream), cancel).await;
 
     let mut all_pcm = Vec::new();
     let mut sample_rate = 0i32;
@@ -186,8 +179,6 @@ async fn test_tts_asr_loopback() {
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// cargo test --test asr_test -- test_asr_paraformer_reference_audio --ignored --nocapture
 async fn test_asr_paraformer_reference_audio() {
     for (variant, expected) in ASR_TEST_CASES {
         let wav_path = ws_root().join(format!("data/asr/model/sense_voice/default/{variant}.wav"));
@@ -227,8 +218,6 @@ async fn test_asr_paraformer_reference_audio() {
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// cargo test --test asr_test -- test_asr_zipformer_reference_audio --ignored --nocapture
 async fn test_asr_zipformer_reference_audio() {
     for (variant, expected) in ASR_TEST_CASES {
         let wav_path = ws_root().join(format!("data/asr/model/sense_voice/default/{variant}.wav"));
@@ -293,7 +282,9 @@ async fn loopback_diagnostic(asr_path: &str, model: AsrModel) {
 
     let tts_start = std::time::Instant::now();
     let text_stream = tts_stream(TEST_TTS_TEXT.to_string());
-    let mut tts_stream = tts.stream(Box::pin(text_stream)).await;
+    let mut tts_stream = tts
+        .stream(Box::pin(text_stream), CancellationToken::new())
+        .await;
 
     let mut all_pcm = Vec::new();
     let mut sample_rate = 0i32;
@@ -327,8 +318,6 @@ async fn loopback_diagnostic(asr_path: &str, model: AsrModel) {
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// cargo test --test asr_test -- test_tts_asr_loopback_paraformer --ignored --nocapture
 async fn test_tts_asr_loopback_paraformer() {
     let asr_path = ws_root()
         .join("data/asr/model/paraformer/default/")
@@ -339,8 +328,6 @@ async fn test_tts_asr_loopback_paraformer() {
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// cargo test --test asr_test -- test_tts_asr_loopback_zipformer --ignored --nocapture
 async fn test_tts_asr_loopback_zipformer() {
     let asr_path = ws_root()
         .join("data/asr/model/zipformer/default/")

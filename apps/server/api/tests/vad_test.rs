@@ -8,7 +8,6 @@ use tracing_test::traced_test;
 
 #[tokio::test]
 #[traced_test]
-/// cargo test --test vad_test -- test_state_machine --nocapture
 async fn test_state_machine() -> anyhow::Result<()> {
     let config = VadConfig::default();
     let mut vad = VadEarshot::new(&config)?;
@@ -22,19 +21,16 @@ async fn test_state_machine() -> anyhow::Result<()> {
         if frame.len() < WINDOW_SIZE {
             frame.resize(WINDOW_SIZE, 0.0);
         }
-        vad.accept_waveform(&frame).await?;
+        vad.accept_waveform(&frame)?;
     }
-    assert!(vad.is_speech().await, "Expected speech=true after speech_a");
+    assert!(vad.is_speech(), "Expected speech=true after speech_a");
 
     // ── Phase 2: feed 2s of silence → should clear after min_silence_duration=1000ms ──
     let silence_frames_count = (2 * SAMPLE_RATE as usize) / WINDOW_SIZE;
     for _ in 0..silence_frames_count {
-        vad.accept_waveform(&silence_frame()).await?;
+        vad.accept_waveform(&silence_frame())?;
     }
-    assert!(
-        !vad.is_speech().await,
-        "Expected speech=false after 2s silence"
-    );
+    assert!(!vad.is_speech(), "Expected speech=false after 2s silence");
 
     // ── Phase 3: feed speech_b → should detect new speech segment ──
     for chunk in speech2.chunks(WINDOW_SIZE) {
@@ -42,9 +38,9 @@ async fn test_state_machine() -> anyhow::Result<()> {
         if frame.len() < WINDOW_SIZE {
             frame.resize(WINDOW_SIZE, 0.0);
         }
-        vad.accept_waveform(&frame).await?;
+        vad.accept_waveform(&frame)?;
     }
-    assert!(vad.is_speech().await, "Expected speech=true after speech_b");
+    assert!(vad.is_speech(), "Expected speech=true after speech_b");
 
     Ok(())
 }

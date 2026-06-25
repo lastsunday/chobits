@@ -20,6 +20,7 @@ use rmcp::transport::{
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio_stream::StreamExt;
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 use tracing_test::traced_test;
 use utoipa_axum::router::OpenApiRouter;
@@ -29,16 +30,19 @@ use common::{setup_database, tear_down};
 use crate::common::router_client::RouterClient;
 
 fn create_model() -> Box<dyn Model> {
+    let model_path = common::tts::ws_root()
+        .join("data/llm/model/qwen3/0.6b/")
+        .to_string_lossy()
+        .into_owned();
     LlmFactory::create_model(&LlmConfig {
         model: Some(LlmModel::Qwen3),
-        path: Some(String::from("data/llm/model/unsloth/Qwen3-1.7B-GGUF/")),
+        path: Some(model_path),
         variant: None,
     })
 }
 
 #[tokio::test]
 #[traced_test]
-/// cargo test --test llm_client_test -- test_chat_echo --nocapture
 async fn test_chat_echo() {
     let client = ClientBuilder::new()
         .with_model(Arc::new(LlmFactory::create_model(&LlmConfig {
@@ -51,13 +55,16 @@ async fn test_chat_echo() {
             preamble: None,
             chat_history: vec![],
         })));
-    let mut output = client.chat(ChatRequest {
-        message: Message::User {
-            content: OneOrMany::<UserContent>::one(UserContent::Text(Text {
-                text: r#"Hello"#.to_string(),
-            })),
+    let mut output = client.chat(
+        ChatRequest {
+            message: Message::User {
+                content: OneOrMany::<UserContent>::one(UserContent::Text(Text {
+                    text: r#"Hello"#.to_string(),
+                })),
+            },
         },
-    });
+        CancellationToken::new(),
+    );
     let mut result = Vec::new();
     while let Some(text) = output.next().await {
         match text {
@@ -76,7 +83,6 @@ async fn test_chat_echo() {
 #[tokio::test]
 #[traced_test]
 #[ignore]
-/// cargo test --test llm_client_test -- test_chat_simple --ignored --nocapture
 async fn test_chat_simple() {
     let model = create_model();
     let system_prompt = "你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等并且数字使用中文字代替。".to_string();
@@ -95,7 +101,7 @@ async fn test_chat_simple() {
             })),
         },
     };
-    let mut output = client.chat(request);
+    let mut output = client.chat(request, CancellationToken::new());
     let mut result = Vec::new();
     while let Some(text) = output.next().await {
         match text {
@@ -114,8 +120,6 @@ async fn test_chat_simple() {
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// cargo test --test llm_client_test -- test_short_question --ignored --nocapture
 async fn test_short_question() {
     let model = create_model();
     let system_prompt = "你是一个助手。".to_string();
@@ -134,7 +138,7 @@ async fn test_short_question() {
             })),
         },
     };
-    let mut output = client.chat(request);
+    let mut output = client.chat(request, CancellationToken::new());
     let mut result = Vec::new();
     while let Some(text) = output.next().await {
         match text {
@@ -153,8 +157,6 @@ async fn test_short_question() {
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// cargo test --test llm_client_test -- test_english_question --ignored --nocapture
 async fn test_english_question() {
     let model = create_model();
     let system_prompt =
@@ -175,7 +177,7 @@ async fn test_english_question() {
             })),
         },
     };
-    let mut output = client.chat(request);
+    let mut output = client.chat(request, CancellationToken::new());
     let mut result = Vec::new();
     while let Some(text) = output.next().await {
         match text {
@@ -194,8 +196,6 @@ async fn test_english_question() {
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// cargo test --test llm_client_test -- test_chat_history --ignored --nocapture
 async fn test_chat_history() {
     let model = create_model();
     let system_prompt = "你是一个助手，协助用户进行记录，查询和提供建议，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等并且数字使用中文字代替。".to_string();
@@ -226,7 +226,7 @@ async fn test_chat_history() {
             })),
         },
     };
-    let mut output = client.chat(request);
+    let mut output = client.chat(request, CancellationToken::new());
     let mut result = Vec::new();
     while let Some(text) = output.next().await {
         match text {
@@ -246,8 +246,6 @@ async fn test_chat_history() {
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// cargo test --test llm_client_test -- test_chat_mcp --ignored --nocapture
 async fn test_chat_mcp() -> anyhow::Result<()> {
     let model = create_model();
     let mut union_mcp_host = UnionMcpHost::new(None);
@@ -289,7 +287,7 @@ async fn test_chat_mcp() -> anyhow::Result<()> {
             })),
         },
     };
-    let mut output = client.chat(request);
+    let mut output = client.chat(request, CancellationToken::new());
     let mut result = Vec::new();
     while let Some(text) = output.next().await {
         match text {

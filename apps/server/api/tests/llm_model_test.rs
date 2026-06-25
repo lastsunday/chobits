@@ -39,16 +39,19 @@ use common::{setup_database, tear_down};
 use crate::common::router_client::RouterClient;
 
 fn create_llm_config() -> LlmConfig {
+    let model_path = crate::common::tts::ws_root()
+        .join("data/llm/model/qwen3/0.6b/")
+        .to_string_lossy()
+        .into_owned();
     LlmConfig {
         model: Some(LlmModel::Qwen3),
-        path: Some(String::from("data/llm/model/unsloth/Qwen3-1.7B-GGUF/")),
+        path: Some(model_path),
         variant: None,
     }
 }
 
 #[tokio::test]
 #[traced_test]
-/// cargo test --test llm_model_test -- test_llm_model_echo --nocapture
 async fn test_llm_model_echo() -> anyhow::Result<()> {
     let model = LlmFactory::create_model(&LlmConfig {
         model: Some(LlmModel::Echo),
@@ -86,7 +89,6 @@ async fn test_llm_model_echo() -> anyhow::Result<()> {
 #[tokio::test]
 #[traced_test]
 #[ignore]
-/// cargo test --test llm_model_test -- test_chat_server_mcp --ignored --nocapture
 async fn test_chat_server_mcp() -> anyhow::Result<()> {
     test_chat_mcp(r#"Calculate the sum of 24.5 and 17.3 using the calculator service"#).await
 }

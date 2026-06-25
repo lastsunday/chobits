@@ -217,7 +217,12 @@ async fn main() {
     TestWorld::cucumber()
         .before(|_feature, _rule, _scenario, world| {
             async move {
-                let (container, state) = setup_database().await;
+                let (container, mut state) = setup_database().await;
+                state.auth_config = Arc::new(AuthConfig {
+                    client_id: Some(String::from("d1aicsr57dijo7h963ig")),
+                    client_secret: Some(String::from("ujTgh2lEQYy0PXhK")),
+                    ..Default::default()
+                });
                 world.container = container;
                 world.state = Some(state.clone());
                 Jwt::init(Arc::new(AuthConfig {

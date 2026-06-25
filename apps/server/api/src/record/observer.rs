@@ -66,8 +66,15 @@ pub struct FrameContext {
     pub detail: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RoundEndReason {
+    Completed,
+    Interrupted,
+}
+
 pub struct RoundEndContext {
     pub round_id: String,
+    pub reason: RoundEndReason,
 }
 
 #[async_trait]
@@ -86,7 +93,7 @@ pub trait SessionObserver: Send + Sync {
 
     fn on_tts_delta(&self, ctx: &TtsDeltaContext);
 
-    async fn on_frame(&self, ctx: &FrameContext);
+    fn on_frame(&self, ctx: &FrameContext);
 
     async fn on_round_end(&self, ctx: &RoundEndContext) -> Result<(), anyhow::Error>;
 }

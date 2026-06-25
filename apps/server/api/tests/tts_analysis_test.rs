@@ -88,8 +88,6 @@ async fn run_length_scale_scan(
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// cargo test --test tts_analysis_test -- test_compare_raw_vs_processed --ignored --nocapture
 async fn test_compare_raw_vs_processed() -> anyhow::Result<()> {
     let model_dir_buf = ws_root().join("data/tts/model/vits/melo-tts-zh_en/");
     let model_dir = Path::new(&model_dir_buf);
@@ -171,8 +169,6 @@ async fn test_compare_raw_vs_processed() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// cargo test --test tts_analysis_test -- test_grid_search_compressor --ignored --nocapture
 async fn test_grid_search_compressor() -> anyhow::Result<()> {
     let model_dir = ws_root().join("data/tts/model/vits/melo-tts-zh_en/");
     let model_path = Path::new(&model_dir);
@@ -269,8 +265,6 @@ async fn test_grid_search_compressor() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// cargo test --test tts_analysis_test -- test_tts_vits_melo_tts_zh_en_noise_scale --ignored --nocapture
 async fn test_tts_vits_melo_tts_zh_en_noise_scale() -> anyhow::Result<()> {
     let path = ws_root()
         .join("data/tts/model/vits/melo-tts-zh_en/")
@@ -338,8 +332,6 @@ async fn test_tts_vits_melo_tts_zh_en_noise_scale() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// cargo test --test tts_analysis_test -- test_tts_vits_aishell3_scan_sid --ignored --nocapture
 async fn test_tts_vits_aishell3_scan_sid() -> anyhow::Result<()> {
     let path = ws_root()
         .join("data/tts/model/vits/aishell3/")
@@ -402,8 +394,6 @@ async fn test_tts_vits_aishell3_scan_sid() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// cargo test --test tts_analysis_test -- test_tts_vits_zh_hf_theresa_scan_sid --ignored --nocapture
 async fn test_tts_vits_zh_hf_theresa_scan_sid() -> anyhow::Result<()> {
     let path = ws_root()
         .join("data/tts/model/vits/zh-hf-theresa/")
@@ -468,8 +458,6 @@ async fn test_tts_vits_zh_hf_theresa_scan_sid() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// cargo test --test tts_analysis_test -- test_tts_matcha_zh_baker_scan_ls --ignored --nocapture
 async fn test_tts_matcha_zh_baker_scan_ls() -> anyhow::Result<()> {
     run_length_scale_scan(
         TtsModel::MatchaTts,
@@ -484,8 +472,6 @@ async fn test_tts_matcha_zh_baker_scan_ls() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// cargo test --test tts_analysis_test -- test_tts_matcha_zh_en_scan_ls --ignored --nocapture
 async fn test_tts_matcha_zh_en_scan_ls() -> anyhow::Result<()> {
     run_length_scale_scan(
         TtsModel::MatchaTts,
@@ -500,8 +486,6 @@ async fn test_tts_matcha_zh_en_scan_ls() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// cargo test --test tts_analysis_test -- test_tts_vits_melo_tts_zh_en_scan_ls --ignored --nocapture
 async fn test_tts_vits_melo_tts_zh_en_scan_ls() -> anyhow::Result<()> {
     run_length_scale_scan(
         TtsModel::Vits,
@@ -516,8 +500,6 @@ async fn test_tts_vits_melo_tts_zh_en_scan_ls() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// cargo test --test tts_analysis_test -- test_tts_vits_zh_hf_theresa_scan_ls --ignored --nocapture
 async fn test_tts_vits_zh_hf_theresa_scan_ls() -> anyhow::Result<()> {
     run_length_scale_scan(
         TtsModel::Vits,
@@ -532,8 +514,6 @@ async fn test_tts_vits_zh_hf_theresa_scan_ls() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// cargo test --test tts_analysis_test -- test_tts_vits_aishell3_scan_ls --ignored --nocapture
 async fn test_tts_vits_aishell3_scan_ls() -> anyhow::Result<()> {
     run_length_scale_scan(
         TtsModel::Vits,

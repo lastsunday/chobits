@@ -19,8 +19,6 @@ struct SegmentReport {
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// cargo test --test vad_analysis_test -- test_vad_analysis --ignored --nocapture
 async fn test_vad_analysis() -> anyhow::Result<()> {
     let (speech, sr) = read_wav(&resource_path("speech_a.wav").to_string_lossy());
     assert_eq!(sr, SAMPLE_RATE);
@@ -182,8 +180,6 @@ fn print_summary(title: &str, all: &[FileAccuracy]) {
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// cargo test --test vad_analysis_test -- test_vad_accuracy --ignored --nocapture
 async fn test_vad_accuracy() -> anyhow::Result<()> {
     let mut all_accuracy: Vec<FileAccuracy> = Vec::new();
 
@@ -250,8 +246,6 @@ async fn test_vad_accuracy() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// cargo test --test vad_analysis_test -- test_threshold_sweep --ignored --nocapture
 async fn test_threshold_sweep() -> anyhow::Result<()> {
     info!("=== VAD Threshold Sweep ===");
     info!(
@@ -333,9 +327,9 @@ async fn detect_segments(audio: &[f32]) -> anyhow::Result<Vec<SegmentReport>> {
         let chunk_len = end - start;
         let mut frame = audio[start..end].to_vec();
         frame.resize(WINDOW_SIZE, 0.0);
-        vad.accept_waveform(&frame).await?;
+        vad.accept_waveform(&frame)?;
 
-        let now_speech = vad.is_speech().await;
+        let now_speech = vad.is_speech();
         if now_speech && !was_speech {
             let start_ms = (i as f64 * frame_dur_ms) as i32;
             segments.push(SegmentReport {

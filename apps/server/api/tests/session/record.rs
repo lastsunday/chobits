@@ -28,12 +28,11 @@ use tracing_test::traced_test;
 
 use crate::common::{setup_database, tear_down};
 
+// TODO: failed - "record data not fully flushed to DB within 5s" (DB flush timeout)
 #[tokio::test]
 #[traced_test]
-#[ignore]
 /// Test that record data is persisted to DB after a full round
 /// Using Echo LLM + Mute TTS + Void ASR + Earshot VAD
-/// cargo test --test session_test -- test_full_flow --exact --ignored --nocapture
 async fn test_full_flow() -> anyhow::Result<()> {
     let (container, state) = setup_database().await;
     let record = Arc::new(RecordCollector::new(state.conn.clone())) as Arc<dyn SessionObserver>;
@@ -49,12 +48,12 @@ async fn test_full_flow() -> anyhow::Result<()> {
     let session_id = gen_id();
     let mut session = SessionBuilder::new()
         .with_listener(Box::new(DefaultListener::new(
-            Arc::new(Mutex::new(VadFactory::create_model(&Arc::new(
+            VadFactory::create_model(&Arc::new(
                 VadConfig {
                     model: Some(VadModel::Earshot),
                     ..Default::default()
                 },
-            )))),
+            )),
             Arc::new(Mutex::new(AsrFactory::create_model(&AsrConfig {
                 model: Some(AsrModel::Void),
                 ..Default::default()
@@ -97,7 +96,7 @@ async fn test_full_flow() -> anyhow::Result<()> {
     }
 
     session.start().await?;
-    let mut output = session.output_frame().await;
+    let (mut output, _, _, _, _) = session.output_frame().await;
 
     // Hello
     session
@@ -106,7 +105,7 @@ async fn test_full_flow() -> anyhow::Result<()> {
         }))
         .await;
     assert!(matches!(
-        output.next().await.unwrap().unwrap(),
+        output.next().await.unwrap().payload.unwrap(),
         FrameResult::HelloResult(..)
     ));
 
@@ -122,7 +121,7 @@ async fn test_full_flow() -> anyhow::Result<()> {
 
     // Consume output until TTS::Stop
     loop {
-        let frame = output.next().await.unwrap().unwrap();
+        let frame = output.next().await.unwrap().payload.unwrap();
         if let FrameResult::TTSResult(msg) = &frame
             && msg.state == Some(TtsState::Stop)
         {
@@ -134,6 +133,8 @@ async fn test_full_flow() -> anyhow::Result<()> {
 
     // Poll DB for record data (wait until llm round_data is flushed)
     // Mute TTS doesn't produce raw_pcm, so on_tts_delta is never called
+    // Wait for at least the llm entry — flush_to_db inserts sequentially
+    // (text row first, then llm row), so checking data.len() >= 1 is racy.
     let conn = &state.conn;
     let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
     let (rounds, data) = loop {
@@ -143,7 +144,7 @@ async fn test_full_flow() -> anyhow::Result<()> {
                 .filter(round_data::Column::RoundId.eq(&round.id))
                 .all(conn)
                 .await?;
-            if data.len() >= 1 {
+            if data.iter().any(|d| d.data_type == "llm") {
                 break (rounds, data);
             }
         }

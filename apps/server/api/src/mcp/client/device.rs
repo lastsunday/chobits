@@ -25,7 +25,7 @@ use service::chobits::message::{
 };
 use tokio::sync::{
     Mutex,
-    mpsc::{Receiver, Sender},
+    mpsc::{Receiver, UnboundedSender},
 };
 
 use tracing::{error, info};
@@ -44,7 +44,7 @@ pub struct DeviceMcpClient {
     next_cursor: Option<String>,
     pub tools: Vec<Tool>,
     pub phase: DeviceMcpPhase,
-    output_tx: Sender<OutputMessage>,
+    output_tx: UnboundedSender<OutputMessage>,
     call_tool_result_rx: Arc<Mutex<Receiver<anyhow::Result<ToolResult>>>>,
 }
 
@@ -71,23 +71,21 @@ impl McpClient for DeviceMcpClient {
             task: None,
         });
         let tx = self.output_tx.clone();
-        let result = tx
-            .send(OutputMessage {
-                epoch: 0,
-                payload: Ok(FrameResult::McpResult(McpRequest::new(
-                    self.session_id.clone(),
-                    JsonRpcRequest {
-                        jsonrpc: JsonRpcVersion2_0,
-                        id,
-                        request: Request {
-                            method: request.method.as_str().to_string(),
-                            params: to_json_object(request.params),
-                            ..Default::default()
-                        },
+        let result = tx.send(OutputMessage {
+            epoch: 0,
+            payload: Ok(FrameResult::McpResult(McpRequest::new(
+                self.session_id.clone(),
+                JsonRpcRequest {
+                    jsonrpc: JsonRpcVersion2_0,
+                    id,
+                    request: Request {
+                        method: request.method.as_str().to_string(),
+                        params: to_json_object(request.params),
+                        ..Default::default()
                     },
-                ))),
-            })
-            .await;
+                },
+            ))),
+        });
         if result.is_err() {
             Err(anyhow::anyhow!(
                 "tx send mcp tool call failure,name = {}",
@@ -109,7 +107,7 @@ impl McpClient for DeviceMcpClient {
 impl DeviceMcpClient {
     pub fn new(
         session_id: Option<String>,
-        output_tx: Sender<OutputMessage>,
+        output_tx: UnboundedSender<OutputMessage>,
         call_tool_result_rx: Arc<Mutex<Receiver<anyhow::Result<ToolResult>>>>,
     ) -> Self {
         Self {
@@ -288,13 +286,10 @@ impl DeviceMcpClient {
     pub async fn request_mcp_initialize(&mut self, _hello_message: &HelloMessage) {
         let tx = self.output_tx.clone();
         let request = self.create_initialize_request().await;
-        // mcp request send
-        let result = tx
-            .send(OutputMessage {
-                epoch: 0,
-                payload: Ok(FrameResult::McpResult(request)),
-            })
-            .await;
+        let result = tx.send(OutputMessage {
+            epoch: 0,
+            payload: Ok(FrameResult::McpResult(request)),
+        });
         if result.is_err() {
             info!("tx send mcp initialize reqeust failure");
         }
@@ -306,14 +301,12 @@ impl DeviceMcpClient {
 
     async fn request_mcp_tools_list(&mut self) {
         let tx = self.output_tx.clone();
-        let result = tx
-            .send(OutputMessage {
-                epoch: 0,
-                payload: Ok(FrameResult::McpResult(
-                    self.create_tools_list_request().await,
-                )),
-            })
-            .await;
+        let result = tx.send(OutputMessage {
+            epoch: 0,
+            payload: Ok(FrameResult::McpResult(
+                self.create_tools_list_request().await,
+            )),
+        });
         if result.is_err() {
             info!("tx send mcp tools list reqeust failure");
         }

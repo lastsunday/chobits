@@ -26,9 +26,7 @@ use tracing_test::traced_test;
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
 /// Collect full TTS audio through complete session pipeline (Void VAD/ASR + Echo LLM + VITS TTS)
-/// cargo test --test session_test -- test_tts_audio_collect --ignored --nocapture
 async fn test_tts_audio_collect() -> anyhow::Result<()> {
     use std::path::Path;
 
@@ -56,10 +54,10 @@ async fn test_tts_audio_collect() -> anyhow::Result<()> {
     let session_id = gen_id();
     let mut session = SessionBuilder::new()
         .with_listener(Box::new(DefaultListener::new(
-            Arc::new(Mutex::new(VadFactory::create_model(&Arc::new(VadConfig {
+            VadFactory::create_model(&Arc::new(VadConfig {
                 model: Some(VadModel::Void),
                 ..Default::default()
-            })))),
+            })),
             Arc::new(Mutex::new(AsrFactory::create_model(&AsrConfig {
                 model: Some(AsrModel::Void),
                 ..Default::default()
@@ -98,7 +96,7 @@ async fn test_tts_audio_collect() -> anyhow::Result<()> {
         .build();
 
     session.start().await?;
-    let mut output = session.output_frame().await;
+    let (mut output, _, _, _, _) = session.output_frame().await;
 
     session
         .accept_frame(&Frame::Hello(HelloMessage {
@@ -106,7 +104,7 @@ async fn test_tts_audio_collect() -> anyhow::Result<()> {
         }))
         .await;
     assert!(matches!(
-        output.next().await.unwrap().unwrap(),
+        output.next().await.unwrap().payload.unwrap(),
         FrameResult::HelloResult(..)
     ));
 
@@ -122,7 +120,7 @@ async fn test_tts_audio_collect() -> anyhow::Result<()> {
 
     let mut all_packets: Vec<Vec<u8>> = Vec::new();
     loop {
-        let data = output.next().await.unwrap().unwrap();
+        let data = output.next().await.unwrap().payload.unwrap();
         match data {
             FrameResult::TTSResult(msg) => {
                 if msg.state == Some(TtsState::Stop) {

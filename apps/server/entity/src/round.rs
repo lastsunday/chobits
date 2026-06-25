@@ -14,6 +14,7 @@ pub struct Model {
     pub mode: String,
     #[sea_orm(column_type = "JsonBinary", nullable)]
     pub client_info: Option<Json>,
+    pub status: Option<String>,
     #[schema(schema_with = date_time_with_time_zone_or_null_schema)]
     pub create_datetime: Option<DateTimeWithTimeZone>,
     #[schema(schema_with = date_time_with_time_zone_or_null_schema)]

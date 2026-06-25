@@ -19,11 +19,6 @@ use crate::common::tear_down;
 use crate::session::helpers::{create_session, to_json_rpc_response};
 
 #[tokio::test]
-#[ignore]
-/// Shell command:
-/// ``` shell
-/// cargo test --test session_test -- test_mcp_flow_server_client --exact --ignored --nocapture
-/// ```
 /// 1. [Device -> Server] hello request
 /// 2. [Server -> Device] hello response
 /// 3.1.1. [Server -> Device] mcp initialize request
@@ -48,13 +43,12 @@ use crate::session::helpers::{create_session, to_json_rpc_response};
 /// 5.1.1. [Server -> Device] llm text response
 /// 5.1.2. [Server -> Device] tts response
 async fn test_mcp_flow_server_client() -> anyhow::Result<()> {
-    tracing::subscriber::set_global_default(
+    let _ = tracing::subscriber::set_global_default(
         tracing_subscriber::fmt::Subscriber::builder()
             .compact()
             .with_max_level(tracing::Level::TRACE)
             .finish(),
-    )
-    .expect("Failed to set tracing subscriber");
+    );
     let device_mcp_tools_list_response: &'static str = r#"
 [
   {
@@ -126,7 +120,7 @@ async fn test_mcp_flow_server_client() -> anyhow::Result<()> {
     let request_id = AtomicI64::new(0);
     let (mut session, container, state) = create_session().await?;
     session.start().await?;
-    let mut output = session.output_frame().await;
+    let (mut output, _, _, _, _) = session.output_frame().await;
     session
         .accept_frame(&Frame::Hello(HelloMessage {
             features: Some(Feature {
@@ -137,10 +131,10 @@ async fn test_mcp_flow_server_client() -> anyhow::Result<()> {
         }))
         .await;
     assert!(matches!(
-        output.next().await.unwrap().unwrap(),
+        output.next().await.unwrap().payload.unwrap(),
         FrameResult::HelloResult(..)
     ));
-    let frame_result = output.next().await.unwrap().unwrap();
+    let frame_result = output.next().await.unwrap().payload.unwrap();
     assert!(matches!(frame_result, FrameResult::McpResult(..)));
     if let FrameResult::McpResult(request) = frame_result {
         assert_eq!(request.payload.request.method, "initialize");
@@ -169,7 +163,7 @@ async fn test_mcp_flow_server_client() -> anyhow::Result<()> {
         ))))
         .await;
 
-    let frame_result = output.next().await.unwrap().unwrap();
+    let frame_result = output.next().await.unwrap().payload.unwrap();
     debug!("{:?}", &frame_result);
     if let FrameResult::McpResult(request) = frame_result {
         assert_eq!(request.payload.request.method, "tools/list");
@@ -195,23 +189,23 @@ async fn test_mcp_flow_server_client() -> anyhow::Result<()> {
         }))
         .await;
 
-    let frame_result = output.next().await.unwrap().unwrap();
+    let frame_result = output.next().await.unwrap().payload.unwrap();
     debug!("{:?}", &frame_result);
     assert!(matches!(frame_result, FrameResult::STTResult(..)));
 
     assert!(matches!(
-        output.next().await.unwrap().unwrap(),
+        output.next().await.unwrap().payload.unwrap(),
         FrameResult::TTSResult(TtsMessage {
             state: Some(TtsState::Start),
             ..
         })
     ));
 
-    let frame_result = output.next().await.unwrap().unwrap();
+    let frame_result = output.next().await.unwrap().payload.unwrap();
     debug!("{:?}", &frame_result);
     assert!(matches!(frame_result, FrameResult::LLMResult(..)));
 
-    let frame_result = output.next().await.unwrap().unwrap();
+    let frame_result = output.next().await.unwrap().payload.unwrap();
     debug!("{:?}", frame_result);
     assert!(matches!(
         frame_result,
@@ -223,12 +217,12 @@ async fn test_mcp_flow_server_client() -> anyhow::Result<()> {
 
     // has some audio result,detect first one
     assert!(matches!(
-        output.next().await.unwrap().unwrap(),
+        output.next().await.unwrap().payload.unwrap(),
         FrameResult::AudioResult(AudioMessage { .. })
     ));
 
     while let Some(data) = output.next().await {
-        match data {
+        match data.payload {
             Ok(frame_result) => {
                 if let FrameResult::TTSResult(tts_message) = frame_result {
                     let state = tts_message.state;
@@ -251,13 +245,11 @@ async fn test_mcp_flow_server_client() -> anyhow::Result<()> {
     Ok(())
 }
 
+// TODO: blocked — requires a tool-calling LLM (Qwen3). Echo LLM never generates
+// tool calls, so the server never issues McpResult::CallTool (step 5.1.0.4).
+#[ignore]
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// Shell command:
-/// ``` shell
-/// cargo test -F cuda --test session_test -- test_mcp_flow_device_client --exact --ignored --nocapture
-/// ```
 async fn test_mcp_flow_device_client() -> anyhow::Result<()> {
     let device_mcp_tools_list_response: &'static str = r#"
 [
@@ -330,7 +322,7 @@ async fn test_mcp_flow_device_client() -> anyhow::Result<()> {
     let request_id = AtomicI64::new(0);
     let (mut session, container, state) = create_session().await?;
     session.start().await?;
-    let mut output = session.output_frame().await;
+    let (mut output, _, _, _, _) = session.output_frame().await;
     session
         .accept_frame(&Frame::Hello(HelloMessage {
             features: Some(Feature {
@@ -341,10 +333,10 @@ async fn test_mcp_flow_device_client() -> anyhow::Result<()> {
         }))
         .await;
     assert!(matches!(
-        output.next().await.unwrap().unwrap(),
+        output.next().await.unwrap().payload.unwrap(),
         FrameResult::HelloResult(..)
     ));
-    let frame_result = output.next().await.unwrap().unwrap();
+    let frame_result = output.next().await.unwrap().payload.unwrap();
     assert!(matches!(frame_result, FrameResult::McpResult(..)));
     if let FrameResult::McpResult(request) = frame_result {
         assert_eq!(request.payload.request.method, "initialize");
@@ -373,7 +365,7 @@ async fn test_mcp_flow_device_client() -> anyhow::Result<()> {
         ))))
         .await;
 
-    let frame_result = output.next().await.unwrap().unwrap();
+    let frame_result = output.next().await.unwrap().payload.unwrap();
     debug!("{:?}", &frame_result);
     if let FrameResult::McpResult(request) = frame_result {
         assert_eq!(request.payload.request.method, "tools/list");
@@ -399,19 +391,19 @@ async fn test_mcp_flow_device_client() -> anyhow::Result<()> {
         }))
         .await;
 
-    let frame_result = output.next().await.unwrap().unwrap();
+    let frame_result = output.next().await.unwrap().payload.unwrap();
     debug!("{:?}", &frame_result);
     assert!(matches!(frame_result, FrameResult::STTResult(..)));
 
     assert!(matches!(
-        output.next().await.unwrap().unwrap(),
+        output.next().await.unwrap().payload.unwrap(),
         FrameResult::TTSResult(TtsMessage {
             state: Some(TtsState::Start),
             ..
         })
     ));
 
-    let frame_result = output.next().await.unwrap().unwrap();
+    let frame_result = output.next().await.unwrap().payload.unwrap();
     debug!("{:?}", &frame_result);
     assert!(matches!(frame_result, FrameResult::McpResult(..)));
 
@@ -452,11 +444,11 @@ async fn test_mcp_flow_device_client() -> anyhow::Result<()> {
         ))))
         .await;
 
-    let frame_result = output.next().await.unwrap().unwrap();
+    let frame_result = output.next().await.unwrap().payload.unwrap();
     debug!("{:?}", &frame_result);
     assert!(matches!(frame_result, FrameResult::LLMResult(..)));
 
-    let frame_result = output.next().await.unwrap().unwrap();
+    let frame_result = output.next().await.unwrap().payload.unwrap();
     debug!("{:?}", frame_result);
     assert!(matches!(
         frame_result,
@@ -468,12 +460,12 @@ async fn test_mcp_flow_device_client() -> anyhow::Result<()> {
 
     // has some audio result,detect first one
     assert!(matches!(
-        output.next().await.unwrap().unwrap(),
+        output.next().await.unwrap().payload.unwrap(),
         FrameResult::AudioResult(AudioMessage { .. })
     ));
 
     while let Some(data) = output.next().await {
-        match data {
+        match data.payload {
             Ok(frame_result) => {
                 if let FrameResult::TTSResult(tts_message) = frame_result {
                     let state = tts_message.state;

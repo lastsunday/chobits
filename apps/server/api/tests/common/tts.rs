@@ -387,7 +387,8 @@ pub async fn run_vits_test(
 ) -> anyhow::Result<()> {
     let tts = api::tts::TtsFactory::create_model(tts_config, audio_config).await?;
     let text_stream = tts_stream(String::from(TEST_TTS_TEXT));
-    let mut tts_stream = tts.stream(Box::pin(text_stream)).await;
+    let cancel = tokio_util::sync::CancellationToken::new();
+    let mut tts_stream = tts.stream(Box::pin(text_stream), cancel).await;
 
     let gen_start = std::time::Instant::now();
     let mut all_packets: Vec<Vec<u8>> = Vec::new();

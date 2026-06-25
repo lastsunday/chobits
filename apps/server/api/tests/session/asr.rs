@@ -27,8 +27,6 @@ use crate::session::helpers::get_audio;
 
 #[tokio::test]
 #[traced_test]
-#[ignore]
-/// cargo test --test session_test -- test_asr_voice_input_manual --ignored --nocapture
 async fn test_asr_voice_input_manual() -> anyhow::Result<()> {
     let audio = get_audio();
     let audio_config = Arc::new(AudioConfig {
@@ -42,10 +40,10 @@ async fn test_asr_voice_input_manual() -> anyhow::Result<()> {
     let session_id = gen_id();
     let mut session = SessionBuilder::new()
         .with_listener(Box::new(DefaultListener::new(
-            Arc::new(Mutex::new(VadFactory::create_model(&Arc::new(VadConfig {
+            VadFactory::create_model(&Arc::new(VadConfig {
                 model: Some(VadModel::Earshot),
                 ..Default::default()
-            })))),
+            })),
             Arc::new(Mutex::new(AsrFactory::create_model(&AsrConfig {
                 model: Some(AsrModel::SenseVoice),
                 path: Some(
@@ -95,7 +93,7 @@ async fn test_asr_voice_input_manual() -> anyhow::Result<()> {
         .build();
 
     session.start().await?;
-    let mut output = session.output_frame().await;
+    let (mut output, _, _, _, _) = session.output_frame().await;
 
     session
         .accept_frame(&Frame::Hello(HelloMessage {
@@ -103,7 +101,7 @@ async fn test_asr_voice_input_manual() -> anyhow::Result<()> {
         }))
         .await;
     assert!(matches!(
-        output.next().await.unwrap().unwrap(),
+        output.next().await.unwrap().payload.unwrap(),
         FrameResult::HelloResult(..)
     ));
 
@@ -133,7 +131,7 @@ async fn test_asr_voice_input_manual() -> anyhow::Result<()> {
 
     let mut frames = Vec::new();
     loop {
-        let frame = output.next().await.unwrap().unwrap();
+        let frame = output.next().await.unwrap().payload.unwrap();
         let is_stop =
             matches!(&frame, FrameResult::TTSResult(msg) if msg.state == Some(TtsState::Stop));
         frames.push(frame);

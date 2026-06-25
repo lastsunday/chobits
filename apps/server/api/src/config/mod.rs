@@ -211,7 +211,7 @@ pub struct Config {
     #[serde(default)]
     pub tts_options: Option<serde_json::Value>,
 
-    /// default: qwen3
+    /// default: sensevoice
     #[serde(default = "default_asr_model")]
     pub asr_model: Option<AsrModel>,
 
@@ -757,8 +757,8 @@ pub enum AsrModel {
 pub enum TtsModel {
     Mute,
     PocketTts,
-    #[default]
     Vits,
+    #[default]
     MatchaTts,
 }
 

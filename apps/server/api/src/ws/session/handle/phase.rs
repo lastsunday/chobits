@@ -142,7 +142,7 @@ impl Session {
                                     self.interrupt_output().await;
                                     self.phase = Phase::Listen(ListenMode::Auto);
                                     self.current_mode = RoundMode::Auto;
-                                    self.update_latest_activity_time().await;
+                                    self.update_latest_activity_time();
                                     self.new_round(RoundMode::Auto).await;
                                     if let Some(round) = &mut self.current_round {
                                         round.accept_command(Command::Wake { text: "Hello" }).await;
@@ -205,7 +205,7 @@ impl Session {
                                 .silence_voice_timeout
                                 .expect("logic silence voice timeout is empty");
                             self.listener.reset(Some(silence_voice_timeout)).await;
-                            self.update_latest_activity_time().await;
+                            self.update_latest_activity_time();
                         }
                     }
                     None => {
@@ -216,7 +216,7 @@ impl Session {
                                 .silence_voice_timeout
                                 .expect("logic silence voice timeout is empty");
                             self.listener.reset(Some(silence_voice_timeout)).await;
-                            self.update_latest_activity_time().await;
+                            self.update_latest_activity_time();
                         } else {
                             self.listener
                                 .accept(listener::ListenInput::Audio(data.to_vec()))
@@ -229,9 +229,9 @@ impl Session {
                     _ => false,
                 };
                 if is_speech {
-                    self.update_latest_activity_time().await;
+                    self.update_latest_activity_time();
                 } else {
-                    let latest_activity_time = self.get_latest_activity_time().await;
+                    let latest_activity_time = self.get_latest_activity_time();
                     if let (Some(latest_activity_time), Some(close_connection_no_voice_time)) = (
                         latest_activity_time,
                         self.config.close_connection_no_voice_time,
@@ -387,14 +387,14 @@ impl Session {
                         let text = &listen_message.text;
                         match text {
                             Some(text) => {
-                                self.update_latest_activity_time().await;
+                                self.update_latest_activity_time();
                                 self.new_round(self.current_mode).await;
                                 //if match walk word
                                 if let Some(round) = &mut self.current_round {
                                     // TODO: detech voice id
                                     self.listener
                                         .set_state(crate::ws::session::listener::ListenState::End);
-                                    match self.listener.get_result().await {
+                                    match self.listener.take_result().await.1 {
                                         Ok(_) => {
                                             round.accept_command(Command::Wake { text }).await;
                                         }
@@ -450,7 +450,7 @@ impl Session {
                                 .silence_voice_timeout
                                 .expect("logic silence voice timeout is empty");
                             self.listener.reset(Some(silence_voice_timeout)).await;
-                            self.update_latest_activity_time().await;
+                            self.update_latest_activity_time();
                         }
                     }
                     None => {
@@ -461,7 +461,7 @@ impl Session {
                                 .silence_voice_timeout
                                 .expect("logic silence voice timeout is empty");
                             self.listener.reset(Some(silence_voice_timeout)).await;
-                            self.update_latest_activity_time().await;
+                            self.update_latest_activity_time();
                         } else {
                             self.listener
                                 .accept(listener::ListenInput::Audio(data.to_vec()))
@@ -474,9 +474,9 @@ impl Session {
                     _ => false,
                 };
                 if is_speech {
-                    self.update_latest_activity_time().await;
+                    self.update_latest_activity_time();
                 } else {
-                    let latest_activity_time = self.get_latest_activity_time().await;
+                    let latest_activity_time = self.get_latest_activity_time();
                     if let (Some(latest_activity_time), Some(close_connection_no_voice_time)) = (
                         latest_activity_time,
                         self.config.close_connection_no_voice_time,
@@ -526,12 +526,10 @@ impl Session {
             features: None,
             session_id: Some(self.id.clone()),
         };
-        let result = tx
-            .send(OutputMessage {
-                epoch: 0,
-                payload: Ok(FrameResult::HelloResult(data)),
-            })
-            .await;
+        let result = tx.send(OutputMessage {
+            epoch: 0,
+            payload: Ok(FrameResult::HelloResult(data)),
+        });
         if result.is_err() {
             info!(target:"session","tx send hello result failure");
         }
@@ -542,15 +540,13 @@ impl Session {
         self.output_epoch.fetch_add(1, Ordering::Release);
     }
 
-    async fn handle_listen_end(&mut self) {
-
-        let voice_pcm = self.listener.get_voice_data().await;
-        let sample_rate = self
-            .audio_config
-            .input_sample_rate
-            .expect("input sample rate is empty");
-
-        let result = self.listener.get_result().await;
+    async fn finish_asr_inner(
+        &mut self,
+        voice_pcm: Vec<f32>,
+        result: (Vec<f32>, core::result::Result<listener::ListenResult, crate::common::ModelError>),
+        sample_rate: u32,
+    ) {
+        let (_voice_data_from_result, result) = result;
         match result {
             Ok(listener::ListenResult::Text(text)) => {
                 self.new_round(RoundMode::Text).await;
@@ -595,6 +591,48 @@ impl Session {
             Err(e) => {
                 error!("{:?}", e);
                 self.stop_round().await;
+            }
+        }
+    }
+
+    async fn handle_listen_end(&mut self) {
+        let sample_rate = self
+            .audio_config
+            .input_sample_rate
+            .expect("input sample rate is empty");
+
+        let voice_pcm = self.listener.take_voice().await;
+
+        if voice_pcm.is_empty() {
+            // Text path — harvest pending text from listener
+            let (voice_data, result) = self.listener.take_result().await;
+            self.finish_asr_inner(voice_data.clone(), (voice_data, result), sample_rate).await;
+        } else {
+            // Voice path — run ASR inline (all speech ended, no more audio coming)
+            let Some(asr) = self.listener.clone_asr() else {
+                error!("no ASR engine available, skipping transcription");
+                return;
+            };
+            let mut asr = asr.lock().await;
+            match asr.transcribe(sample_rate, &voice_pcm).await {
+                Ok(transcript) => {
+                    self.finish_asr_inner(
+                        voice_pcm.clone(),
+                        (
+                            voice_pcm,
+                            Ok(listener::ListenResult::Audio {
+                                text: transcript.text,
+                                prob: transcript.prob,
+                            }),
+                        ),
+                        sample_rate,
+                    )
+                    .await;
+                }
+                Err(e) => {
+                    error!("ASR transcription error: {:?}", e);
+                    self.stop_round().await;
+                }
             }
         }
     }

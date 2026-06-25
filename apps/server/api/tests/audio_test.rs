@@ -7,7 +7,6 @@ use wavers::write;
 
 #[tokio::test]
 #[traced_test]
-/// cargo test --test audio_test -- test_audio_encode_decode --nocapture
 async fn test_audio_encode_decode() {
     // 1. get wav file
     let wav_file: PathBuf = [

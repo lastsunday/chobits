@@ -212,7 +212,7 @@ impl Tts for TtsMatcha {
         >,
         cancel: CancellationToken,
     ) -> Pin<Box<dyn Stream<Item = core::result::Result<TtsData, TtsError>> + Send + Sync>> {
-        let (tx, rx) = channel::<core::result::Result<TtsData, TtsError>>(10);
+        let (tx, rx) = channel::<core::result::Result<TtsData, TtsError>>(64);
 
         let tts = self.tts.clone();
         let output_sample_rate = self.output_sample_rate;

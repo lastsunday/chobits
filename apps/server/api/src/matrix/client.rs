@@ -227,7 +227,7 @@ impl Bot {
             let mut session = SessionBuilder::new()
                 .with_id(id.clone())
                 .with_listener(Box::new(DefaultListener::new(
-                    Arc::new(Mutex::new(VadFactory::create_model(&self.vad_config))),
+                    VadFactory::create_model(&self.vad_config),
                     AsrFactory::global().default().clone(),
                     self.audio_config.clone(),
                 )))
@@ -240,7 +240,7 @@ impl Bot {
                 observer.on_session_start(&id).await;
             }
             session.start().await?;
-            let (mut output, _, _, _) = session.output_frame().await;
+            let (mut output, _, _, _, _) = session.output_frame().await;
             // send hello frame
             session
                 .accept_frame(&Frame::Hello(HelloMessage {

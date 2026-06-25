@@ -26,7 +26,24 @@ use rmcp::{
 };
 use serde::Serialize;
 
-use std::{cmp, sync::Arc};
+use std::{
+    cmp,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
+
+/// Absolute workspace root, derived from CARGO_MANIFEST_DIR (compile-time constant).
+/// CARGO_MANIFEST_DIR = <root>/apps/server/api → 3 `.parent()` calls = root.
+fn workspace_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .to_path_buf()
+}
 use testcontainers::ContainerAsync;
 use testcontainers_modules::postgres::Postgres;
 use tokio::sync::Mutex;
@@ -70,13 +87,18 @@ pub async fn create_session()
     });
     let session = SessionBuilder::new()
         .with_listener(Box::new(DefaultListener::new(
-            Arc::new(Mutex::new(VadFactory::create_model(&Arc::new(VadConfig {
+            VadFactory::create_model(&Arc::new(VadConfig {
                 model: Some(VadModel::Earshot),
                 ..Default::default()
-            })))),
+            })),
             Arc::new(Mutex::new(AsrFactory::create_model(&AsrConfig {
                 model: Some(AsrModel::SenseVoice),
-                path: Some(String::from("data/asr/model/sense_voice/default/")),
+                path: Some(
+                    workspace_root()
+                        .join("data/asr/model/sense_voice/default/")
+                        .to_string_lossy()
+                        .into_owned(),
+                ),
                 variant: None,
             }))),
             audio_config.clone(),
@@ -84,13 +106,18 @@ pub async fn create_session()
         .with_id(session_id.clone())
         .with_model(
            Arc::new( LlmFactory::create_model(&LlmConfig {
-                model: Some(LlmModel::Qwen3),
-                path: Some(String::from("data/llm/model/unsloth/Qwen3-1.7B-GGUF/")),
-                variant: None,
+                model: Some(LlmModel::Echo),
+                ..Default::default()
             }))
         )
             .with_tts(Arc::new(TtsFactory::create_model(&TtsConfig {
-                model: Some(TtsModel::Mute),
+                model: Some(TtsModel::MatchaTts),
+                path: Some(
+                    workspace_root()
+                        .join("data/tts/model/matcha/matcha-icefall-zh-en/")
+                        .to_string_lossy()
+                        .into_owned(),
+                ),
                 ..Default::default()
             }, &audio_config).await.unwrap()))
         .with_mcp_host(Arc::new(Mutex::new(mcp_host)))
@@ -119,10 +146,10 @@ pub async fn create_mini_session() -> Session {
     let session_id = gen_id();
     SessionBuilder::new()
         .with_listener(Box::new(DefaultListener::new(
-            Arc::new(Mutex::new(VadFactory::create_model(&Arc::new(VadConfig {
+            VadFactory::create_model(&Arc::new(VadConfig {
                 model: Some(VadModel::Earshot),
                 ..Default::default()
-            })))),
+            })),
             Arc::new(Mutex::new(AsrFactory::create_model(&AsrConfig {
                 model:Some(AsrModel::Void),
                 ..Default::default()
