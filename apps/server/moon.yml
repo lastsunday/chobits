@@ -59,6 +59,7 @@ tasks:
       TEST_DATABASE: "pg"
     deps:
       - ~:build
+      - ~:test-download-resources
 
   run:
     command: "cargo run --package chobits-server -- --config=application.toml"

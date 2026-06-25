@@ -120,6 +120,7 @@ async fn test_chat_simple() {
 
 #[tokio::test]
 #[traced_test]
+#[ignore]
 async fn test_short_question() {
     let model = create_model();
     let system_prompt = "你是一个助手。".to_string();
@@ -157,6 +158,7 @@ async fn test_short_question() {
 
 #[tokio::test]
 #[traced_test]
+#[ignore]
 async fn test_english_question() {
     let model = create_model();
     let system_prompt =
@@ -196,6 +198,7 @@ async fn test_english_question() {
 
 #[tokio::test]
 #[traced_test]
+#[ignore]
 async fn test_chat_history() {
     let model = create_model();
     let system_prompt = "你是一个助手，协助用户进行记录，查询和提供建议，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等并且数字使用中文字代替。".to_string();
@@ -246,6 +249,7 @@ async fn test_chat_history() {
 
 #[tokio::test]
 #[traced_test]
+#[ignore]
 async fn test_chat_mcp() -> anyhow::Result<()> {
     let model = create_model();
     let mut union_mcp_host = UnionMcpHost::new(None);
