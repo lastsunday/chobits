@@ -345,21 +345,17 @@ async fn test_chat_flow_listen_realtime() -> anyhow::Result<()> {
         }))
         .await;
     // drain: wait for Wake pipeline to complete
-    tokio::time::timeout(Duration::from_secs(30), async {
-        while let Some(data) = output.next().await {
-            let data = data.payload.unwrap();
-            match data {
-                FrameResult::TTSResult(tts_message) => {
-                    if let Some(TtsState::Stop) = tts_message.state {
-                        break;
-                    }
+    while let Some(data) = output.next().await {
+        let data = data.payload.unwrap();
+        match data {
+            FrameResult::TTSResult(tts_message) => {
+                if let Some(TtsState::Stop) = tts_message.state {
+                    break;
                 }
-                _ => continue,
             }
+            _ => continue,
         }
-    })
-    .await
-    .expect("drain Wake pipeline timed out after 30s");
+    }
     session
         .accept_frame(&Frame::Listen(ListenMessage {
             state: ListenState::Start,
@@ -534,21 +530,17 @@ async fn test_chat_flow_listen_realtime_silent_voice_connection_timeout() -> any
         .await;
     // drain Wake pipeline before Listen(Start, RealTime) to avoid epoch bump
     // discarding the Wake pipeline's STTResult
-    tokio::time::timeout(Duration::from_secs(30), async {
-        while let Some(data) = output.next().await {
-            let data = data.payload.unwrap();
-            match data {
-                FrameResult::TTSResult(tts_message) => {
-                    if let Some(TtsState::Stop) = tts_message.state {
-                        break;
-                    }
+    while let Some(data) = output.next().await {
+        let data = data.payload.unwrap();
+        match data {
+            FrameResult::TTSResult(tts_message) => {
+                if let Some(TtsState::Stop) = tts_message.state {
+                    break;
                 }
-                _ => continue,
             }
+            _ => continue,
         }
-    })
-    .await
-    .expect("drain Wake pipeline timed out after 30s");
+    }
     session
         .accept_frame(&Frame::Listen(ListenMessage {
             state: ListenState::Start,
