@@ -3,7 +3,7 @@
     "category": "llm",
     "model": "qwen3"
   },
-  "default_variant": "1.7b",
+  "default_variant": "0.6b",
   "variants": {
     "0.6b": {
       "files": [

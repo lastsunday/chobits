@@ -698,7 +698,7 @@ impl Config {
         }
         let variant = self.llm_variant.clone().unwrap_or_else(|| {
             match self.llm_model.clone().unwrap_or_default() {
-                LlmModel::Qwen3 => "1.7b".into(),
+                LlmModel::Qwen3 => "0.6b".into(),
                 _ => String::new(),
             }
         });
