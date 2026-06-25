@@ -307,6 +307,7 @@ impl Session {
                         let text = &listen_message.text;
                         match text {
                             Some(text) => {
+                                self.interrupt_output().await;
                                 self.listener
                                     .accept(listener::ListenInput::Text(text.to_string()))
                                     .await;
