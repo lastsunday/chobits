@@ -25,8 +25,8 @@
 - **Testing**: cucumber (BDD) + testcontainers
 - **ML**: Candle (candle-core, candle-transformers, candle-nn)
 - **Audio**: symphonia, wavers, resampler, opus
-- **ASR**: sherpa-onnx — SenseVoice / Paraformer / Zipformer
-- **TTS**: sherpa-onnx — Mute / PocketTts / Vits / MatchaTts
+- **ASR**: sherpa-onnx — SenseVoice
+- **TTS**: sherpa-onnx — Mute / MatchaTts
 - **VAD**: earshot (Silero VAD)
 - **LLM**: rig-core + Candle — Qwen3 / Echo
 - **MCP**: rmcp (Model Context Protocol, 支持 SSE 与 Streamable HTTP)

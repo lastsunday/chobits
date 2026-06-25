@@ -10,8 +10,6 @@ apps/server/api/src/asr/
 └── model/
     ├── mod.rs
     ├── sense_voice/       # AsrSenseVoice
-    ├── paraformer/        # AsrParaformer
-    ├── zipformer/         # AsrZipformer
     └── void/              # AsrVoid (no-op)
 ```
 
@@ -45,8 +43,6 @@ pub trait Asr: Send + Sync {
 | 模型 | 配置名 | 模型文件 | 大小 | 语言 | 架构 |
 |------|--------|---------|------|------|------|
 | **SenseVoice** | `sensevoice` | `model.int8.onnx` | 228MB | 中/英/日/韩/粤 | OfflineSenseVoice |
-| **Paraformer** | `paraformer` | `model.int8.onnx` | 217MB | 中文 | OfflineParaformer |
-| **Zipformer** | `zipformer` | `encoder+decoder+joiner` 三个 ONNX | 257MB | 中/英 | OfflineTransducer |
 | **Void** | `void` | 无 (no-op) | 0 | — | — |
 
 所有模型均来自 <https://github.com/k2-fsa/sherpa-onnx>，通过下载器 manifest 管理。
@@ -56,8 +52,6 @@ pub trait Asr: Send + Sync {
 | Manifest | 存档 URL |
 |----------|---------|
 | `manifests/asr/sense_voice.json` | `sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2` |
-| `manifests/asr/paraformer.json` | `sherpa-onnx-paraformer-zh-2024-03-09.tar.bz2` |
-| `manifests/asr/zipformer.json` | `sherpa-onnx-zipformer-zh-en-2023-11-22.tar.bz2` |
 
 ```shell
 # 下载当前配置的 ASR 模型
@@ -65,8 +59,6 @@ moon run server:downloader -- asr
 
 # 下载指定 ASR 模型
 moon run server:downloader -- asr sensevoice
-moon run server:downloader -- asr paraformer
-moon run server:downloader -- asr zipformer
 ```
 
 ## 性能基准
@@ -76,18 +68,13 @@ moon run server:downloader -- asr zipformer
 | 模型 | CER | WER | RTF | ASR 耗时 | 准确性 | 性能分 | 总分 | 判定 |
 |------|-----|-----|-----|---------|--------|--------|------|------|
 | **SenseVoice** | **0.00%(A)** | 0.00% | 0.110 | 1.3s | 100% | 89.0% | 96.7% | ✅ 适合日常 |
-| **Paraformer** | 34.62%(F) | 166.67% | 0.054 | 0.6s | 65.4% | 94.6% | 74.1% | ❌ 不可用 |
-| **Zipformer** | 32.05%(F) | 100.00% | 0.056 | 0.7s | 67.9% | 94.4% | 75.9% | ❌ 不可用 |
 
 **结论：当前仅 SenseVoice 达到可用水平，为默认模型。**
 
 | 观察 | 说明 |
 |------|------|
 | SenseVoice 精度 | TTS 闭环 CER 为 0%——对合成语音完美识别 |
-| Paraformer 中文限制 | 仅支持中文，对中英混读的 `TEST_TTS_TEXT` 产生 166% WER（英文全部为插入/替换）|
-| Zipformer WER | 100% WER——所有参考词都与假设不匹配，但对中文片段稍有识别 |
-| 性能 | 三个模型 RTF 均 < 0.12（debug 模式），release 模式更快 |
-| 参考音频测试 | SenseVoice 对 `zh.wav`、`en.wav`、`yue.wav` 均能正确识别预期文本，Paraformer/Zipformer 对 `en` 和 `yue` 失败 |
+| 性能 | RTF < 0.12（debug 模式），release 模式更快 |
 
 ### TTS-ASR 闭环测试
 
@@ -96,8 +83,6 @@ moon run server:downloader -- asr zipformer
 | 测试名 | ASR 模型 | 阈值 |
 |--------|---------|------|
 | `test_tts_asr_loopback` | SenseVoice | CER < 6% (实测 0%) |
-| `test_tts_asr_loopback_paraformer` | Paraformer | 仅诊断 (CER 34.6%) |
-| `test_tts_asr_loopback_zipformer` | Zipformer | 仅诊断 (CER 32.1%) |
 
 **TTS 生成耗时**：~6.1-6.2s (debug) → 相当于 RTF=0.52（TTS 生成 + ASR 转录）
 
@@ -144,11 +129,7 @@ CER=XX.X%(X) WER=XX.X% Acc=XX.X% Perf=XX.X% Total=XX.X% | RTF=X.XXX ASR=X.Xs Aud
 | `asr_test.rs` | `test_asr` | SenseVoice | 无 (诊断) |
 | `asr_test.rs` | `test_asr_model_void` | Void | text=="" prob==1.0 |
 | `asr_test.rs` | `test_asr_with_reference_audio` | SenseVoice | 含预期子串 (zh/en/yue) |
-| `asr_test.rs` | `test_asr_paraformer_reference_audio` | Paraformer | 含预期子串 (zh/en/yue) |
-| `asr_test.rs` | `test_asr_zipformer_reference_audio` | Zipformer | 含预期子串 (zh/en/yue) |
 | `asr_test.rs` | `test_tts_asr_loopback` | SenseVoice | CER < 6% |
-| `asr_test.rs` | `test_tts_asr_loopback_paraformer` | Paraformer | 无 (诊断) |
-| `asr_test.rs` | `test_tts_asr_loopback_zipformer` | Zipformer | 无 (诊断) |
 
 ### Session 集成测试
 
@@ -173,13 +154,9 @@ cargo test --package api --test asr_test -- test_asr --ignored --nocapture
 
 # 参考音频测试
 cargo test --package api --test asr_test -- test_asr_with_reference_audio --ignored --nocapture
-cargo test --package api --test asr_test -- test_asr_paraformer_reference_audio --ignored --nocapture
-cargo test --package api --test asr_test -- test_asr_zipformer_reference_audio --ignored --nocapture
 
 # TTS-ASR 闭环测试
 cargo test --package api --test asr_test -- test_tts_asr_loopback --ignored --nocapture
-cargo test --package api --test asr_test -- test_tts_asr_loopback_paraformer --ignored --nocapture
-cargo test --package api --test asr_test -- test_tts_asr_loopback_zipformer --ignored --nocapture
 
 # release 模式（更快）
 cargo test --package api --test asr_test --release -- test_asr --ignored --nocapture
@@ -203,12 +180,10 @@ cargo test --package api --test asr_test -- --ignored --nocapture
 |------|------|
 | `apps/server/api/src/asr/mod.rs` | Asr trait、Factory、RecognizerResult |
 | `apps/server/api/src/asr/model/sense_voice/mod.rs` | SenseVoice 模型实现 |
-| `apps/server/api/src/asr/model/paraformer/mod.rs` | Paraformer 模型实现 |
-| `apps/server/api/src/asr/model/zipformer/mod.rs` | Zipformer 模型实现 |
 | `apps/server/api/src/asr/model/void/mod.rs` | Void no-op 模型 |
 | `apps/server/api/src/config/asr.rs` | AsrConfig 结构体 |
 | `apps/server/api/src/config/mod.rs` | AsrModel 枚举 |
 | `apps/server/src/downloader/manifests/asr/` | 下载 manifest |
-| `apps/server/api/tests/asr_test.rs` | 8 个 ASR 集成测试 |
+| `apps/server/api/tests/asr_test.rs` | 5 个 ASR 集成测试 |
 | `apps/server/api/tests/common/asr.rs` | AsrDiagnostics 诊断系统 |
 | `apps/server/api/tests/session_test.rs` | Session 集成 ASR 测试 |

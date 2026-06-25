@@ -21,16 +21,12 @@ _TODO_
 | Model                                    | Memory  | File Size | Language              | CER (TTS 闭环) |
 | ---------------------------------------- | ------- | --------- | --------------------- | -------------- |
 | SenseVoice (sherpa-onnx)                 | ~600MB  | 228MB     | 中/英/日/韩/粤        | 0.00%(A)       |
-| Paraformer (sherpa-onnx)                 | ~400MB  | 217MB     | 中文                  | 34.62%(F)      |
-| Zipformer (sherpa-onnx)                  | ~500MB  | 257MB     | 中/英                 | 32.05%(F)      |
 
 ### TTS
 
 | Model                        | Memory   | File Size | Remark             |
 | ---------------------------- | -------- | --------- | ------------------ |
 | MatchaTts (sherpa-onnx)      | ~500MB   | 72MB + 76MB (vocoder) | 中文/中英双语 |
-| Vits (sherpa-onnx)           | ~400MB   | 217MB      | 多 speaker 可选  |
-| PocketTts (sherpa-onnx)      | ~300MB   | 150MB      | 轻量级           |
 | Mute                         | 0        | 0          | 静音 (测试用)    |
 
 ## CUDA Toolkit install in fedora 43 & setup env

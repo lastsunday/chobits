@@ -238,8 +238,8 @@ moon run server:download-all-and-checksums # 下载所有模型并更新 SHA
 
 | 配置字段 | 可选值 | 下载目标 |
 |----------|--------|----------|
-| `tts_model` | `pocket-tts` / `vits` / `matchatts` / `mute` | `mute` 跳过 |
-| `asr_model` | `sensevoice` / `paraformer` / `zipformer` / `void` | `void` 跳过 |
+| `tts_model` | `matchatts` / `mute` | `mute` 跳过 |
+| `asr_model` | `sensevoice` / `void` | `void` 跳过 |
 | `llm_model` | `qwen3` / `echo` / `mini-cpm4` | `echo`/`mini-cpm4` 跳过 |
 | `vad_model` | `earshot` / `void` | `earshot`/`void` 跳过 |
 

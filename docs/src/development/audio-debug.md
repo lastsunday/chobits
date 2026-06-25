@@ -286,34 +286,19 @@ Audio:scr=30(P) Perf:scr=84(G) Timing:scr=74(G) | sh=18.07%(Bad) dr=25.9dB(Good)
 ### 参数调优测试
 
 ```bash
-# noise_scale / noise_scale_w 扫描（melo-tts-zh_en）
-cargo test --package api --test tts_test -- test_tts_vits_melo_tts_zh_en_noise_scale --ignored --nocapture
-
 # length_scale 语速校准扫描
-cargo test --package api --test tts_analysis_test -- test_tts_matcha_zh_baker_scan_ls --ignored --nocapture
 cargo test --package api --test tts_analysis_test -- test_tts_matcha_zh_en_scan_ls --ignored --nocapture
-cargo test --package api --test tts_analysis_test -- test_tts_vits_melo_tts_zh_en_scan_ls --ignored --nocapture
-cargo test --package api --test tts_analysis_test -- test_tts_vits_zh_hf_theresa_scan_ls --ignored --nocapture
-cargo test --package api --test tts_analysis_test -- test_tts_vits_aishell3_scan_ls --ignored --nocapture
-
-# SID 扫描（多 speaker 模型）
-cargo test --package api --test tts_analysis_test -- test_tts_vits_aishell3_scan_sid --ignored --nocapture
-cargo test --package api --test tts_analysis_test -- test_tts_vits_zh_hf_theresa_scan_sid --ignored --nocapture
 ```
 
 ### 已知问题
 
-**melo-tts-zh_en**：shimmer ~16%，远超算法可靠上限（12%），无法通过 `noise_scale` / `noise_scale_w` 调整改善（`noise_scale_w` 被 ONNX 导出忽略）。所有 VITS/Matcha 模型的 shimmer 均在 14–18% 范围。**matcha-icefall-zh-baker / zh-en** 同样 ~17%。
+**matcha-icefall-zh-en**：shimmer ~17%，远超算法可靠上限（12%）。
 
 **length_scale 默认值校准（使时长接近标准 14.1s）：**
 
 | 模型 | 默认 `length_scale` |
 |------|-------------------|
-| matcha-icefall-zh-baker | **1.3** |
 | matcha-icefall-zh-en | **1.3** |
-| melo-tts-zh_en | **1.3** |
-| zh-hf-theresa | **2.0** |
-| aishell3 | **0.6** |
 
 校准值已写入 `default_length_scale()`（`api/src/tts/mod.rs`），在 `tts_options` 未指定 `length_scale` 时自动生效。
 

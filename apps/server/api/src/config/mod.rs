@@ -747,8 +747,6 @@ pub enum VadModel {
 pub enum AsrModel {
     #[default]
     SenseVoice,
-    Paraformer,
-    Zipformer,
     Void,
 }
 
@@ -756,8 +754,6 @@ pub enum AsrModel {
 #[serde(rename_all = "lowercase")]
 pub enum TtsModel {
     Mute,
-    PocketTts,
-    Vits,
     #[default]
     MatchaTts,
 }

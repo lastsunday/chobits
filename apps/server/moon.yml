@@ -32,15 +32,7 @@ tasks:
   test-download-resources:
     script: |
       cargo run --package chobits-server -- downloader install --data-dir ../../data --quiet asr sense_voice default && \
-      cargo run --package chobits-server -- downloader install --data-dir ../../data --quiet asr paraformer default && \
-      cargo run --package chobits-server -- downloader install --data-dir ../../data --quiet asr zipformer default && \
       cargo run --package chobits-server -- downloader install --data-dir ../../data --quiet tts matcha matcha-icefall-zh-en && \
-      cargo run --package chobits-server -- downloader install --data-dir ../../data --quiet tts matcha matcha-icefall-zh-baker && \
-      cargo run --package chobits-server -- downloader install --data-dir ../../data --quiet tts vits melo-tts-zh_en && \
-      cargo run --package chobits-server -- downloader install --data-dir ../../data --quiet tts vits zh-hf-theresa && \
-      cargo run --package chobits-server -- downloader install --data-dir ../../data --quiet tts vits aishell3 && \
-      cargo run --package chobits-server -- downloader install --data-dir ../../data --quiet tts pocket_tts default && \
-      cargo run --package chobits-server -- downloader install --data-dir ../../data --quiet reference audio bria && \
       cargo run --package chobits-server -- downloader install --data-dir ../../data --quiet llm qwen3 0.6b
     deps:
       - ~:build

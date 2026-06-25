@@ -5,38 +5,9 @@
   },
   "default_variant": "matcha-icefall-zh-en",
   "variants": {
-    "matcha-icefall-zh-baker": {
-      "length_scale": 1.3,
-      "archives": [
-        {
-          "path": "tts/model/matcha/matcha-icefall-zh-baker/",
-          "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/matcha-icefall-zh-baker.tar.bz2",
-          "sha256": null,
-          "extract": [
-            "model-steps-3.onnx",
-            "tokens.txt",
-            "lexicon.txt",
-            "date.fst",
-            "number.fst",
-            "phone.fst"
-          ]
-        }
-      ],
-      "files": [
-        {
-          "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/vocoder-models/vocos-22khz-univ.onnx",
-          "sha256": null,
-          "path": "tts/model/matcha/matcha-icefall-zh-baker/vocos-22khz-univ.onnx"
-        }
-      ]
-    },
     "matcha-icefall-zh-en": {
-      "length_scale": 1.0,
       "archives": [
         {
-          "path": "tts/model/matcha/matcha-icefall-zh-en/",
-          "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/matcha-icefall-zh-en.tar.bz2",
-          "sha256": null,
           "extract": [
             "model-steps-3.onnx",
             "tokens.txt",
@@ -45,16 +16,20 @@
             "date-zh.fst",
             "number-zh.fst",
             "espeak-ng-data"
-          ]
+          ],
+          "path": "tts/model/matcha/matcha-icefall-zh-en/",
+          "sha256": null,
+          "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/matcha-icefall-zh-en.tar.bz2"
         }
       ],
       "files": [
         {
-          "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/vocoder-models/vocos-16khz-univ.onnx",
-          "sha256": null,
-          "path": "tts/model/matcha/matcha-icefall-zh-en/vocos-16khz-univ.onnx"
+          "path": "tts/model/matcha/matcha-icefall-zh-en/vocos-16khz-univ.onnx",
+          "sha256": "b599142a1fb8ff03de3e84ac35ff537c619e56f4267a6fe894851a42844acf9e",
+          "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/vocoder-models/vocos-16khz-univ.onnx"
         }
-      ]
+      ],
+      "length_scale": 1.0
     }
   }
 }

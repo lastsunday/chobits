@@ -9,41 +9,13 @@
       "files": [
         {
           "path": "llm/model/qwen3/0.6b/tokenizer.json",
-          "sha256": null,
+          "sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
           "url": "https://huggingface.co/Qwen/Qwen3-0.6B/resolve/167b8104f88905a951069f5f95f9776908da5f68/tokenizer.json"
         },
         {
           "path": "llm/model/qwen3/0.6b/model.gguf",
-          "sha256": null,
+          "sha256": "ac2d97712095a558e31573f62f466a3f9d93990898b0ec79d7c974c1780d524a",
           "url": "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/058b74ede71731e4a323a88d68da1386519ec6fc/Qwen3-0.6B-Q4_K_M.gguf"
-        }
-      ]
-    },
-    "1.7b": {
-      "files": [
-        {
-          "path": "llm/model/qwen3/1.7b/tokenizer.json",
-          "sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
-          "url": "https://huggingface.co/Qwen/Qwen3-1.7B/resolve/70d244cc86ccca08cf5af4e1e306ecf908b1ad5e/tokenizer.json"
-        },
-        {
-          "path": "llm/model/qwen3/1.7b/model.gguf",
-          "sha256": "b139949c5bd74937ad8ed8c8cf3d9ffb1e99c866c823204dc42c0d91fa181897",
-          "url": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/d7f544eead698dbd1f15126ef60b45a1e1933222/Qwen3-1.7B-Q4_K_M.gguf"
-        }
-      ]
-    },
-    "4b": {
-      "files": [
-        {
-          "path": "llm/model/qwen3/4b/tokenizer.json",
-          "sha256": null,
-          "url": "https://huggingface.co/Qwen/Qwen3-4B/resolve/1cfa9a7208912126459214e8b04321603b3df60c/tokenizer.json"
-        },
-        {
-          "path": "llm/model/qwen3/4b/model.gguf",
-          "sha256": null,
-          "url": "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/22c9fc8a8c7700b76a1789366280a6a5a1ad1120/Qwen3-4B-Q4_K_M.gguf"
         }
       ]
     }

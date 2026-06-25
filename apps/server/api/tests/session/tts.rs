@@ -26,7 +26,7 @@ use tracing_test::traced_test;
 
 #[tokio::test]
 #[traced_test]
-/// Collect full TTS audio through complete session pipeline (Void VAD/ASR + Echo LLM + VITS TTS)
+/// Collect full TTS audio through complete session pipeline (Void VAD/ASR + Echo LLM + Matcha TTS)
 async fn test_tts_audio_collect() -> anyhow::Result<()> {
     use std::path::Path;
 
@@ -47,7 +47,7 @@ async fn test_tts_audio_collect() -> anyhow::Result<()> {
         .parent()
         .unwrap();
     let model_path = ws_root
-        .join("data/tts/model/vits/melo-tts-zh_en/")
+        .join("data/tts/model/matcha/matcha-icefall-zh-en/")
         .to_string_lossy()
         .into_owned();
 
@@ -72,8 +72,15 @@ async fn test_tts_audio_collect() -> anyhow::Result<()> {
         .with_tts(Arc::new(
             TtsFactory::create_model(
                 &TtsConfig {
-                    model: Some(TtsModel::Vits),
+                    model: Some(TtsModel::MatchaTts),
                     path: Some(model_path),
+                    options: Some(serde_json::json!({
+                        "num_threads": 2,
+                        "noise_scale": 0.667,
+                        "length_scale": 1.0,
+                        "speed": 1.0,
+                        "debug": false,
+                    })),
                     ..Default::default()
                 },
                 &audio_config,

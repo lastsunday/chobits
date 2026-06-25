@@ -53,7 +53,7 @@ use utoipa_axum::router::OpenApiRouter;
 use crate::common::{router_client::RouterClient, setup_database};
 
 /// Full session pipeline test at 16000Hz output.
-/// Uses Void VAD/ASR + Echo LLM + Vits TTS.
+/// Uses Void VAD/ASR + Echo LLM + Matcha TTS.
 /// Captures all Opus packets from the output stream via OutputController,
 /// decodes to PCM, and saves as WAV for analysis.
 pub async fn create_session()

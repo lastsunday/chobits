@@ -371,8 +371,8 @@ pub fn opus_pipeline(samples: &[f32], sample_rate: i32, encode_sr: u32) -> Vec<f
     decoded
 }
 
-/// Standard AudioConfig for VITS tests: 16kHz / mono / 20ms frame duration.
-pub fn vits_audio_config() -> AudioConfig {
+/// Standard AudioConfig for TTS tests: 16kHz / mono / 20ms frame duration.
+pub fn test_audio_config() -> AudioConfig {
     AudioConfig {
         output_sample_rate: Some(16000),
         output_channel: Some(1),
@@ -381,8 +381,8 @@ pub fn vits_audio_config() -> AudioConfig {
     }
 }
 
-/// Shared VITS test helper: create model → stream inference → Opus decode → write WAV.
-pub async fn run_vits_test(
+/// Shared TTS test helper: create model → stream inference → Opus decode → write WAV.
+pub async fn run_tts_test(
     tts_config: &TtsConfig,
     audio_config: &AudioConfig,
     wav: &str,
@@ -406,10 +406,7 @@ pub async fn run_vits_test(
         }
     }
     let gen_elapsed = gen_start.elapsed();
-    anyhow::ensure!(
-        !all_packets.is_empty(),
-        "Expected audio packets from VitsTTS"
-    );
+    anyhow::ensure!(!all_packets.is_empty(), "Expected audio packets from TTS");
 
     let decode_fs = 320;
     let mut decoder = opus::Decoder::new(16000, opus::Channels::Mono).unwrap();
