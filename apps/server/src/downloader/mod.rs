@@ -52,12 +52,38 @@ struct Variant {
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
+struct ExtractEntry {
+    path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    target: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    sha256: Option<String>,
+}
+
+fn extract_target_path(dest_dir: &Path, entry: &ExtractEntry) -> PathBuf {
+    match &entry.target {
+        Some(t) => dest_dir.join(t),
+        None => {
+            let name = Path::new(&entry.path)
+                .file_name()
+                .unwrap_or(OsStr::new(&entry.path));
+            dest_dir.join(name)
+        }
+    }
+}
+
+fn archive_report_path(archive: &ArchiveEntry) -> String {
+    format!("{}.tar.bz2", archive.path.trim_end_matches('/'))
+}
+
+#[derive(Deserialize)]
 struct ArchiveEntry {
     url: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     sha256: Option<String>,
     path: String,
-    extract: Vec<String>,
+    extract: Vec<ExtractEntry>,
 }
 
 #[derive(Deserialize)]
@@ -267,28 +293,41 @@ pub async fn run(
 
                 for archive in &v.archives {
                     let dest_dir = data_dir.join(&archive.path);
+                    let archive_file = dest_dir.with_file_name(format!(
+                        "{}.tar.bz2",
+                        dest_dir
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_str()
+                            .unwrap_or("model")
+                    ));
                     let all_exist = if cat_name == "reference" {
                         archive.extract.iter().all(|f| {
-                            let ext = Path::new(f)
+                            let ext = Path::new(&f.path)
                                 .extension()
                                 .and_then(|e| e.to_str())
                                 .unwrap_or("wav");
                             dest_dir.join(format!("{}.{}", v_name, ext)).exists()
                         })
                     } else {
-                        archive.extract.iter().all(|f| {
-                            let name = Path::new(f).file_name().unwrap_or(OsStr::new(f));
-                            dest_dir.join(name).exists()
-                        })
+                        archive
+                            .extract
+                            .iter()
+                            .all(|f| extract_target_path(&dest_dir, f).exists())
                     };
                     if all_exist {
                         if !quiet {
                             eprintln!("  ARCHIVE {}: all check files exist, skip", archive.path);
                         }
+                        let (size, sha256) = if archive_file.exists() {
+                            sha256_file(&archive_file)?
+                        } else {
+                            (0, String::new())
+                        };
                         report_files.push(ReportFile {
-                            path: format!("{} (archive)", archive.path),
-                            size: 0,
-                            sha256: String::new(),
+                            path: archive_report_path(archive),
+                            size,
+                            sha256,
                             status: "ok".into(),
                         });
                         continue;
@@ -298,19 +337,10 @@ pub async fn run(
                         eprintln!("  ARCHIVE {}: downloading ...", archive.path);
                     }
 
-                    let archive_dest = dest_dir.with_file_name(format!(
-                        "{}.tar.bz2",
-                        dest_dir
-                            .file_name()
-                            .unwrap_or_default()
-                            .to_str()
-                            .unwrap_or("model")
-                    ));
-
                     let result = download_file(
                         &client,
                         &archive.url,
-                        &archive_dest,
+                        &archive_file,
                         archive.sha256.as_deref(),
                         mirrors,
                         quiet,
@@ -322,16 +352,13 @@ pub async fn run(
                             if !quiet {
                                 eprintln!("  ARCHIVE {}: extracting ...", archive.path);
                             }
-                            match extract_tar_bz2(&archive_dest, &dest_dir, &archive.extract) {
+                            match extract_tar_bz2(&archive_file, &dest_dir, &archive.extract) {
                                 Ok(()) => {
-                                    let _ = std::fs::remove_file(&archive_dest);
                                     if cat_name == "reference" {
                                         for f in &archive.extract {
-                                            let orig_name =
-                                                Path::new(f).file_name().unwrap_or(OsStr::new(f));
-                                            let orig_path = dest_dir.join(Path::new(orig_name));
+                                            let orig_path = extract_target_path(&dest_dir, f);
                                             if orig_path.exists() {
-                                                let ext = Path::new(f)
+                                                let ext = Path::new(&f.path)
                                                     .extension()
                                                     .and_then(|e| e.to_str())
                                                     .unwrap_or("wav");
@@ -344,7 +371,7 @@ pub async fn run(
                                         }
                                     }
                                     report_files.push(ReportFile {
-                                        path: format!("{} (archive)", archive.path),
+                                        path: archive_report_path(archive),
                                         size,
                                         sha256,
                                         status: "ok".into(),
@@ -356,7 +383,7 @@ pub async fn run(
                                         eprintln!("  FAIL: {} ({msg})", archive.path);
                                     }
                                     report_files.push(ReportFile {
-                                        path: format!("{} (archive)", archive.path),
+                                        path: archive_report_path(archive),
                                         size: 0,
                                         sha256: String::new(),
                                         status: format!("failed: {msg}"),
@@ -369,7 +396,7 @@ pub async fn run(
                                 eprintln!("  FAIL: {} archive ({msg})", archive.path);
                             }
                             report_files.push(ReportFile {
-                                path: format!("{} (archive)", archive.path),
+                                path: archive_report_path(archive),
                                 size: 0,
                                 sha256: String::new(),
                                 status: format!("failed: {msg}"),
@@ -646,18 +673,17 @@ fn sha256_file(path: &Path) -> Result<(u64, String), Box<dyn std::error::Error>>
 fn extract_tar_bz2(
     archive_path: &Path,
     dest: &Path,
-    files: &[String],
+    files: &[ExtractEntry],
 ) -> Result<(), Box<dyn std::error::Error>> {
     let file = File::open(archive_path)?;
     let decoder = BzDecoder::new(file);
     let mut archive = Archive::new(decoder);
     std::fs::create_dir_all(dest)?;
 
-    let dir_prefixes: Vec<&str> = files
-        .iter()
-        .filter(|f| !f.contains('.'))
-        .map(|f| f.as_str())
-        .collect();
+    let paths: Vec<&str> = files.iter().map(|f| f.path.as_str()).collect();
+    let dir_prefixes: Vec<&str> = paths.iter().filter(|f| !f.contains('.')).copied().collect();
+    let entry_map: HashMap<&str, &ExtractEntry> =
+        files.iter().map(|e| (e.path.as_str(), e)).collect();
 
     for entry in archive.entries()? {
         let mut entry = entry?;
@@ -668,18 +694,31 @@ fn extract_tar_bz2(
         }
 
         let stripped_str = stripped.to_string_lossy();
-        let matched = files.iter().any(|f| stripped == Path::new(f))
-            || dir_prefixes.iter().any(|p| stripped_str.starts_with(p));
+        let matched_entry = paths
+            .iter()
+            .find(|f| stripped == Path::new(f))
+            .and_then(|f| entry_map.get(f));
+        let matched_dir = dir_prefixes.iter().any(|p| stripped_str.starts_with(p));
 
-        if !matched {
+        if matched_entry.is_none() && !matched_dir {
             continue;
         }
 
         if entry.header().entry_type().is_dir() {
-            let dest_path = dest.join(&stripped);
+            let dest_path = if let Some(e) = matched_entry
+                && let Some(t) = &e.target
+            {
+                dest.join(t)
+            } else {
+                dest.join(&stripped)
+            };
             std::fs::create_dir_all(&dest_path)?;
         } else {
-            let dest_path = if dir_prefixes.iter().any(|p| stripped_str.starts_with(p)) {
+            let dest_path = if let Some(e) = matched_entry
+                && let Some(t) = &e.target
+            {
+                dest.join(t)
+            } else if matched_dir {
                 dest.join(&stripped)
             } else {
                 let name = stripped.file_name().map(Path::new).unwrap_or(&stripped);
@@ -1210,6 +1249,56 @@ pub fn update_checksums(data_dir: &Path, quiet: bool) -> Result<(), Box<dyn std:
                     }
                     sha_updates.push((manifest_rel.clone(), file.path.clone(), sha));
                 }
+
+                for archive in &v.archives {
+                    // Archive itself: compute sha256 from disk (archive is kept after extraction)
+                    let dest_dir = data_dir.join(&archive.path);
+                    let archive_file = dest_dir.with_file_name(format!(
+                        "{}.tar.bz2",
+                        dest_dir
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_str()
+                            .unwrap_or("model")
+                    ));
+                    if archive_file.exists() {
+                        let (_size, sha) = sha256_file(&archive_file)?;
+                        if !quiet {
+                            eprintln!("  {:<60} {}", archive_file.display(), sha);
+                        }
+                        sha_updates.push((manifest_rel.clone(), archive.path.clone(), sha));
+                    } else {
+                        // fallback: look up from download report (try new and old key format)
+                        let report_key = archive_report_path(archive);
+                        let old_key = format!("{} (archive)", archive.path);
+                        if let Some(sha) = report_sha
+                            .get(&report_key)
+                            .or_else(|| report_sha.get(&old_key))
+                        {
+                            sha_updates.push((
+                                manifest_rel.clone(),
+                                archive.path.clone(),
+                                sha.clone(),
+                            ));
+                        }
+                    }
+
+                    // Extracted files: compute sha256 from disk
+                    for entry in &archive.extract {
+                        let file_path = extract_target_path(&dest_dir, entry);
+                        if !file_path.exists() || file_path.is_dir() {
+                            if !quiet && !file_path.exists() {
+                                eprintln!("  SKIP (not found): {}", file_path.display());
+                            }
+                            continue;
+                        }
+                        let (_size, sha) = sha256_file(&file_path)?;
+                        if !quiet {
+                            eprintln!("  {:<60} {}", file_path.display(), sha);
+                        }
+                        sha_updates.push((manifest_rel.clone(), entry.path.clone(), sha));
+                    }
+                }
             }
         }
     }
@@ -1330,7 +1419,7 @@ pub fn resolve_reference_audio(variant: &str) -> Option<(String, String)> {
         .map(String::from)
         .or_else(|| {
             let ap = variant_obj["archives"][0]["path"].as_str()?;
-            let ex = variant_obj["archives"][0]["extract"][0].as_str()?;
+            let ex = variant_obj["archives"][0]["extract"][0]["path"].as_str()?;
             let ex_filename = Path::new(ex).file_name().and_then(|f| f.to_str())?;
             Some(format!("{ap}{ex_filename}"))
         })?;
