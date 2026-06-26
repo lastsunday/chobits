@@ -1,4 +1,4 @@
-use api::config::audio::AudioConfig;
+use api::config::{TtsModel, audio::AudioConfig};
 use tracing::info;
 use tracing_test::traced_test;
 
