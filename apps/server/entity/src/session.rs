@@ -14,6 +14,8 @@ pub struct Model {
     pub create_datetime: Option<DateTimeWithTimeZone>,
     #[schema(schema_with = date_time_with_time_zone_or_null_schema)]
     pub update_datetime: Option<DateTimeWithTimeZone>,
+    #[schema(schema_with = date_time_with_time_zone_or_null_schema)]
+    pub end_time: Option<DateTimeWithTimeZone>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

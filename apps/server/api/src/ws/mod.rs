@@ -12,7 +12,6 @@ use crate::{
         mcp_host::{McpHost, UnionMcpHost},
     },
     record::collector::RecordCollector,
-    record::observer::SessionObserver,
     tts::TtsFactory,
     vad::VadFactory,
     ws::session::Session,
@@ -34,8 +33,7 @@ use rmcp::transport::{
     StreamableHttpClientTransport, streamable_http_client::StreamableHttpClientTransportConfig,
 };
 use serde::Serialize;
-use session::round::OutputMessage;
-use session::{SessionBuilder, listener::DefaultListener};
+use session::{DefaultListener, OutputMessage, SessionOptions};
 
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
@@ -115,41 +113,29 @@ pub(crate) struct SocketContext {
     audio_config: Arc<AudioConfig>,
 }
 
-pub(crate) async fn handle_socket<W, R>(ctx: SocketContext, mut write: W, read: R)
+pub(crate) async fn handle_socket<W, R>(ctx: SocketContext, write: W, read: R)
 where
     W: Sink<Message> + Unpin + Send + 'static,
     R: Stream<Item = Result<Message, axum::Error>> + Unpin + Send + 'static,
 {
-    let span = span!(Level::DEBUG, "socket", id=%ctx.session_id);
-    let _guard = span.enter();
-    let record = RecordCollector::new(ctx.conn);
-    let mut session = SessionBuilder::new()
-        .with_id(ctx.session_id.clone())
-        .with_listener(Box::new(DefaultListener::new(
+    let record = Arc::new(RecordCollector::new(ctx.conn));
+    let mut session = Session::new(SessionOptions {
+        id: ctx.session_id.clone(),
+        listener: DefaultListener::new(
             VadFactory::create_model(&ctx.vad_config),
             AsrFactory::global().default().clone(),
             ctx.audio_config.clone(),
-        )))
-        .with_model(LlmFactory::global().default())
-        .with_tts(TtsFactory::global().default())
-        .with_mcp_host(Arc::new(Mutex::new(
+        ),
+        model: LlmFactory::global().default(),
+        tts: TtsFactory::global().default(),
+        mcp_host: Arc::new(Mutex::new(
             create_mcp_host(ctx.session_id.clone(), ctx.mcp_config.clone()).await,
-        )))
-        .with_config(ctx.session_config.clone())
-        .with_audio_config(ctx.audio_config.clone())
-        .add_observer(Arc::new(record) as Arc<dyn SessionObserver>)
-        .build();
-    for observer in &session.observers {
-        observer.on_session_start(&ctx.session_id).await;
-    }
-    if let Err(e) = session.start().instrument(span.clone()).await {
-        error!("{}", e);
-        let result = write.close().await;
-        if result.is_err() {
-            info!("write close failure");
-        }
-        return;
-    }
+        )),
+        config: ctx.session_config.clone(),
+        audio_config: ctx.audio_config.clone(),
+        recorder: Some(record.clone()),
+    });
+    record.on_session_start(&ctx.session_id).await;
     let session_id_clone = ctx.session_id.clone();
     let (output_stream, _epoch, _latest_activity_time, _frame_duration, _session_epoch) =
         session.output_frame().await;

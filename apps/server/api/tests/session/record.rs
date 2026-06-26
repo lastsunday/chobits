@@ -6,11 +6,11 @@ use api::{
     },
     llm::LlmFactory,
     mcp::mcp_host::UnionMcpHost,
-    record::{collector::RecordCollector, observer::SessionObserver},
+    record::collector::RecordCollector,
     tts::TtsFactory,
     vad::VadFactory,
     ws::frame::{Frame, FrameResult},
-    ws::session::{SessionBuilder, listener::DefaultListener},
+    ws::session::{DefaultListener, Session, SessionOptions},
 };
 use entity::{prelude::*, round_data};
 use framework::id::gen_id;
@@ -35,7 +35,7 @@ use crate::common::{setup_database, tear_down};
 /// Using Echo LLM + Mute TTS + Void ASR + Earshot VAD
 async fn test_full_flow() -> anyhow::Result<()> {
     let (container, state) = setup_database().await;
-    let record = Arc::new(RecordCollector::new(state.conn.clone())) as Arc<dyn SessionObserver>;
+    let record = Arc::new(RecordCollector::new(state.conn.clone()));
 
     let audio_config = Arc::new(AudioConfig {
         input_sample_rate: Some(16000),
@@ -46,26 +46,24 @@ async fn test_full_flow() -> anyhow::Result<()> {
         output_frame_duration: Some(20_u64),
     });
     let session_id = gen_id();
-    let mut session = SessionBuilder::new()
-        .with_listener(Box::new(DefaultListener::new(
-            VadFactory::create_model(&Arc::new(
-                VadConfig {
-                    model: Some(VadModel::Earshot),
-                    ..Default::default()
-                },
-            )),
+    let mut session = Session::new(SessionOptions {
+        id: session_id.clone(),
+        listener: DefaultListener::new(
+            VadFactory::create_model(&Arc::new(VadConfig {
+                model: Some(VadModel::Earshot),
+                ..Default::default()
+            })),
             Arc::new(Mutex::new(AsrFactory::create_model(&AsrConfig {
                 model: Some(AsrModel::Void),
                 ..Default::default()
             }))),
             audio_config.clone(),
-        )))
-        .with_id(session_id.clone())
-        .with_model(Arc::new(LlmFactory::create_model(&LlmConfig {
+        ),
+        model: Arc::new(LlmFactory::create_model(&LlmConfig {
             model: Some(LlmModel::Echo),
             ..Default::default()
-        })))
-        .with_tts(Arc::new(
+        })),
+        tts: Arc::new(
             TtsFactory::create_model(
                 &TtsConfig {
                     model: Some(TtsModel::Mute),
@@ -75,27 +73,22 @@ async fn test_full_flow() -> anyhow::Result<()> {
             )
             .await
             .unwrap(),
-        ))
-        .with_mcp_host(Arc::new(Mutex::new(UnionMcpHost::new(Some(
-            session_id.clone(),
-        )))))
-        .with_config(Arc::new(SessionConfig {
+        ),
+        mcp_host: Arc::new(Mutex::new(UnionMcpHost::new(Some(session_id.clone())))),
+        config: Arc::new(SessionConfig {
             close_connection_no_voice_time: Some(3000),
             silence_voice_timeout: Some(1200),
             system_prompt: Some(String::from(
                 "你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等。",
             )),
             max_prompt_len: Some(3000),
-        }))
-        .with_audio_config(audio_config.clone())
-        .add_observer(record)
-        .build();
+        }),
+        audio_config: audio_config.clone(),
+        recorder: Some(record.clone()),
+    });
 
-    for observer in &session.observers {
-        observer.on_session_start(&session_id).await;
-    }
+    record.on_session_start(&session_id).await;
 
-    session.start().await?;
     let (mut output, _, _, _, _) = session.output_frame().await;
 
     // Hello

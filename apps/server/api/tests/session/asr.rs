@@ -9,7 +9,7 @@ use api::{
     tts::TtsFactory,
     vad::VadFactory,
     ws::frame::{Frame, FrameResult},
-    ws::session::{SessionBuilder, listener::DefaultListener},
+    ws::session::{DefaultListener, Session, SessionOptions},
 };
 use framework::id::gen_id;
 use service::chobits::message::{
@@ -38,8 +38,9 @@ async fn test_asr_voice_input_manual() -> anyhow::Result<()> {
         output_frame_duration: Some(20_u64),
     });
     let session_id = gen_id();
-    let mut session = SessionBuilder::new()
-        .with_listener(Box::new(DefaultListener::new(
+    let mut session = Session::new(SessionOptions {
+        id: session_id.clone(),
+        listener: DefaultListener::new(
             VadFactory::create_model(&Arc::new(VadConfig {
                 model: Some(VadModel::Earshot),
                 ..Default::default()
@@ -61,13 +62,12 @@ async fn test_asr_voice_input_manual() -> anyhow::Result<()> {
                 ..Default::default()
             }))),
             audio_config.clone(),
-        )))
-        .with_id(session_id.clone())
-        .with_model(Arc::new(LlmFactory::create_model(&LlmConfig {
+        ),
+        model: Arc::new(LlmFactory::create_model(&LlmConfig {
             model: Some(LlmModel::Echo),
             ..Default::default()
-        })))
-        .with_tts(Arc::new(
+        })),
+        tts: Arc::new(
             TtsFactory::create_model(
                 &TtsConfig {
                     model: Some(TtsModel::Mute),
@@ -77,22 +77,20 @@ async fn test_asr_voice_input_manual() -> anyhow::Result<()> {
             )
             .await
             .unwrap(),
-        ))
-        .with_mcp_host(Arc::new(Mutex::new(UnionMcpHost::new(Some(
-            session_id.clone(),
-        )))))
-        .with_config(Arc::new(SessionConfig {
+        ),
+        mcp_host: Arc::new(Mutex::new(UnionMcpHost::new(Some(session_id.clone())))),
+        config: Arc::new(SessionConfig {
             close_connection_no_voice_time: Some(3000),
             silence_voice_timeout: Some(1200),
             system_prompt: Some(String::from(
                 "你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等。",
             )),
             max_prompt_len: Some(3000),
-        }))
-        .with_audio_config(audio_config.clone())
-        .build();
+        }),
+        audio_config: audio_config.clone(),
+        recorder: None,
+    });
 
-    session.start().await?;
     let (mut output, _, _, _, _) = session.output_frame().await;
 
     session

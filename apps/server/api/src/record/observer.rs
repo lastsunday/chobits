@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
@@ -75,25 +74,4 @@ pub enum RoundEndReason {
 pub struct RoundEndContext {
     pub round_id: String,
     pub reason: RoundEndReason,
-}
-
-#[async_trait]
-pub trait SessionObserver: Send + Sync {
-    async fn on_session_start(&self, _session_id: &str) {}
-
-    fn on_round_start(&self, ctx: &RoundStartContext);
-
-    fn on_text_input(&self, _ctx: &TextInputContext) {}
-
-    fn on_asr(&self, ctx: &AsrContext);
-
-    fn on_asr_complete(&self, _round_id: &str) {}
-
-    fn on_llm_delta(&self, ctx: &LlmDeltaContext);
-
-    fn on_tts_delta(&self, ctx: &TtsDeltaContext);
-
-    fn on_frame(&self, ctx: &FrameContext);
-
-    async fn on_round_end(&self, ctx: &RoundEndContext) -> Result<(), anyhow::Error>;
 }

@@ -39,10 +39,11 @@ use crate::{
         client::server::ServerMcpClient,
         mcp_host::{McpHost, UnionMcpHost},
     },
+    tts::TtsFactory,
     vad::VadFactory,
     ws::{
         frame::{Frame, FrameResult},
-        session::{Session, SessionBuilder, listener::DefaultListener},
+        session::{DefaultListener, Session, SessionOptions},
     },
 };
 
@@ -224,22 +225,20 @@ impl Bot {
                     }
                 }
             }
-            let mut session = SessionBuilder::new()
-                .with_id(id.clone())
-                .with_listener(Box::new(DefaultListener::new(
+            let mut session = Session::new(SessionOptions {
+                id: id.clone(),
+                listener: DefaultListener::new(
                     VadFactory::create_model(&self.vad_config),
                     AsrFactory::global().default().clone(),
                     self.audio_config.clone(),
-                )))
-                .with_model(LlmFactory::global().default())
-                .with_mcp_host(Arc::new(Mutex::new(mcp_host)))
-                .with_config(self.session_config.clone())
-                .with_audio_config(self.audio_config.clone())
-                .build();
-            for observer in &session.observers {
-                observer.on_session_start(&id).await;
-            }
-            session.start().await?;
+                ),
+                model: LlmFactory::global().default(),
+                tts: TtsFactory::global().default(),
+                mcp_host: Arc::new(Mutex::new(mcp_host)),
+                config: self.session_config.clone(),
+                audio_config: self.audio_config.clone(),
+                recorder: None,
+            });
             let (mut output, _, _, _, _) = session.output_frame().await;
             // send hello frame
             session

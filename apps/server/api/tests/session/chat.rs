@@ -18,7 +18,6 @@ use crate::session::helpers::{create_mini_session, create_session, get_audio};
 #[traced_test]
 async fn test_chat_flow_hello() -> anyhow::Result<()> {
     let mut session = create_mini_session().await;
-    session.start().await?;
     let (mut output, _, _, _, _) = session.output_frame().await;
     session
         .accept_frame(&Frame::Hello(HelloMessage {
@@ -46,7 +45,6 @@ async fn test_chat_flow_hello() -> anyhow::Result<()> {
 async fn test_chat_flow_listen_manual() -> anyhow::Result<()> {
     let audio = get_audio();
     let (mut session, container, state) = create_session().await?;
-    session.start().await?;
     let (mut output, _, _, _, _) = session.output_frame().await;
     session
         .accept_frame(&Frame::Hello(HelloMessage {
@@ -98,7 +96,6 @@ async fn test_chat_flow_listen_manual() -> anyhow::Result<()> {
 #[traced_test]
 async fn test_chat_flow_listen_auto() -> anyhow::Result<()> {
     let (mut session, container, state) = create_session().await?;
-    session.start().await?;
     let (mut output, _, _, _, _) = session.output_frame().await;
 
     // Hello
@@ -287,7 +284,6 @@ async fn test_chat_flow_listen_auto() -> anyhow::Result<()> {
 // TODO: also timed out (>60s) - hangs in drain loop or after
 async fn test_chat_flow_listen_realtime() -> anyhow::Result<()> {
     let (mut session, container, state) = create_session().await?;
-    session.start().await?;
     let (mut output, _, _, _, _) = session.output_frame().await;
     session
         .accept_frame(&Frame::Hello(HelloMessage {
@@ -395,7 +391,6 @@ async fn test_chat_flow_listen_realtime() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_chat_flow_listen_realtime_silent_voice_connection_timeout() -> anyhow::Result<()> {
     let mut session = create_mini_session().await;
-    session.start().await?;
     let (mut output, _, _, _, _) = session.output_frame().await;
     session
         .accept_frame(&Frame::Hello(HelloMessage {
@@ -472,7 +467,6 @@ async fn test_chat_flow_handle_text_message_multiple_time() -> anyhow::Result<()
             .finish(),
     );
     let (mut session, container, state) = create_session().await?;
-    session.start().await?;
     let (mut output, _, _, _, _) = session.output_frame().await;
     session
         .accept_frame(&Frame::Hello(HelloMessage {
@@ -560,7 +554,6 @@ async fn test_chat_flow_handle_text_message_multiple_time() -> anyhow::Result<()
 async fn test_chat_flow_handle_text_message() -> anyhow::Result<()> {
     let (mut session, container, state) = create_session().await?;
     let session_id = session.id.clone();
-    session.start().await?;
     let (mut output, _, _, _, _) = session.output_frame().await;
     // TODO: need refactor,remove tokio::spawn
     let join_handle = tokio::spawn(async move {
@@ -616,7 +609,6 @@ async fn test_chat_flow_handle_text_message() -> anyhow::Result<()> {
 async fn test_chat_flow_break() -> anyhow::Result<()> {
     let mut session = create_mini_session().await;
     let session_id = session.id.clone();
-    session.start().await?;
     let (mut output, _, _, _, _) = session.output_frame().await;
     let mut count = 0;
     // Expect 1 TTS Stop (the second/interrupting round completes;

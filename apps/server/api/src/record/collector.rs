@@ -3,7 +3,6 @@ use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
 use std::time::{Duration, Instant};
 
-use async_trait::async_trait;
 use sea_orm::{ActiveValue::Set, DatabaseConnection, entity::prelude::*};
 use serde_json::Value as JsonValue;
 use tokio::sync::mpsc;
@@ -140,6 +139,18 @@ impl RecordCollector {
             flush_tx,
             _flush_handle,
         }
+    }
+
+    pub async fn on_session_end(&self, session_id: &str) {
+        let now = chrono::Local::now().fixed_offset();
+        session::ActiveModel {
+            id: Set(session_id.to_string()),
+            end_time: Set(Some(now)),
+            ..Default::default()
+        }
+        .insert(&self.conn)
+        .await
+        .ok();
     }
 
     fn start_round(
@@ -526,9 +537,8 @@ impl RecordCollector {
     }
 }
 
-#[async_trait]
-impl SessionObserver for RecordCollector {
-    async fn on_session_start(&self, session_id: &str) {
+impl RecordCollector {
+    pub async fn on_session_start(&self, session_id: &str) {
         session::ActiveModel {
             id: Set(session_id.to_string()),
             ..Default::default()
@@ -538,7 +548,7 @@ impl SessionObserver for RecordCollector {
         .ok();
     }
 
-    fn on_round_start(&self, ctx: &RoundStartContext) {
+    pub fn on_round_start(&self, ctx: &RoundStartContext) {
         self.start_round(
             ctx.round_id.clone(),
             ctx.session_id.clone(),
@@ -562,11 +572,11 @@ impl SessionObserver for RecordCollector {
         }
     }
 
-    fn on_text_input(&self, ctx: &TextInputContext) {
+    pub fn on_text_input(&self, ctx: &TextInputContext) {
         self.collect_text(&ctx.round_id, &ctx.text);
     }
 
-    fn on_asr(&self, ctx: &AsrContext) {
+    pub fn on_asr(&self, ctx: &AsrContext) {
         self.collect_asr(
             &ctx.round_id,
             ctx.voice_pcm.clone(),
@@ -576,19 +586,19 @@ impl SessionObserver for RecordCollector {
         );
     }
 
-    fn on_asr_complete(&self, round_id: &str) {
+    pub fn on_asr_complete(&self, round_id: &str) {
         self.align_round_start(round_id);
     }
 
-    fn on_llm_delta(&self, ctx: &LlmDeltaContext) {
+    pub fn on_llm_delta(&self, ctx: &LlmDeltaContext) {
         self.collect_llm_text(&ctx.round_id, &ctx.text);
     }
 
-    fn on_tts_delta(&self, ctx: &TtsDeltaContext) {
+    pub fn on_tts_delta(&self, ctx: &TtsDeltaContext) {
         self.collect_tts(&ctx.round_id, &ctx.text, ctx.raw_pcm.clone());
     }
 
-    fn on_frame(&self, ctx: &FrameContext) {
+    pub fn on_frame(&self, ctx: &FrameContext) {
         let is_inbound = matches!(ctx.direction, FrameDirection::Inbound);
         self.record_frame(
             ctx.round_id.as_deref(),
@@ -599,7 +609,7 @@ impl SessionObserver for RecordCollector {
         );
     }
 
-    async fn on_round_end(&self, ctx: &RoundEndContext) -> Result<(), anyhow::Error> {
+    pub async fn on_round_end(&self, ctx: &RoundEndContext) -> Result<(), anyhow::Error> {
         self.finish_round(&ctx.round_id, ctx.reason.clone())
             .map_err(|_| anyhow::anyhow!("flush channel closed"))
     }

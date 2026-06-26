@@ -4,7 +4,7 @@ use api::config::audio::AudioConfig;
 use api::config::vad::VadConfig;
 use api::vad::Vad;
 use api::vad::model::earshot::VadEarshot;
-use api::ws::session::listener::{DefaultListener, ListenInput, ListenState, Listener};
+use api::ws::session::{DefaultListener, ListenInput, ListenerState};
 
 mod common;
 use common::vad::*;
@@ -182,7 +182,7 @@ async fn test_reset_clears_everything() -> anyhow::Result<()> {
     );
     assert_eq!(
         listener.get_state(),
-        ListenState::Idle,
+        ListenerState::Idle,
         "state should be Idle after reset",
     );
 
@@ -210,7 +210,7 @@ async fn test_silence_only_no_end_state() -> anyhow::Result<()> {
     let silence = vec![0.0f32; 16000 * 5]; // 5 seconds
     feed_all(&mut listener, &encode_opus(&silence)).await;
 
-    assert_eq!(listener.get_state(), ListenState::Listening(false));
+    assert_eq!(listener.get_state(), ListenerState::Listening(false));
     assert!(listener.take_voice().await.is_empty());
 
     Ok(())

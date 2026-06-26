@@ -48,6 +48,7 @@ impl MigrationTrait for Migration {
                     .col(string_uniq(Session::Id))
                     .col(timestamp_with_time_zone_null(Session::CreateDatetime))
                     .col(timestamp_with_time_zone_null(Session::UpdateDatetime))
+                    .col(timestamp_with_time_zone_null(Session::EndTime))
                     .primary_key(Index::create().name("pk-session-id").col(Session::Id))
                     .to_owned(),
             )
@@ -166,6 +167,7 @@ enum Session {
     Id,
     CreateDatetime,
     UpdateDatetime,
+    EndTime,
 }
 
 #[derive(DeriveIden)]

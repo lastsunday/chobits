@@ -3,7 +3,7 @@ use std::sync::{
     atomic::{AtomicI64, Ordering},
 };
 
-use crate::ws::session::round::OutputMessage;
+use crate::ws::session::OutputMessage;
 use crate::{mcp::client::McpClient, ws::frame::FrameResult};
 use anyhow::Context;
 use async_trait::async_trait;

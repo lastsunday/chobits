@@ -14,8 +14,7 @@ use api::{
     tts::TtsFactory,
     util::audio::pcm_decode,
     vad::VadFactory,
-    ws::session::SessionBuilder,
-    ws::session::{Session, listener::DefaultListener},
+    ws::session::{DefaultListener, Session, SessionOptions},
 };
 use framework::id::gen_id;
 use rmcp::{
@@ -85,8 +84,9 @@ pub async fn create_session()
         output_channel: Some(1),
         output_frame_duration: Some(20_u64),
     });
-    let session = SessionBuilder::new()
-        .with_listener(Box::new(DefaultListener::new(
+    let session = Session::new(SessionOptions {
+        id: session_id.clone(),
+        listener: DefaultListener::new(
             VadFactory::create_model(&Arc::new(VadConfig {
                 model: Some(VadModel::Earshot),
                 ..Default::default()
@@ -102,35 +102,40 @@ pub async fn create_session()
                 variant: None,
             }))),
             audio_config.clone(),
-        )))
-        .with_id(session_id.clone())
-        .with_model(
-           Arc::new( LlmFactory::create_model(&LlmConfig {
-                model: Some(LlmModel::Echo),
-                ..Default::default()
-            }))
-        )
-            .with_tts(Arc::new(TtsFactory::create_model(&TtsConfig {
-                model: Some(TtsModel::MatchaTts),
-                path: Some(
-                    workspace_root()
-                        .join("data/tts/model/matcha/matcha-icefall-zh-en/")
-                        .to_string_lossy()
-                        .into_owned(),
-                ),
-                ..Default::default()
-            }, &audio_config).await.unwrap()))
-        .with_mcp_host(Arc::new(Mutex::new(mcp_host)))
-        .with_config(Arc::new(SessionConfig {
+        ),
+        model: Arc::new(LlmFactory::create_model(&LlmConfig {
+            model: Some(LlmModel::Echo),
+            ..Default::default()
+        })),
+        tts: Arc::new(
+            TtsFactory::create_model(
+                &TtsConfig {
+                    model: Some(TtsModel::MatchaTts),
+                    path: Some(
+                        workspace_root()
+                            .join("data/tts/model/matcha/matcha-icefall-zh-en/")
+                            .to_string_lossy()
+                            .into_owned(),
+                    ),
+                    ..Default::default()
+                },
+                &audio_config,
+            )
+            .await
+            .unwrap(),
+        ),
+        mcp_host: Arc::new(Mutex::new(mcp_host)),
+        config: Arc::new(SessionConfig {
             close_connection_no_voice_time: Some(3000),
             silence_voice_timeout: Some(1200),
             system_prompt: Some(String::from(
                 "你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等。",
             )),
             max_prompt_len: Some(6000),
-        }))
-        .with_audio_config(audio_config.clone())
-        .build();
+        }),
+        audio_config: audio_config.clone(),
+        recorder: None,
+    });
     Ok((session, container, state))
 }
 
@@ -144,40 +149,46 @@ pub async fn create_mini_session() -> Session {
         output_frame_duration: Some(20_u64),
     });
     let session_id = gen_id();
-    SessionBuilder::new()
-        .with_listener(Box::new(DefaultListener::new(
+    Session::new(SessionOptions {
+        id: session_id.clone(),
+        listener: DefaultListener::new(
             VadFactory::create_model(&Arc::new(VadConfig {
                 model: Some(VadModel::Earshot),
                 ..Default::default()
             })),
             Arc::new(Mutex::new(AsrFactory::create_model(&AsrConfig {
-                model:Some(AsrModel::Void),
+                model: Some(AsrModel::Void),
                 ..Default::default()
             }))),
             audio_config.clone(),
-        )))
-        .with_id(session_id.clone())
-        .with_model(
-           Arc::new( LlmFactory::create_model(&LlmConfig {
+        ),
+        model: Arc::new(LlmFactory::create_model(&LlmConfig {
             model: Some(LlmModel::Echo),
             ..Default::default()
-            }))
-        )
-            .with_tts(Arc::new(TtsFactory::create_model(&TtsConfig {
-            model: Some(TtsModel::Mute),
-            ..Default::default()
-        }, &audio_config).await.unwrap()))
-        .with_mcp_host(Arc::new(Mutex::new(UnionMcpHost::new(Some(session_id.clone())))))
-        .with_config(Arc::new(SessionConfig {
+        })),
+        tts: Arc::new(
+            TtsFactory::create_model(
+                &TtsConfig {
+                    model: Some(TtsModel::Mute),
+                    ..Default::default()
+                },
+                &audio_config,
+            )
+            .await
+            .unwrap(),
+        ),
+        mcp_host: Arc::new(Mutex::new(UnionMcpHost::new(Some(session_id.clone())))),
+        config: Arc::new(SessionConfig {
             close_connection_no_voice_time: Some(3000),
             silence_voice_timeout: Some(1200),
             system_prompt: Some(String::from(
                 "你是一个助手，所有回答必须使用纯文本自然语言，禁止使用任何Markdown符号如#、-、*等。",
             )),
             max_prompt_len: Some(3000),
-        }))
-        .with_audio_config(audio_config.clone())
-        .build()
+        }),
+        audio_config: audio_config.clone(),
+        recorder: None,
+    })
 }
 
 pub fn get_audio() -> Vec<Vec<u8>> {

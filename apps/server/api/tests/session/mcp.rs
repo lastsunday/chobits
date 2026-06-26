@@ -119,7 +119,6 @@ async fn test_mcp_flow_server_client() -> anyhow::Result<()> {
 
     let request_id = AtomicI64::new(0);
     let (mut session, container, state) = create_session().await?;
-    session.start().await?;
     let (mut output, _, _, _, _) = session.output_frame().await;
     session
         .accept_frame(&Frame::Hello(HelloMessage {
@@ -321,7 +320,6 @@ async fn test_mcp_flow_device_client() -> anyhow::Result<()> {
 
     let request_id = AtomicI64::new(0);
     let (mut session, container, state) = create_session().await?;
-    session.start().await?;
     let (mut output, _, _, _, _) = session.output_frame().await;
     session
         .accept_frame(&Frame::Hello(HelloMessage {
