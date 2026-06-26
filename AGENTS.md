@@ -202,7 +202,11 @@ nix develop             # 默认完整环境（含 moon、just、mdbook、pkg-co
 
 ## 附录 架构概述
 
+> 详细架构文档见 [Server Architecture](./docs/src/development/server-architecture.md)
+
 ### WebSocket 会话生命周期
+
+详细文档见 [Server Architecture](docs/src/development/server-architecture.md#session-生命周期)。
 
 ```
 Client → WS Connect → Auth(JWT) → Session Created
@@ -235,16 +239,16 @@ chobits-macros (proc-macro: #[config_example_generator])
 
 ### 框架错误码
 
-| 范围 | 说明 |
-|------|------|
-| 1xxxxx | 基础错误 (数据库等) |
-| 2xxxxx | 第三方错误 (JWT, 密码等) |
-| 3xxxxx | 框架错误 (验证, 请求格式等) |
-| 4xxxxx | 严重错误 (内部错误, 资源未找到) |
-| 401xxx | Auth 错误 |
-| 402xxx | AuthErrorCode |
-| 403xxx | OTA 错误 |
-| 404xxx | WsErrorCode |
-| 5xxxxx | 业务模块错误 (用户, OTA 等) |
-| 503xxx | AI 模型错误 (Chat/TTS/ASR) |
-| 504xxx | WsErrorCode |
+| 范围 | 分类 | 说明 |
+|------|------|------|
+| 101xxx | 基础 | 数据库等 |
+| 201xxx | 第三方 | JWT, 密码等 |
+| 301xxx | 框架 | 校验, 请求格式等 |
+| 401xxx | 严重 | 内部错误, 资源未找到 |
+| 402xxx | 认证 | AuthErrorCode |
+| 501xxx | 用户业务 | UserErrorCode |
+| 502xxx | OTA | OtaErrorCode |
+| 503xxx | AI 模型 | Chat/TTS/ASR |
+| 504xxx | WebSocket | WsErrorCode |
+
+完整架构分析见 [Server Architecture](./docs/src/development/server-architecture.md)。

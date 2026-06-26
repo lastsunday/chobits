@@ -9,6 +9,7 @@
   - [UserManual](./guide/user-manual.md)
 - [Development](./development/README.md)
   - [Server](./development/server.md)
+  - [Server Architecture](./development/server-architecture.md)
   - [VAD & Listener](./development/vad-listener.md)
   - [Audio Debug](./development/audio-debug.md)
   - [ASR Debug](./development/asr-debug.md)
