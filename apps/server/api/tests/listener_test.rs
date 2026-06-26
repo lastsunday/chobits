@@ -181,7 +181,7 @@ async fn test_reset_clears_everything() -> anyhow::Result<()> {
         "voice_data should be empty after reset",
     );
     assert_eq!(
-        listener.get_state(),
+        listener.state,
         ListenerState::Idle,
         "state should be Idle after reset",
     );
@@ -210,7 +210,7 @@ async fn test_silence_only_no_end_state() -> anyhow::Result<()> {
     let silence = vec![0.0f32; 16000 * 5]; // 5 seconds
     feed_all(&mut listener, &encode_opus(&silence)).await;
 
-    assert_eq!(listener.get_state(), ListenerState::Listening(false));
+    assert_eq!(listener.state, ListenerState::Listening(false));
     assert!(listener.take_voice().await.is_empty());
 
     Ok(())

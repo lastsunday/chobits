@@ -170,6 +170,7 @@ pub struct DefaultListener {
     prefix_buffer: Vec<f32>,
     prefix_flushed: bool,
     pending_text: Option<String>,
+    frame_size: usize,
 }
 
 impl DefaultListener {
@@ -181,6 +182,13 @@ impl DefaultListener {
         let sample_rate = audio_config
             .input_sample_rate
             .expect("input sample rate is empty");
+        let frame_size = {
+            let channel = audio_config.input_channel.expect("input channel is empty");
+            let frame_duration = audio_config
+                .input_frame_duration
+                .expect("input frame duration is empty");
+            ((sample_rate as u64 * channel as u64 * frame_duration) / 1000) as usize
+        };
         Self {
             vad,
             asr,
@@ -195,6 +203,7 @@ impl DefaultListener {
             prefix_buffer: Vec::with_capacity(PREFIX_SAMPLES_MAX),
             prefix_flushed: false,
             pending_text: None,
+            frame_size,
         }
     }
 }
@@ -210,20 +219,7 @@ impl DefaultListener {
                     self.state = ListenerState::Listening(false);
                 }
                 if let ListenerState::Listening(_) = self.state {
-                    let sample_rate = self
-                        .audio_config
-                        .input_sample_rate
-                        .expect("input sample rate is empty");
-                    let channel = self
-                        .audio_config
-                        .input_channel
-                        .expect("input channel is empty");
-                    let frame_duration = self
-                        .audio_config
-                        .input_frame_duration
-                        .expect("input frame duration is empty");
-                    let frame_size =
-                        ((sample_rate as u64 * channel as u64 * frame_duration) / 1000) as usize;
+                    let frame_size = self.frame_size;
                     let mut samples = vec![0f32; frame_size];
                     let len =
                         match self
@@ -291,20 +287,8 @@ impl DefaultListener {
         }
     }
 
-    pub fn set_state(&mut self, state: ListenerState) {
-        self.state = state;
-    }
-
-    pub fn get_state(&self) -> ListenerState {
-        self.state
-    }
-
     pub async fn take_voice(&mut self) -> Vec<f32> {
         core::mem::take(&mut self.voice_data)
-    }
-
-    pub fn clone_asr(&self) -> Option<Arc<Mutex<Box<dyn Asr>>>> {
-        Some(self.asr.clone())
     }
 
     pub async fn take_result(
@@ -340,10 +324,11 @@ impl DefaultListener {
             Err(e) => {
                 tracing::error!("{:?}", e);
                 if let Some(tx) = &self.error_tx {
-                    let _ = tx.send(OutputMessage {
-                        epoch: 0,
-                        payload: Err(err!(WsErrorCode::AsrFailure).with_extra(e.to_string())),
-                    });
+                    push_frame(
+                        tx,
+                        0,
+                        Err(err!(WsErrorCode::AsrFailure).with_extra(e.to_string())),
+                    );
                 }
                 (voice_data, Err(e))
             }
@@ -361,15 +346,19 @@ impl DefaultListener {
         self.prefix_flushed = false;
         self.pending_text = None;
     }
-
-    pub async fn set_sender(&mut self, tx: UnboundedSender<OutputMessage>) {
-        self.error_tx = Some(tx);
-    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // Round — TTS + LLM pipeline
 ////////////////////////////////////////////////////////////////////////////////
+
+fn push_frame(
+    tx: &UnboundedSender<OutputMessage>,
+    epoch: u64,
+    payload: Result<FrameResult, AppError>,
+) -> bool {
+    tx.send(OutputMessage { epoch, payload }).is_ok()
+}
 
 async fn send_tts_frame_and_change_state(
     tts_state: Arc<Mutex<Option<TtsState>>>,
@@ -381,14 +370,15 @@ async fn send_tts_frame_and_change_state(
 ) {
     let mut tts_state = tts_state.lock().await;
     *tts_state = Some(state.clone());
-    let _ = tx.send(OutputMessage {
+    push_frame(
+        tx,
         epoch,
-        payload: Ok(FrameResult::TTSResult(TtsMessage::new(
+        Ok(FrameResult::TTSResult(TtsMessage::new(
             Some(session_id.to_string()),
             Some(state),
             text,
         ))),
-    });
+    );
 }
 
 struct SendCtx {
@@ -405,18 +395,15 @@ async fn send_llm_audio(
     text: &str,
     audio_data: Option<Vec<Vec<u8>>>,
 ) {
-    if ctx
-        .tx
-        .send(OutputMessage {
-            epoch: ctx.epoch,
-            payload: Ok(FrameResult::LLMResult(LlmMessage::new(
-                Some(ctx.session_id.clone()),
-                Some(emotion.to_string()),
-                Some(EMOJI_MAP.get(emotion).map_or(r#"😶"#, |v| v).to_string()),
-            ))),
-        })
-        .is_err()
-    {
+    if !push_frame(
+        &ctx.tx,
+        ctx.epoch,
+        Ok(FrameResult::LLMResult(LlmMessage::new(
+            Some(ctx.session_id.clone()),
+            Some(emotion.to_string()),
+            Some(EMOJI_MAP.get(emotion).map_or(r#"😶"#, |v| v).to_string()),
+        ))),
+    ) {
         return;
     }
     send_tts_frame_and_change_state(
@@ -432,18 +419,16 @@ async fn send_llm_audio(
         if ctx.cancel.is_cancelled() {
             break;
         }
-        if ctx
-            .tx
-            .send(OutputMessage {
-                epoch: ctx.epoch,
-                payload: Ok(FrameResult::AudioResult(AudioMessage::new(
-                    Some(ctx.session_id.clone()),
-                    packet,
-                ))),
-            })
-            .is_err()
-        {
-            return;
+        if !push_frame(
+            &ctx.tx,
+            ctx.epoch,
+            Ok(FrameResult::AudioResult(AudioMessage::new(
+                Some(ctx.session_id.clone()),
+                packet,
+            ))),
+        ) {
+            info!(target:"round","send audio failure");
+            break;
         }
     }
     send_tts_frame_and_change_state(
@@ -529,17 +514,14 @@ impl Round {
         self.join_handle = Some(tokio::spawn(
             async move {
                 let stt_text = text.clone();
-                if ctx
-                    .tx
-                    .send(OutputMessage {
-                        epoch: ctx.epoch,
-                        payload: Ok(FrameResult::STTResult(SttMessage::new(
-                            Some(ctx.session_id.clone()),
-                            Some(stt_text),
-                        ))),
-                    })
-                    .is_err()
-                {
+                if !push_frame(
+                    &ctx.tx,
+                    ctx.epoch,
+                    Ok(FrameResult::STTResult(SttMessage::new(
+                        Some(ctx.session_id.clone()),
+                        Some(stt_text),
+                    ))),
+                ) {
                     info!(target:"round","send stt result failure");
                     return;
                 }
@@ -584,16 +566,11 @@ impl Round {
                         }
                         Err(e) => {
                             error!(target:"round","{:?}", e);
-                            if ctx
-                                .tx
-                                .send(OutputMessage {
-                                    epoch: ctx.epoch,
-                                    payload: Err(
-                                        err!(WsErrorCode::TtsEncode).with_extra(e.to_string())
-                                    ),
-                                })
-                                .is_err()
-                            {
+                            if !push_frame(
+                                &ctx.tx,
+                                ctx.epoch,
+                                Err(err!(WsErrorCode::TtsEncode).with_extra(e.to_string())),
+                            ) {
                                 error!(target:"round","send error frame failure");
                             }
                             break;
@@ -617,14 +594,12 @@ impl Round {
                         })
                         .await;
                 }
-                info!(target:"round","end");
             }
             .instrument(span),
         ));
     }
 
     pub async fn stop(&self) {
-        info!(target:"round","stop");
         self.cancel.cancel();
     }
 }
@@ -729,24 +704,18 @@ impl Session {
     }
 
     pub async fn stop(&mut self) {
-        info!(target:"session", "stop");
         self.phase = Phase::Stop;
         self.stop_round().await;
         if let Some(ref recorder) = self.recorder {
             recorder.on_session_end(&self.id).await;
         }
         let tx = self.output_tx.clone().expect("output tx not exists");
-        let result = tx.send(OutputMessage {
-            epoch: 0,
-            payload: Ok(FrameResult::CloseResult),
-        });
-        if result.is_err() {
+        if !push_frame(&tx, 0, Ok(FrameResult::CloseResult)) {
             info!("tx send frame result close result failure");
         }
     }
 
     pub async fn new_round(&mut self, mode: RoundMode) {
-        info!(target:"session", "new round");
         self.stop_round().await;
         self.current_mode = mode;
         let tx = self
@@ -786,7 +755,6 @@ impl Session {
     }
 
     pub async fn stop_round(&mut self) {
-        info!(target:"session", "stop round");
         if let Some(round) = &mut self.current_round {
             let round_id = round.id.clone();
             round.stop().await;
@@ -806,13 +774,11 @@ impl Session {
         // Handle close/abort/ping/pong immediately (no recording needed)
         match frame {
             Frame::Close(_) => {
-                info!(target:"session","close");
                 self.session_epoch.fetch_add(1, Ordering::Release);
                 self.stop().await;
                 return;
             }
             Frame::Abort(_) => {
-                info!(target:"session","abort");
                 self.session_epoch.fetch_add(1, Ordering::Release);
                 self.new_round(self.current_mode).await;
                 return;
@@ -884,6 +850,21 @@ impl Session {
         }
     }
 
+    async fn init_mcp_device(&mut self, input_tx: UnboundedSender<OutputMessage>) {
+        let (device_mcp_call_tool_result_tx, device_mcp_call_tool_result_rx) =
+            channel::<anyhow::Result<ToolResult>>(1);
+        self.device_mcp_call_tool_result_tx = Some(device_mcp_call_tool_result_tx);
+        let mcp_device_client = DeviceMcpClient::new(
+            Some(self.id.clone()),
+            input_tx,
+            Arc::new(Mutex::new(device_mcp_call_tool_result_rx)),
+        );
+        let mcp_device_client = Arc::new(Mutex::new(mcp_device_client));
+        let mcp_host = self.mcp_host.clone();
+        let mut mcp_host = mcp_host.lock().await;
+        mcp_host.set_device_client(mcp_device_client.clone()).await;
+    }
+
     pub async fn output_frame(
         &mut self,
     ) -> (
@@ -903,19 +884,8 @@ impl Session {
             .output_frame_duration
             .expect("output frame duration is empty");
 
-        let (device_mcp_call_tool_result_tx, device_mcp_call_tool_result_rx) =
-            channel::<anyhow::Result<ToolResult>>(1);
-        self.device_mcp_call_tool_result_tx = Some(device_mcp_call_tool_result_tx);
-        let mcp_device_client = DeviceMcpClient::new(
-            Some(self.id.clone()),
-            input_tx.clone(),
-            Arc::new(Mutex::new(device_mcp_call_tool_result_rx)),
-        );
-        let mcp_device_client = Arc::new(Mutex::new(mcp_device_client));
-        let mcp_host = self.mcp_host.clone();
-        let mut mcp_host = mcp_host.lock().await;
-        mcp_host.set_device_client(mcp_device_client.clone()).await;
-        self.listener.set_sender(input_tx.clone()).await;
+        self.init_mcp_device(input_tx.clone()).await;
+        self.listener.error_tx = Some(input_tx.clone());
         self.output_tx = Some(input_tx.clone());
 
         let controller = OutputController::new(
@@ -947,6 +917,24 @@ impl Session {
     pub fn get_latest_activity_time(&self) -> Option<i64> {
         let time = self.latest_activity_time.load(Ordering::Acquire);
         if time == 0 { None } else { Some(time) }
+    }
+
+    async fn check_activity_timeout(&mut self) {
+        match self.listener.state {
+            ListenerState::Listening(true) => self.update_latest_activity_time(),
+            _ => {
+                let Some(activity) = self.get_latest_activity_time() else {
+                    return;
+                };
+                let Some(timeout) = self.config.close_connection_no_voice_time else {
+                    return;
+                };
+                if now_millis().saturating_sub(activity) >= timeout {
+                    info!(target:"session", "session stop: offset_time = {} >= close_connection_no_voice_time = {}", now_millis().saturating_sub(activity), timeout);
+                    self.stop().await;
+                }
+            }
+        }
     }
 }
 
@@ -994,9 +982,8 @@ impl Session {
     async fn handle_listen_start(&mut self, msg: &ListenMessage<'_>) {
         let Some(mode) = &msg.mmod else {
             error!(
-                "invalid frame in phase = {:?},frame = {:?}, state = {:?}",
+                "invalid frame in phase = {:?}, state = {:?}",
                 self.phase,
-                "ListenMessage",
                 ListenState::Start
             );
             return;
@@ -1116,8 +1103,7 @@ impl Session {
                             .silence_voice_timeout
                             .expect("logic silence voice timeout is empty");
                         self.listener.reset(Some(silence_voice_timeout)).await;
-                    }
-                    if *mode == ListenMode::Manual
+                    } else if *mode == ListenMode::Manual
                         && msg.mmod == Some(service::chobits::message::listen::ListenMode::Auto)
                     {
                         let silence_voice_timeout = self
@@ -1145,7 +1131,7 @@ impl Session {
                         self.update_latest_activity_time();
                         self.new_round(self.current_mode).await;
                         if let Some(round) = &mut self.current_round {
-                            self.listener.set_state(ListenerState::End);
+                            self.listener.state = ListenerState::End;
                             match self.listener.take_result().await.1 {
                                 Ok(_) => {
                                     round.accept_command(Command::Wake { text }).await;
@@ -1166,7 +1152,7 @@ impl Session {
                 }
                 ListenState::Stop => {
                     if *mode == ListenMode::Manual && self.current_mode != RoundMode::Text {
-                        self.listener.set_state(ListenerState::End);
+                        self.listener.state = ListenerState::End;
                         self.handle_listen_end().await;
                     }
                 }
@@ -1179,11 +1165,11 @@ impl Session {
             },
             Frame::Voice { data } => {
                 if *mode == ListenMode::Manual {
-                    let state = self.listener.get_state();
+                    let state = self.listener.state;
                     self.listener
                         .accept(ListenInput::Audio(data.to_vec()))
                         .await;
-                    let new_state = self.listener.get_state();
+                    let new_state = self.listener.state;
                     if new_state == ListenerState::Listening(true)
                         && state != ListenerState::Listening(true)
                         && let Some(round) = &self.current_round
@@ -1191,13 +1177,13 @@ impl Session {
                         round.stop().await;
                     }
                 } else {
-                    let state = self.listener.get_state();
+                    let state = self.listener.state;
                     match &self.current_round {
                         Some(round) => {
                             self.listener
                                 .accept(ListenInput::Audio(data.to_vec()))
                                 .await;
-                            let new_state = self.listener.get_state();
+                            let new_state = self.listener.state;
                             if new_state == ListenerState::Listening(true)
                                 && state != ListenerState::Listening(true)
                             {
@@ -1229,29 +1215,7 @@ impl Session {
                             }
                         }
                     }
-                    let is_speech = match self.listener.get_state() {
-                        ListenerState::Listening(speech) => speech,
-                        _ => false,
-                    };
-                    if is_speech {
-                        self.update_latest_activity_time();
-                    } else {
-                        let latest_activity_time = self.get_latest_activity_time();
-                        if let (Some(latest_activity_time), Some(close_connection_no_voice_time)) = (
-                            latest_activity_time,
-                            self.config.close_connection_no_voice_time,
-                        ) {
-                            let offset_time = now_millis().saturating_sub(latest_activity_time);
-                            if offset_time >= close_connection_no_voice_time {
-                                info!(
-                                    target:"session",
-                                    "session stop: offset_time = {} >= close_connection_no_voice_time = {}",
-                                    offset_time, close_connection_no_voice_time
-                                );
-                                self.stop().await;
-                            }
-                        }
-                    }
+                    self.check_activity_timeout().await;
                 }
             }
             _ => {
@@ -1287,11 +1251,7 @@ impl Session {
             features: None,
             session_id: Some(self.id.clone()),
         };
-        let result = tx.send(OutputMessage {
-            epoch: 0,
-            payload: Ok(FrameResult::HelloResult(data)),
-        });
-        if result.is_err() {
+        if !push_frame(&tx, 0, Ok(FrameResult::HelloResult(data))) {
             info!(target:"session","tx send hello result failure");
         }
     }
@@ -1372,12 +1332,11 @@ impl Session {
             self.finish_asr_inner(voice_data.clone(), (voice_data, result), sample_rate)
                 .await;
         } else {
-            let Some(asr) = self.listener.clone_asr() else {
-                error!("no ASR engine available, skipping transcription");
-                return;
+            let result = {
+                let mut asr = self.listener.asr.lock().await;
+                asr.transcribe(sample_rate, &voice_pcm).await
             };
-            let mut asr = asr.lock().await;
-            match asr.transcribe(sample_rate, &voice_pcm).await {
+            match result {
                 Ok(transcript) => {
                     self.finish_asr_inner(
                         voice_pcm.clone(),
