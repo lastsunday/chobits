@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::{IsTerminal, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
 use bzip2::read::BzDecoder;
 use tar::Archive;
@@ -19,6 +20,8 @@ use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 
 const MAX_CONCURRENT_DOWNLOADS: usize = 4;
+const MAX_DOWNLOAD_RETRIES: u32 = 3;
+const RETRY_BASE_DELAY_MS: u64 = 1000;
 
 static MANIFESTS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/src/downloader/manifests");
 
@@ -352,7 +355,8 @@ pub async fn run(
                             if !quiet {
                                 eprintln!("  ARCHIVE {}: extracting ...", archive.path);
                             }
-                            match extract_tar_bz2(&archive_file, &dest_dir, &archive.extract) {
+                            match extract_tar_bz2(&archive_file, &dest_dir, &archive.extract, quiet)
+                            {
                                 Ok(()) => {
                                     if cat_name == "reference" {
                                         for f in &archive.extract {
@@ -598,13 +602,59 @@ async fn try_download_url(
     quiet: bool,
 ) -> Result<(u64, String), Box<dyn std::error::Error>> {
     let tmp = dest.with_extension("tmp");
+
+    for attempt in 0..MAX_DOWNLOAD_RETRIES {
+        let _ = std::fs::remove_file(&tmp);
+
+        let result = try_download_attempt(client, url, &tmp, dest, expected_sha256, quiet).await;
+        if let Ok(r) = result {
+            std::fs::rename(&tmp, dest)?;
+            return Ok(r);
+        }
+
+        let err_msg = {
+            let e = result.unwrap_err();
+            let msg = e.to_string();
+            if msg.contains("SHA256 mismatch") || attempt + 1 == MAX_DOWNLOAD_RETRIES {
+                let _ = std::fs::remove_file(&tmp);
+                return Err(e);
+            }
+            msg
+        };
+
+        let delay = RETRY_BASE_DELAY_MS * 2u64.pow(attempt);
+        tokio::time::sleep(Duration::from_millis(delay)).await;
+        if !quiet {
+            eprintln!(
+                "  Retry {}/{} for {} (error: {})",
+                attempt + 2,
+                MAX_DOWNLOAD_RETRIES,
+                url,
+                err_msg,
+            );
+        }
+    }
+
+    unreachable!()
+}
+
+async fn try_download_attempt(
+    client: &Client,
+    url: &str,
+    tmp: &Path,
+    dest: &Path,
+    expected_sha256: Option<&str>,
+    quiet: bool,
+) -> Result<(u64, String), Box<dyn std::error::Error>> {
     let mut hasher = sha2::Sha256::new();
     let mut downloaded = 0u64;
 
     let mut resp = client.get(url).send().await?;
     let total_size = resp.content_length().unwrap_or(0);
 
-    let pb = if !quiet && total_size > 0 {
+    let use_bar = !quiet && total_size > 0 && std::io::stderr().is_terminal();
+
+    let pb = if use_bar {
         let pb = ProgressBar::new(total_size);
         pb.set_style(
             ProgressStyle::default_bar()
@@ -621,21 +671,51 @@ async fn try_download_url(
         );
         Some(pb)
     } else {
+        if !quiet && total_size > 0 {
+            let fname = dest
+                .file_name()
+                .unwrap_or_default()
+                .to_str()
+                .unwrap_or("")
+                .to_string();
+            eprintln!("  {fname} ({total_size} bytes)");
+        }
         None
     };
 
-    let mut file = std::fs::File::create(&tmp)?;
+    let mut file = std::fs::File::create(tmp)?;
+    let mut last_pct = 0u32;
     while let Some(chunk) = resp.chunk().await? {
         hasher.update(&chunk);
         file.write_all(&chunk)?;
         downloaded += chunk.len() as u64;
         if let Some(ref pb) = pb {
             pb.set_position(downloaded);
+        } else if !quiet && total_size > 0 {
+            let pct = (downloaded * 100 / total_size) as u32;
+            if pct - last_pct >= 10 {
+                let fname = dest
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_str()
+                    .unwrap_or("")
+                    .to_string();
+                eprintln!("  {fname} ... {pct}%");
+                last_pct = pct;
+            }
         }
     }
 
     if let Some(pb) = pb {
         pb.finish_and_clear();
+    } else if !quiet && total_size > 0 {
+        let fname = dest
+            .file_name()
+            .unwrap_or_default()
+            .to_str()
+            .unwrap_or("")
+            .to_string();
+        eprintln!("  {fname} ... done");
     }
 
     let actual = hex::encode(hasher.finalize());
@@ -643,11 +723,8 @@ async fn try_download_url(
     if let Some(expected) = expected_sha256
         && actual != *expected
     {
-        let _ = std::fs::remove_file(&tmp);
         return Err(format!("SHA256 mismatch: expected {expected}, got {actual}").into());
     }
-
-    std::fs::rename(&tmp, dest)?;
 
     Ok((downloaded, actual))
 }
@@ -674,6 +751,7 @@ fn extract_tar_bz2(
     archive_path: &Path,
     dest: &Path,
     files: &[ExtractEntry],
+    quiet: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let file = File::open(archive_path)?;
     let decoder = BzDecoder::new(file);
@@ -728,6 +806,30 @@ fn extract_tar_bz2(
                 std::fs::create_dir_all(parent)?;
             }
             entry.unpack(&dest_path)?;
+
+            if !quiet {
+                let (size, actual_sha) = sha256_file(&dest_path)?;
+                let fname = dest_path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_str()
+                    .unwrap_or("");
+
+                if let Some(entry) = matched_entry {
+                    if let Some(expected) = &entry.sha256
+                        && actual_sha != *expected
+                    {
+                        eprintln!(
+                            "  {fname}: {} bytes, SHA256 mismatch (expected {expected}, got {actual_sha})",
+                            size,
+                        );
+                    } else {
+                        eprintln!("  {fname}: {size} bytes, sha256: {actual_sha}");
+                    }
+                } else {
+                    eprintln!("  {fname}: {size} bytes, sha256: {actual_sha}");
+                }
+            }
         }
     }
 
