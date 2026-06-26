@@ -25,7 +25,7 @@ use rig::message::ToolResult;
 use rig::message::{Message, Text, UserContent};
 use service::chobits::message::audio::AudioMessage;
 use service::chobits::message::hello::{AudioParam, HelloMessage};
-use service::chobits::message::listen::ListenState;
+use service::chobits::message::listen::{ListenMessage, ListenState};
 use service::chobits::message::llm::LlmMessage;
 use service::chobits::message::stt::SttMessage;
 use service::chobits::message::tts::{TtsMessage, TtsState};
@@ -663,7 +663,7 @@ pub enum Phase {
     Stop,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ListenMode {
     // voice call
     Auto,
@@ -991,78 +991,93 @@ impl Session {
         }
     }
 
+    async fn handle_listen_start(&mut self, msg: &ListenMessage<'_>) {
+        let Some(mode) = &msg.mmod else {
+            error!(
+                "invalid frame in phase = {:?},frame = {:?}, state = {:?}",
+                self.phase,
+                "ListenMessage",
+                ListenState::Start
+            );
+            return;
+        };
+        match mode {
+            service::chobits::message::listen::ListenMode::Auto => {
+                self.interrupt_output().await;
+                self.phase = Phase::Listen(ListenMode::Auto);
+                self.current_mode = RoundMode::Auto;
+            }
+            service::chobits::message::listen::ListenMode::Manual => {
+                self.interrupt_output().await;
+                self.phase = Phase::Listen(ListenMode::Manual);
+                self.current_mode = RoundMode::Manual;
+                self.listener.reset(None).await;
+            }
+            service::chobits::message::listen::ListenMode::RealTime => {
+                self.interrupt_output().await;
+                self.phase = Phase::Listen(ListenMode::RealTime);
+                self.current_mode = RoundMode::RealTime;
+            }
+        }
+    }
+
     async fn handle_phase_listen_detect<'a>(&mut self, frame: &Frame<'a>) {
         match frame {
-            Frame::Listen(listen_message) => {
-                let state = &listen_message.state;
-                match state {
-                    ListenState::Start => {
-                        let mode = &listen_message.mmod;
-                        if let Some(mode) = mode {
-                            match mode {
-                                service::chobits::message::listen::ListenMode::Auto => {
-                                    self.interrupt_output().await;
-                                    self.phase = Phase::Listen(ListenMode::Auto);
-                                    self.current_mode = RoundMode::Auto;
-                                    self.handle_phase_listen_for_auto_mode(frame).await;
-                                }
-                                service::chobits::message::listen::ListenMode::Manual => {
-                                    self.interrupt_output().await;
-                                    self.phase = Phase::Listen(ListenMode::Manual);
-                                    self.current_mode = RoundMode::Manual;
-                                    self.listener.reset(None).await;
-                                }
-                                service::chobits::message::listen::ListenMode::RealTime => {
-                                    self.interrupt_output().await;
-                                    self.phase = Phase::Listen(ListenMode::RealTime);
-                                    self.current_mode = RoundMode::RealTime;
-                                    self.handle_phase_listen_for_realtime_mode(frame).await;
-                                }
-                            }
-                        } else {
-                            error!(
-                                "invalid frame in phase = {:?},frame = {:?}, state = {:?}",
-                                self.phase, frame, state
-                            );
-                        }
-                    }
-                    ListenState::Detect => {
-                        let mode = &listen_message.mmod;
-                        match mode {
-                            Some(mode) => match mode {
-                                service::chobits::message::listen::ListenMode::Auto => {
-                                    self.phase = Phase::Listen(ListenMode::Auto);
-                                    self.current_mode = RoundMode::Auto;
-                                    self.handle_phase_listen_for_auto_mode(frame).await;
-                                }
-                                service::chobits::message::listen::ListenMode::Manual => {
-                                    self.phase = Phase::Listen(ListenMode::Manual);
-                                    self.current_mode = RoundMode::Manual;
-                                    self.handle_phase_listen_for_manual_mode(frame).await;
-                                }
-                                service::chobits::message::listen::ListenMode::RealTime => {
-                                    self.phase = Phase::Listen(ListenMode::RealTime);
-                                    self.current_mode = RoundMode::RealTime;
-                                    self.handle_phase_listen_for_realtime_mode(frame).await;
-                                }
+            Frame::Listen(msg) => match &msg.state {
+                ListenState::Start => {
+                    self.handle_listen_start(msg).await;
+                    if self.current_mode == RoundMode::Auto
+                        || self.current_mode == RoundMode::RealTime
+                    {
+                        self.handle_phase_listen_for_mode(
+                            &match self.current_mode {
+                                RoundMode::Auto => ListenMode::Auto,
+                                _ => ListenMode::RealTime,
                             },
-                            None => {
-                                // eps32-c3 default listen mode is none
-                                // set listen mode to realtime
-                                self.phase = Phase::Listen(ListenMode::RealTime);
-                                self.current_mode = RoundMode::RealTime;
-                                self.handle_phase_listen_for_realtime_mode(frame).await;
-                            }
-                        }
-                    }
-                    _ => {
-                        error!(
-                            "invalid frame in phase = {:?},frame = {:?}, state = {:?}",
-                            self.phase, frame, state
-                        );
+                            frame,
+                        )
+                        .await;
                     }
                 }
-            }
+                ListenState::Detect => {
+                    let mode = &msg.mmod;
+                    if let Some(mode) = mode {
+                        match mode {
+                            service::chobits::message::listen::ListenMode::Auto => {
+                                self.phase = Phase::Listen(ListenMode::Auto);
+                                self.current_mode = RoundMode::Auto;
+                            }
+                            service::chobits::message::listen::ListenMode::Manual => {
+                                self.phase = Phase::Listen(ListenMode::Manual);
+                                self.current_mode = RoundMode::Manual;
+                            }
+                            service::chobits::message::listen::ListenMode::RealTime => {
+                                self.phase = Phase::Listen(ListenMode::RealTime);
+                                self.current_mode = RoundMode::RealTime;
+                            }
+                        }
+                    } else {
+                        // eps32-c3 default listen mode is none
+                        self.phase = Phase::Listen(ListenMode::RealTime);
+                        self.current_mode = RoundMode::RealTime;
+                    }
+                    self.handle_phase_listen_for_mode(
+                        &match self.current_mode {
+                            RoundMode::Auto => ListenMode::Auto,
+                            RoundMode::Manual => ListenMode::Manual,
+                            _ => ListenMode::RealTime,
+                        },
+                        frame,
+                    )
+                    .await;
+                }
+                _ => {
+                    error!(
+                        "invalid frame in phase = {:?},frame = {:?}, state = {:?}",
+                        self.phase, frame, msg.state
+                    );
+                }
+            },
             Frame::Voice { data } => {
                 self.listener
                     .accept(ListenInput::Audio(data.to_vec()))
@@ -1078,365 +1093,163 @@ impl Session {
     }
 
     async fn handle_phase_listen<'a>(&mut self, mode: &ListenMode, frame: &Frame<'a>) {
-        match mode {
-            ListenMode::Auto => self.handle_phase_listen_for_auto_mode(frame).await,
-            ListenMode::Manual => self.handle_phase_listen_for_manual_mode(frame).await,
-            ListenMode::RealTime => self.handle_phase_listen_for_realtime_mode(frame).await,
-        }
+        self.handle_phase_listen_for_mode(mode, frame).await;
     }
 
-    async fn handle_phase_listen_for_auto_mode<'a>(&mut self, frame: &Frame<'a>) {
+    async fn handle_phase_listen_for_mode<'a>(&mut self, mode: &ListenMode, frame: &Frame<'a>) {
         match frame {
-            Frame::Listen(listen_message) => {
-                let state = &listen_message.state;
-                match state {
-                    ListenState::Start => {
-                        let mode = &listen_message.mmod;
-                        if let Some(mode) = mode {
-                            match mode {
-                                service::chobits::message::listen::ListenMode::Auto => {
-                                    self.interrupt_output().await;
-                                    self.phase = Phase::Listen(ListenMode::Auto);
-                                    self.current_mode = RoundMode::Auto;
-                                    self.update_latest_activity_time();
-                                    self.new_round(RoundMode::Auto).await;
-                                    if let Some(round) = &mut self.current_round {
-                                        round.accept_command(Command::Wake { text: "Hello" }).await;
-                                        let silence_voice_timeout = self
-                                            .config
-                                            .silence_voice_timeout
-                                            .expect("logic silence voice timeout is empty");
-                                        self.listener.reset(Some(silence_voice_timeout)).await;
-                                    } else {
-                                        panic!("current round is none");
-                                    }
-                                }
-                                service::chobits::message::listen::ListenMode::Manual => {
-                                    self.interrupt_output().await;
-                                    self.phase = Phase::Listen(ListenMode::Manual);
-                                    self.current_mode = RoundMode::Manual;
-                                    self.listener.reset(None).await;
-                                }
-                                service::chobits::message::listen::ListenMode::RealTime => {
-                                    self.interrupt_output().await;
-                                    self.phase = Phase::Listen(ListenMode::RealTime);
-                                    self.current_mode = RoundMode::RealTime;
-                                }
-                            }
+            Frame::Listen(msg) => match &msg.state {
+                ListenState::Start => {
+                    self.handle_listen_start(msg).await;
+                    if *mode == ListenMode::Auto
+                        && msg.mmod == Some(service::chobits::message::listen::ListenMode::Auto)
+                    {
+                        self.update_latest_activity_time();
+                        self.new_round(RoundMode::Auto).await;
+                        if let Some(round) = &mut self.current_round {
+                            round.accept_command(Command::Wake { text: "Hello" }).await;
                         } else {
-                            error!(
-                                "invalid frame in phase = {:?},frame = {:?}, state = {:?}",
-                                self.phase, frame, state
-                            );
+                            panic!("current round is none");
                         }
+                        let silence_voice_timeout = self
+                            .config
+                            .silence_voice_timeout
+                            .expect("logic silence voice timeout is empty");
+                        self.listener.reset(Some(silence_voice_timeout)).await;
                     }
-                    _ => {
+                    if *mode == ListenMode::Manual
+                        && msg.mmod == Some(service::chobits::message::listen::ListenMode::Auto)
+                    {
+                        let silence_voice_timeout = self
+                            .config
+                            .silence_voice_timeout
+                            .expect("logic silence voice timeout is empty");
+                        self.listener.reset(Some(silence_voice_timeout)).await;
+                    }
+                }
+                ListenState::Detect => {
+                    let Some(text) = &msg.text else {
                         error!(
                             "invalid frame in phase = {:?},frame = {:?}",
                             self.phase, frame
                         );
+                        return;
+                    };
+                    if *mode == ListenMode::Manual {
+                        self.interrupt_output().await;
+                        self.listener
+                            .accept(ListenInput::Text(text.to_string()))
+                            .await;
+                        self.handle_listen_end().await;
+                    } else {
+                        self.update_latest_activity_time();
+                        self.new_round(self.current_mode).await;
+                        if let Some(round) = &mut self.current_round {
+                            self.listener.set_state(ListenerState::End);
+                            match self.listener.take_result().await.1 {
+                                Ok(_) => {
+                                    round.accept_command(Command::Wake { text }).await;
+                                }
+                                Err(e) => {
+                                    error!("{:?}", e);
+                                }
+                            }
+                            let silence_voice_timeout = self
+                                .config
+                                .silence_voice_timeout
+                                .expect("logic silence voice timeout is empty");
+                            self.listener.reset(Some(silence_voice_timeout)).await;
+                        } else {
+                            panic!("current round is none");
+                        }
                     }
                 }
-            }
-            Frame::Voice { data } => {
-                let state = self.listener.get_state();
-                match &self.current_round {
-                    Some(round) => {
-                        self.listener
-                            .accept(ListenInput::Audio(data.to_vec()))
-                            .await;
-                        let new_state = self.listener.get_state();
-                        if new_state == ListenerState::Listening(true)
-                            && state != ListenerState::Listening(true)
-                        {
-                            round.stop().await;
-                        }
-                        if state == ListenerState::End || new_state == ListenerState::End {
-                            self.handle_listen_end().await;
-                            let silence_voice_timeout = self
-                                .config
-                                .silence_voice_timeout
-                                .expect("logic silence voice timeout is empty");
-                            self.listener.reset(Some(silence_voice_timeout)).await;
-                            self.update_latest_activity_time();
-                        }
+                ListenState::Stop => {
+                    if *mode == ListenMode::Manual && self.current_mode != RoundMode::Text {
+                        self.listener.set_state(ListenerState::End);
+                        self.handle_listen_end().await;
                     }
-                    None => {
-                        if state == crate::ws::session::ListenerState::End {
-                            self.handle_listen_end().await;
-                            let silence_voice_timeout = self
-                                .config
-                                .silence_voice_timeout
-                                .expect("logic silence voice timeout is empty");
-                            self.listener.reset(Some(silence_voice_timeout)).await;
-                            self.update_latest_activity_time();
-                        } else {
+                }
+                _ => {
+                    error!(
+                        "invalid frame in phase = {:?},frame = {:?}",
+                        self.phase, frame
+                    );
+                }
+            },
+            Frame::Voice { data } => {
+                if *mode == ListenMode::Manual {
+                    let state = self.listener.get_state();
+                    self.listener
+                        .accept(ListenInput::Audio(data.to_vec()))
+                        .await;
+                    let new_state = self.listener.get_state();
+                    if new_state == ListenerState::Listening(true)
+                        && state != ListenerState::Listening(true)
+                        && let Some(round) = &self.current_round
+                    {
+                        round.stop().await;
+                    }
+                } else {
+                    let state = self.listener.get_state();
+                    match &self.current_round {
+                        Some(round) => {
                             self.listener
                                 .accept(ListenInput::Audio(data.to_vec()))
                                 .await;
-                        }
-                    }
-                }
-                let is_speech = match self.listener.get_state() {
-                    ListenerState::Listening(speech) => speech,
-                    _ => false,
-                };
-                if is_speech {
-                    self.update_latest_activity_time();
-                } else {
-                    let latest_activity_time = self.get_latest_activity_time();
-                    if let (Some(latest_activity_time), Some(close_connection_no_voice_time)) = (
-                        latest_activity_time,
-                        self.config.close_connection_no_voice_time,
-                    ) {
-                        let offset_time = now_millis().saturating_sub(latest_activity_time);
-                        if offset_time >= close_connection_no_voice_time {
-                            info!(
-                                target:"session",
-                                "session stop: offset_time = {} >= close_connection_no_voice_time = {}",
-                                offset_time, close_connection_no_voice_time
-                            );
-                            self.stop().await;
-                        }
-                    }
-                }
-            }
-            _ => {
-                error!(
-                    "invalid frame in phase = {:?},frame = {:?}",
-                    self.phase, frame
-                );
-            }
-        }
-    }
-
-    async fn handle_phase_listen_for_manual_mode<'a>(&mut self, frame: &Frame<'a>) {
-        match frame {
-            Frame::Listen(listen_message) => {
-                let state = &listen_message.state;
-                match state {
-                    ListenState::Start => {
-                        let mode = &listen_message.mmod;
-                        if let Some(mode) = mode {
-                            match mode {
-                                service::chobits::message::listen::ListenMode::Auto => {
-                                    self.interrupt_output().await;
-                                    self.phase = Phase::Listen(ListenMode::Auto);
-                                    self.current_mode = RoundMode::Auto;
-                                    let silence_voice_timeout = self
-                                        .config
-                                        .silence_voice_timeout
-                                        .expect("logic silence voice timeout is empty");
-                                    self.listener.reset(Some(silence_voice_timeout)).await;
-                                }
-                                service::chobits::message::listen::ListenMode::Manual => {
-                                    self.interrupt_output().await;
-                                    self.phase = Phase::Listen(ListenMode::Manual);
-                                    self.current_mode = RoundMode::Manual;
-                                    self.listener.reset(None).await;
-                                }
-                                service::chobits::message::listen::ListenMode::RealTime => {
-                                    self.interrupt_output().await;
-                                    self.phase = Phase::Listen(ListenMode::RealTime);
-                                    self.current_mode = RoundMode::RealTime;
-                                }
+                            let new_state = self.listener.get_state();
+                            if new_state == ListenerState::Listening(true)
+                                && state != ListenerState::Listening(true)
+                            {
+                                round.stop().await;
                             }
-                        } else {
-                            error!(
-                                "invalid frame in phase = {:?},frame = {:?}, state = {:?}",
-                                self.phase, frame, state
-                            );
-                        }
-                    }
-                    ListenState::Stop => {
-                        if self.current_mode != RoundMode::Text {
-                            self.listener
-                                .set_state(crate::ws::session::ListenerState::End);
-                            self.handle_listen_end().await;
-                        }
-                    }
-                    ListenState::Detect => {
-                        let text = &listen_message.text;
-                        match text {
-                            Some(text) => {
-                                self.interrupt_output().await;
-                                self.listener
-                                    .accept(ListenInput::Text(text.to_string()))
-                                    .await;
+                            if state == ListenerState::End || new_state == ListenerState::End {
                                 self.handle_listen_end().await;
-                            }
-                            None => {
-                                error!(
-                                    "invalid frame in phase = {:?},frame = {:?}",
-                                    self.phase, frame
-                                );
-                            }
-                        }
-                    }
-                    _ => {
-                        error!(
-                            "invalid frame in phase = {:?},frame = {:?}",
-                            self.phase, frame
-                        );
-                    }
-                }
-            }
-            Frame::Voice { data } => {
-                let state = self.listener.get_state();
-                self.listener
-                    .accept(ListenInput::Audio(data.to_vec()))
-                    .await;
-                let new_state = self.listener.get_state();
-                if new_state == ListenerState::Listening(true)
-                    && state != ListenerState::Listening(true)
-                    && let Some(round) = &self.current_round
-                {
-                    round.stop().await;
-                }
-            }
-            _ => {
-                error!(
-                    "invalid frame in phase = {:?},frame = {:?}",
-                    self.phase, frame
-                );
-            }
-        }
-    }
-
-    async fn handle_phase_listen_for_realtime_mode<'a>(&mut self, frame: &Frame<'a>) {
-        match frame {
-            Frame::Listen(listen_message) => {
-                let state = &listen_message.state;
-                match state {
-                    ListenState::Start => {
-                        let mode = &listen_message.mmod;
-                        if let Some(mode) = mode {
-                            match mode {
-                                service::chobits::message::listen::ListenMode::Auto => {
-                                    self.interrupt_output().await;
-                                    self.phase = Phase::Listen(ListenMode::Auto);
-                                    self.current_mode = RoundMode::Auto;
-                                }
-                                service::chobits::message::listen::ListenMode::Manual => {
-                                    self.interrupt_output().await;
-                                    self.phase = Phase::Listen(ListenMode::Manual);
-                                    self.current_mode = RoundMode::Manual;
-                                    self.listener.reset(None).await;
-                                }
-                                service::chobits::message::listen::ListenMode::RealTime => {
-                                    self.interrupt_output().await;
-                                    self.phase = Phase::Listen(ListenMode::RealTime);
-                                    self.current_mode = RoundMode::RealTime;
-                                }
-                            }
-                        } else {
-                            error!(
-                                "invalid frame in phase = {:?},frame = {:?}, state = {:?}",
-                                self.phase, frame, state
-                            );
-                        }
-                    }
-                    ListenState::Detect => {
-                        let text = &listen_message.text;
-                        match text {
-                            Some(text) => {
+                                let silence_voice_timeout = self
+                                    .config
+                                    .silence_voice_timeout
+                                    .expect("logic silence voice timeout is empty");
+                                self.listener.reset(Some(silence_voice_timeout)).await;
                                 self.update_latest_activity_time();
-                                self.new_round(self.current_mode).await;
-                                if let Some(round) = &mut self.current_round {
-                                    self.listener
-                                        .set_state(crate::ws::session::ListenerState::End);
-                                    match self.listener.take_result().await.1 {
-                                        Ok(_) => {
-                                            round.accept_command(Command::Wake { text }).await;
-                                        }
-                                        Err(e) => {
-                                            error!("{:?}", e);
-                                        }
-                                    }
-                                    let silence_voice_timeout = self
-                                        .config
-                                        .silence_voice_timeout
-                                        .expect("logic silence voice timeout is empty");
-                                    self.listener.reset(Some(silence_voice_timeout)).await;
-                                } else {
-                                    panic!("current round is none");
-                                }
                             }
-                            None => {
-                                error!(
-                                    "invalid frame in phase = {:?},frame = {:?}",
-                                    self.phase, frame
+                        }
+                        None => {
+                            if state == ListenerState::End {
+                                self.handle_listen_end().await;
+                                let silence_voice_timeout = self
+                                    .config
+                                    .silence_voice_timeout
+                                    .expect("logic silence voice timeout is empty");
+                                self.listener.reset(Some(silence_voice_timeout)).await;
+                                self.update_latest_activity_time();
+                            } else {
+                                self.listener
+                                    .accept(ListenInput::Audio(data.to_vec()))
+                                    .await;
+                            }
+                        }
+                    }
+                    let is_speech = match self.listener.get_state() {
+                        ListenerState::Listening(speech) => speech,
+                        _ => false,
+                    };
+                    if is_speech {
+                        self.update_latest_activity_time();
+                    } else {
+                        let latest_activity_time = self.get_latest_activity_time();
+                        if let (Some(latest_activity_time), Some(close_connection_no_voice_time)) = (
+                            latest_activity_time,
+                            self.config.close_connection_no_voice_time,
+                        ) {
+                            let offset_time = now_millis().saturating_sub(latest_activity_time);
+                            if offset_time >= close_connection_no_voice_time {
+                                info!(
+                                    target:"session",
+                                    "session stop: offset_time = {} >= close_connection_no_voice_time = {}",
+                                    offset_time, close_connection_no_voice_time
                                 );
+                                self.stop().await;
                             }
-                        }
-                    }
-                    _ => {
-                        error!(
-                            "invalid frame in phase = {:?},frame = {:?}",
-                            self.phase, frame
-                        );
-                    }
-                }
-            }
-            Frame::Voice { data } => {
-                let state = self.listener.get_state();
-                match &self.current_round {
-                    Some(round) => {
-                        self.listener
-                            .accept(ListenInput::Audio(data.to_vec()))
-                            .await;
-                        let new_state = self.listener.get_state();
-                        if new_state == ListenerState::Listening(true)
-                            && state != ListenerState::Listening(true)
-                        {
-                            round.stop().await;
-                        }
-                        if state == ListenerState::End || new_state == ListenerState::End {
-                            self.handle_listen_end().await;
-                            let silence_voice_timeout = self
-                                .config
-                                .silence_voice_timeout
-                                .expect("logic silence voice timeout is empty");
-                            self.listener.reset(Some(silence_voice_timeout)).await;
-                            self.update_latest_activity_time();
-                        }
-                    }
-                    None => {
-                        if state == crate::ws::session::ListenerState::End {
-                            self.handle_listen_end().await;
-                            let silence_voice_timeout = self
-                                .config
-                                .silence_voice_timeout
-                                .expect("logic silence voice timeout is empty");
-                            self.listener.reset(Some(silence_voice_timeout)).await;
-                            self.update_latest_activity_time();
-                        } else {
-                            self.listener
-                                .accept(ListenInput::Audio(data.to_vec()))
-                                .await;
-                        }
-                    }
-                }
-                let is_speech = match self.listener.get_state() {
-                    ListenerState::Listening(speech) => speech,
-                    _ => false,
-                };
-                if is_speech {
-                    self.update_latest_activity_time();
-                } else {
-                    let latest_activity_time = self.get_latest_activity_time();
-                    if let (Some(latest_activity_time), Some(close_connection_no_voice_time)) = (
-                        latest_activity_time,
-                        self.config.close_connection_no_voice_time,
-                    ) {
-                        let offset_time = now_millis().saturating_sub(latest_activity_time);
-                        if offset_time >= close_connection_no_voice_time {
-                            info!(
-                                target:"session",
-                                "session stop: offset_time = {} >= close_connection_no_voice_time = {}",
-                                offset_time, close_connection_no_voice_time
-                            );
-                            self.stop().await;
                         }
                     }
                 }
