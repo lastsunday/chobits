@@ -356,9 +356,13 @@ pub async fn run(
                             if !quiet {
                                 eprintln!(
                                     "  {}: {} bytes, sha256: {sha256} OK",
-                                    archive.path, size
+                                    archive_report_path(archive),
+                                    size
                                 );
-                                eprintln!("  ARCHIVE {}: extracting ...", archive.path);
+                                eprintln!(
+                                    "  ARCHIVE {}: extracting ...",
+                                    archive_report_path(archive)
+                                );
                             }
                             match extract_tar_bz2(&archive_file, &dest_dir, &archive.extract, quiet)
                             {
@@ -388,7 +392,7 @@ pub async fn run(
                                 }
                                 Err(e) => {
                                     let msg = format!("extraction failed: {e}");
-                                    eprintln!("  FAIL: {} ({msg})", archive.path);
+                                    eprintln!("  FAIL: {} ({msg})", archive_report_path(archive));
                                     report_files.push(ReportFile {
                                         path: archive_report_path(archive),
                                         size: 0,
@@ -399,7 +403,7 @@ pub async fn run(
                             }
                         }
                         Err(msg) => {
-                            eprintln!("  FAIL: {} archive ({msg})", archive.path);
+                            eprintln!("  FAIL: {} ({msg})", archive_report_path(archive));
                             report_files.push(ReportFile {
                                 path: archive_report_path(archive),
                                 size: 0,
@@ -616,7 +620,7 @@ async fn try_download_url(
     expected_sha256: Option<&str>,
     quiet: bool,
 ) -> Result<(u64, String), Box<dyn std::error::Error>> {
-    let tmp = dest.with_extension("tmp");
+    let tmp = PathBuf::from(format!("{}.tmp.{}", dest.display(), std::process::id()));
 
     for attempt in 0..MAX_DOWNLOAD_RETRIES {
         let _ = std::fs::remove_file(&tmp);

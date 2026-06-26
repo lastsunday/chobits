@@ -99,6 +99,7 @@ tasks:
       - ~:build
     options:
       cache: false
+      runInCI: false
 
   sweep:
     command: "cargo sweep --maxsize 20GB"
@@ -111,6 +112,7 @@ tasks:
       - ~:build
     options:
       cache: false
+      runInCI: false
 
   downloader-all-and-checksums:
     script: |

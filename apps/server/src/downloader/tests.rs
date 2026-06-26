@@ -471,7 +471,8 @@ async fn test_try_download_sha_mismatch() {
     .await;
     assert!(r.is_err());
     assert!(!dest.exists());
-    assert!(!dest.with_extension("tmp").exists());
+    let tmp = PathBuf::from(format!("{}.tmp.{}", dest.display(), std::process::id()));
+    assert!(!tmp.exists());
     m.assert();
 }
 
