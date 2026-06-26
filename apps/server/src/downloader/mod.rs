@@ -273,6 +273,9 @@ pub async fn run(
                     let (fpath, result) = res?;
                     match result {
                         Ok((size, sha256)) => {
+                            if !quiet {
+                                eprintln!("  {}: {} bytes, sha256: {sha256} OK", fpath, size);
+                            }
                             report_files.push(ReportFile {
                                 path: fpath.clone(),
                                 size,
@@ -281,9 +284,7 @@ pub async fn run(
                             });
                         }
                         Err(msg) => {
-                            if !quiet {
-                                eprintln!("  FAIL: {} ({msg})", fpath);
-                            }
+                            eprintln!("  FAIL: {} ({msg})", fpath);
                             report_files.push(ReportFile {
                                 path: fpath,
                                 size: 0,
@@ -353,6 +354,10 @@ pub async fn run(
                     match result {
                         Ok((size, sha256)) => {
                             if !quiet {
+                                eprintln!(
+                                    "  {}: {} bytes, sha256: {sha256} OK",
+                                    archive.path, size
+                                );
                                 eprintln!("  ARCHIVE {}: extracting ...", archive.path);
                             }
                             match extract_tar_bz2(&archive_file, &dest_dir, &archive.extract, quiet)
@@ -383,9 +388,7 @@ pub async fn run(
                                 }
                                 Err(e) => {
                                     let msg = format!("extraction failed: {e}");
-                                    if !quiet {
-                                        eprintln!("  FAIL: {} ({msg})", archive.path);
-                                    }
+                                    eprintln!("  FAIL: {} ({msg})", archive.path);
                                     report_files.push(ReportFile {
                                         path: archive_report_path(archive),
                                         size: 0,
@@ -396,9 +399,7 @@ pub async fn run(
                             }
                         }
                         Err(msg) => {
-                            if !quiet {
-                                eprintln!("  FAIL: {} archive ({msg})", archive.path);
-                            }
+                            eprintln!("  FAIL: {} archive ({msg})", archive.path);
                             report_files.push(ReportFile {
                                 path: archive_report_path(archive),
                                 size: 0,
@@ -423,6 +424,16 @@ pub async fn run(
         );
     }
 
+    let failed_paths: Vec<String> = report_files
+        .iter()
+        .filter(|f| f.status != "ok")
+        .map(|f| f.path.clone())
+        .collect();
+
+    if failed > 0 {
+        eprintln!("  FAILED: {}", failed_paths.join(", "));
+    }
+
     let report = Report {
         completed_at: jiff::Zoned::now().to_string(),
         base_dir: data_dir.to_string_lossy().into(),
@@ -436,7 +447,11 @@ pub async fn run(
     )?;
 
     if failed > 0 {
-        return Err(format!("{failed} file(s) failed to download").into());
+        return Err(format!(
+            "{failed} file(s) failed to download: {}",
+            failed_paths.join(", ")
+        )
+        .into());
     }
 
     Ok(())
@@ -824,10 +839,10 @@ fn extract_tar_bz2(
                             size,
                         );
                     } else {
-                        eprintln!("  {fname}: {size} bytes, sha256: {actual_sha}");
+                        eprintln!("  {fname}: {size} bytes, sha256: {actual_sha} OK");
                     }
                 } else {
-                    eprintln!("  {fname}: {size} bytes, sha256: {actual_sha}");
+                    eprintln!("  {fname}: {size} bytes, sha256: {actual_sha} OK");
                 }
             }
         }
