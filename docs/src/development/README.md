@@ -2,7 +2,7 @@
 
 ## File structure
 
-_TODO_
+整体项目结构见 [AGENTS.md](../../AGENTS.md) 目录树。各模块细节见对应开发文档。
 
 ## Chat Flow
 
@@ -139,12 +139,12 @@ sequenceDiagram
     participant DeviceSession as Device Session
     participant ServerSession as Server Session
     participant ServerMCPServer as Server MCP Server
-    alt if call device tool
-      ServerSession ->> DeviceSession: mcp tools call message request
-      DeviceSession -->> ServerSession: mcp tools call message response
-    else if call server tool
+    alt if call server tool (checked first)
       ServerSession ->> ServerMCPServer: mcp tools call http request
       ServerMCPServer -->> ServerSession: mcp tools call http response
+    else if call device tool (fallback)
+      ServerSession ->> DeviceSession: mcp tools call message request
+      DeviceSession -->> ServerSession: mcp tools call message response
     end
 ```
 
@@ -200,16 +200,19 @@ sequenceDiagram
 
 - mcp initialize message request
 
+  所有 MCP 消息在 WebSocket 上使用外层封装：
+
   ```json
   {
-    "jsonrpc": "2.0",
-    "method": "initialize",
-    "params": {
-      "capabilities": {
-        // 客户端能力，可选
-      }
-    },
-    "id": 1 // 请求 ID
+    "type": "mcp",
+    "payload": {
+      "jsonrpc": "2.0",
+      "method": "initialize",
+      "params": {
+        "capabilities": {}
+      },
+      "id": 1
+    }
   }
   ```
 
@@ -217,16 +220,19 @@ sequenceDiagram
 
   ```json
   {
-    "jsonrpc": "2.0",
-    "id": 1, // 匹配请求 ID
-    "result": {
-      "protocolVersion": "2024-11-05",
-      "capabilities": {
-        "tools": {} // 这里的 tools 似乎不列出详细信息，需要 tools/list
-      },
-      "serverInfo": {
-        "name": "...", // 设备名称 (BOARD_NAME)
-        "version": "..." // 设备固件版本
+    "type": "mcp",
+    "payload": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "protocolVersion": "2025-06-18",
+        "capabilities": {
+          "tools": {}
+        },
+        "serverInfo": {
+          "name": "...",
+          "version": "..."
+        }
       }
     }
   }
@@ -236,12 +242,15 @@ sequenceDiagram
 
   ```json
   {
-    "jsonrpc": "2.0",
-    "method": "tools/list",
-    "params": {
-      "cursor": "" // 用于分页，首次请求为空字符串
-    },
-    "id": 2 // 请求 ID
+    "type": "mcp",
+    "payload": {
+      "jsonrpc": "2.0",
+      "method": "tools/list",
+      "params": {
+        "cursor": ""
+      },
+      "id": 2
+    }
   }
   ```
 
@@ -249,23 +258,25 @@ sequenceDiagram
 
   ```json
   {
-    "jsonrpc": "2.0",
-    "id": 2, // 匹配请求 ID
-    "result": {
-      "tools": [ // 工具对象列表
-        {
-          "name": "self.get_device_status",
-          "description": "...",
-          "inputSchema": { ... } // 参数 schema
-        },
-        {
-          "name": "self.audio_speaker.set_volume",
-          "description": "...",
-          "inputSchema": { ... } // 参数 schema
-        }
-        // ... 更多工具
-      ],
-      "nextCursor": "..." // 如果列表很大需要分页，这里会包含下一个请求的 cursor 值
+    "type": "mcp",
+    "payload": {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "result": {
+        "tools": [
+          {
+            "name": "self.get_device_status",
+            "description": "...",
+            "inputSchema": { ... }
+          },
+          {
+            "name": "self.audio_speaker.set_volume",
+            "description": "...",
+            "inputSchema": { ... }
+          }
+        ],
+        "nextCursor": "..."
+      }
     }
   }
   ```
@@ -283,7 +294,7 @@ sequenceDiagram
 
   - "session_id"：会话标识
   - "type": "listen"
-  - "state"："start", "stop", "detect"（唤醒检测已触发）
+  - "state"："start", "stop", "detect"（唤醒检测已触发）, "text"（文本输入）
   - "mode"："auto", "manual" 或 "realtime"，表示识别模式。
 
 - stt message
@@ -316,49 +327,56 @@ sequenceDiagram
 
   ```json
   {
-    "jsonrpc": "2.0",
-    "method": "tools/call",
-    "params": {
-      "name": "self.audio_speaker.set_volume", // 要调用的工具名称
-      "arguments": {
-        // 工具参数，对象格式
-        "volume": 50 // 参数名及其值
-      }
-    },
-    "id": 3 // 请求 ID
+    "type": "mcp",
+    "payload": {
+      "jsonrpc": "2.0",
+      "method": "tools/call",
+      "params": {
+        "name": "self.audio_speaker.set_volume",
+        "arguments": {
+          "volume": 50
+        }
+      },
+      "id": 3
+    }
   }
   ```
 
 - mcp tools call message response
 
+  设备成功响应消息：
+
   ```json
   {
-    "jsonrpc": "2.0",
-    "id": 3, // 匹配请求 ID
-    "result": {
-      "content": [
-        // 工具执行结果内容
-        { "type": "text", "text": "true" } // 示例：set_volume 返回 bool
-      ],
-      "isError": false // 表示成功
+    "type": "mcp",
+    "payload": {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "result": {
+        "content": [
+          { "type": "text", "text": "true" }
+        ],
+        "isError": false
+      }
     }
   }
   ```
 
-  - 设备成功响应消息
+  设备失败响应消息：
 
   ```json
   {
-    "jsonrpc": "2.0",
-    "id": 3, // 匹配请求 ID
-    "error": {
-      "code": -32601, // JSON-RPC 错误码，例如 Method not found (-32601)
-      "message": "Unknown tool: self.non_existent_tool" // 错误描述
+    "type": "mcp",
+    "payload": {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "error": {
+        "code": -32601,
+        "message": "Unknown tool: self.non_existent_tool"
+      }
     }
   }
   ```
-
-  - 设备失败响应消息
 
 - tts message
 
@@ -392,3 +410,13 @@ sequenceDiagram
   ```
 
   - 让设备在界面上显示当前要播放或朗读的文本片段（例如用于显示给用户）。
+
+  ```json
+  {
+    "session_id": "xxx",
+    "type": "tts",
+    "state": "sentence_end"
+  }
+  ```
+
+  - 表示当前句子播放完毕。

@@ -21,10 +21,10 @@
 - **Config**: figment (TOML)
 - **ID**: xid (XID 格式)
 - **DB**: SQLite (默认) / PostgreSQL (可选)
-- **Error**: `thiserror` + `#[implement]` 宏
+- **Error**: `thiserror` + `#[error]` 宏 (framework-macros)
 - **Testing**: cucumber (BDD) + testcontainers
 - **ML**: Candle (candle-core, candle-transformers, candle-nn)
-- **Audio**: symphonia, wavers, resampler, opus
+- **Audio**: symphonia, wavers, rubato, opus
 - **ASR**: sherpa-onnx — SenseVoice
 - **TTS**: sherpa-onnx — Mute / MatchaTts
 - **VAD**: earshot (Silero VAD)
@@ -66,8 +66,8 @@
 ├── libs/                      共享库 (framework, macros, build-metadata)
 ├── apps/
 │   ├── server/                Rust 后端
-│   │   ├── src/               应用入口 (main.rs, clap, logging, runtime, server, signal, restart)
-│   │   ├── api/src/           API 路由层 + AI 模块 (ws, llm, tts, asr, vad, auth, ota, matrix, mcp 等)
+│   │   ├── src/               应用入口 (main.rs, clap, downloader, server 等)
+│   │   ├── api/src/           API 路由层 + AI 模块 (ws, llm, tts, asr, vad, auth, ota, matrix, mcp, record, util, common, error 等)
 │   │   ├── service/src/       业务逻辑层 (chobits/)
 │   │   ├── entity/src/        Sea-ORM Entity
 │   │   ├── migration/src/     数据库迁移
@@ -76,7 +76,7 @@
 │   ├── server-ui-e2e/         管理后台 E2E 测试 (Playwright)
 │   └── app/                   Flutter 跨平台客户端应用
 ├── libs/
-│   ├── framework/             框架层 (auth, config, data, error, logger, middleware, password 等)
+│   ├── framework/             框架层 (auth, config, data, database, deadlock, error, id, info, log, logging, middleware, panic, password, prelude, runtime, sentry, signal, trace, utils 等)
 │   │   └── macros/            proc-macro crate (`#[implement]`)
 │   ├── macros/                proc-macro crate (`#[config_example_generator]`)
 │   └── build-metadata/        构建元数据 crate (git 信息)
@@ -162,9 +162,12 @@ nix develop             # 默认完整环境（含 moon、just、mdbook、pkg-co
 ### 新增 AI 模型支持时
 
 1. `api/src/llm/`（或 `tts/`, `asr/`, `vad/`）: 实现对应 Trait
-2. 在 `api/src/config/` 中添加模型配置项
-3. 在 Factory 中注册模型创建逻辑
-4. 更新 `application-example.toml`
+2. 在 `api/src/config/` 中添加模型配置项（枚举变体 + 配置结构体）
+3. 创建 manifest: `apps/server/src/downloader/manifests/` 添加 JSON
+4. 在 `api/src/<category>/model/mod.rs` 注册模块
+5. 在 Factory 中注册模型创建逻辑（`create_model()` 添加 match arm）
+6. 添加测试（单元 + 集成 + 参考音频/闭环）
+7. 更新 `application-example.toml`
 
 ### 新增前端页面时 (server-ui)
 
@@ -193,8 +196,8 @@ nix develop             # 默认完整环境（含 moon、just、mdbook、pkg-co
 ### Fast Dev Loop
 
 - Rust 路由改动后运行 `cargo check` 验证类型，不用 `cargo run` 全量编译
-- 启动服务: `pnpm nx run chobits-server:run`
-- 启动前端: `pnpm exec nx run @chobits/server-ui:dev`
+- 启动服务: `moon run server:run`
+- 启动前端: `moon run server-ui:dev`
 - 运行测试: `cargo test --package api`
 
 ## 附录 架构概述
@@ -221,13 +224,13 @@ Client ← Audio Stream
 build-metadata (编译时 git 信息)
 framework-macros (proc-macro: #[implement])
 chobits-macros (proc-macro: #[config_example_generator])
-  └── framework (框架层: auth, config, error, database, id, logger, middleware, password, trace)
-       ├── entity (Sea-ORM 实体)
-       ├── migration (数据库迁移)
-       ├── web (rust-embed 静态文件)
-       ├── service (业务逻辑)
-       └── api (路由 + AI 模型管道)
-            └── server (应用入口)
+  └── framework (框架层: auth, config, data, database, deadlock, error, id, info, log, logging, middleware, panic, password, prelude, runtime, sentry, signal, trace, utils)
+       ├── entity (Sea-ORM 实体) → depends on framework
+       ├── migration (数据库迁移) → depends on framework, entity
+       ├── web (rust-embed 静态文件) → standalone
+       ├── service (业务逻辑) → depends on framework, entity
+       ├── api (路由 + AI 模型管道) → depends on framework, entity, migration, service, web
+       └── server (应用入口) → depends on api
 ```
 
 ### 框架错误码
@@ -238,4 +241,10 @@ chobits-macros (proc-macro: #[config_example_generator])
 | 2xxxxx | 第三方错误 (JWT, 密码等) |
 | 3xxxxx | 框架错误 (验证, 请求格式等) |
 | 4xxxxx | 严重错误 (内部错误, 资源未找到) |
+| 401xxx | Auth 错误 |
+| 402xxx | AuthErrorCode |
+| 403xxx | OTA 错误 |
+| 404xxx | WsErrorCode |
 | 5xxxxx | 业务模块错误 (用户, OTA 等) |
+| 503xxx | AI 模型错误 (Chat/TTS/ASR) |
+| 504xxx | WsErrorCode |

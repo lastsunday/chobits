@@ -8,7 +8,7 @@
 
 ### 1. Validate server output
 
-- Session 集成测试（`test_tts_audio_collect` / `test_tts_vits`）产生 WAV 文件，播放干净
+- Session 集成测试产生 WAV 文件，播放干净
 - **结论：服务端音频管线（TTS → resample → Opus → WebSocket）无质量问题**
 
 ### 2. Rule out each tunable
@@ -80,7 +80,7 @@ Frame 228:                   │
 
 ### 具体机制
 
-1. **VITS 模型**对完整句子生成连续 PCM（~13 秒推理时间）
+1. **TTS 模型**对完整句子生成连续 PCM（~13 秒推理时间）
 2. PCM 被分割为 228 帧（60ms/帧），经 mpsc channel 同时到达 `OutputController`
 3. **旧 pacing 逻辑**以 `audio_start_time`（TTS::Start 时刻）为基准做绝对目标计算：
    ```
@@ -169,8 +169,8 @@ Frame 4:                 │
 | `apps/server/api/src/ws/session/output_controller.rs` | 帧发送 pacing 逻辑（修复位置） |
 | `apps/server-ui/public/test/device/js/core/audio/player.js` | 客户端 Opus 解码 + 批量取帧 |
 | `apps/server-ui/public/test/device/js/core/audio/stream-context.js` | Web Audio API 链式调度 |
-| `apps/server/api/src/tts/model/vits/mod.rs` | VITS 模型音频生成 |
-| `apps/server/api/src/ws/mod.rs` | WebSocket 帧发送 |
+| `apps/server/api/src/tts/model/matcha/mod.rs` | MatchaTts 模型音频生成 |
+| `apps/server/api/src/ws/session/mod.rs` | WebSocket 会话帧发送 |
 | `apps/server/api/src/tts/mod.rs` | `encode_sample_to_tts_packet` 帧分割编码 |
 
 ## TTS 测试工具
@@ -182,9 +182,9 @@ Frame 4:                 │
 | 函数 | 说明 |
 |------|------|
 | `ws_root()` | monorepo 根路径（`CARGO_MANIFEST_DIR` 往上 3 层） |
-| `vits_audio_config()` | VITS 测试标准 AudioConfig（16000Hz / mono / 20ms 帧） |
-| `run_vits_test(tts_config, audio_config, wav)` | 完整流程：创建模型 → TTS 流式推理 → Opus 解码 → 写 WAV |
-| `run_length_scale_scan(model, dir, audio_cfg, wav_prefix, ls_values, sid)` | 扫描多个 `length_scale` 值，找到语速校准点 |
+| `test_audio_config()` | 测试标准 AudioConfig（16000Hz / mono / 20ms 帧） |
+| `run_tts_test(tts_config, audio_config, wav)` | 完整流程：创建模型 → TTS 流式推理 → Opus 解码 → 写 WAV |
+| `run_length_scale_scan(dir, audio_cfg, wav_prefix, ls_values)` | 扫描多个 `length_scale` 值，找到语速校准点 |
 | `tts_stream(text)` | 从字符串创建 TTS 输入 `Stream` |
 | `analyze_audio(samples, sample_rate, gen_elapsed, std_duration_secs)` | 返回 `TtsAudioDiagnostics` 诊断结果 |
 | `estimate_std_duration(text)` | 基于文本内容估算标准时长（OmniVoice 权重系统） |
@@ -203,19 +203,19 @@ Frame 4:                 │
 
 | 维度 | 字段 | 评分依据 | 等级 |
 |------|------|---------|------|
-| **Audio**（音质） | `shimmer_pct`, `dynamic_range_db` | shimmer 70% + DR 30% | E/G/F/P/B |
-| **Perf**（性能） | `rtf` | RTF 实时因子阈值 | E/G/F/P/B |
-| **Timing**（语速） | `duration_secs`, `std_duration_secs`, `std_diff_secs` | 偏离标准时长百分比 | E/G/F/P/B |
+| **Audio**（音质） | `shimmer_pct`, `dynamic_range_db` | shimmer 70% + DR 30% | A/B/C/D/F |
+| **Perf**（性能） | `rtf` | RTF 实时因子阈值 | A/B/C/D/F |
+| **Timing**（语速） | `duration_secs`, `std_duration_secs`, `std_diff_secs` | 偏离标准时长百分比 | A/B/C/D/F |
 
 **等级字母：**
 
 | 得分范围 | 等级 |
 |----------|------|
-| ≥ 86 | E（Excellent） |
-| 66–85 | G（Good） |
-| 41–65 | F（Fair） |
-| 21–40 | P（Poor） |
-| < 21 | B（Bad） |
+| ≥ 86 | A |
+| 66–85 | B |
+| 41–65 | C |
+| 21–40 | D |
+| < 21 | F |
 
 #### Audio 评分
 
@@ -225,19 +225,19 @@ Frame 4:                 │
 
 | 等级 | Shimmer (%) | 含义 |
 |------|-------------|------|
-| Excellent | < 3.81 | 健康人声水平 |
-| Good | 3.81–5.0 | 正常范围，轻微可感 |
-| Fair | 5.0–6.0 | 警告区，明显不稳定 |
-| Poor | 6.0–10.0 | 病理范围，粗糙/抖动 |
-| Bad | > 10.0 | 超出算法可靠上限 |
+| A | < 3.81 | 健康人声水平 |
+| B | 3.81–5.0 | 正常范围，轻微可感 |
+| C | 5.0–6.0 | 警告区，明显不稳定 |
+| D | 6.0–10.0 | 病理范围，粗糙/抖动 |
+| F | > 10.0 | 超出算法可靠上限 |
 
 **Dynamic Range 等级：**
 
 | 等级 | dB | 含义 |
 |------|-----|------|
-| Good | > 20 | 达到自然语音水平 |
-| Fair | 15–20 | 偏压缩，动态不足 |
-| Poor | < 15 | 明显扁平/沉闷 |
+| A | > 20 | 达到自然语音水平 |
+| C | 15–20 | 偏压缩，动态不足 |
+| F | < 15 | 明显扁平/沉闷 |
 
 **综合分值（权重 70% + 30%，线性插值）：**
 
@@ -257,11 +257,11 @@ Frame 4:                 │
 
 | RTF | 得分 | 等级 |
 |-----|------|------|
-| < 0.1 | 100 | E |
-| 0.1–0.3 | 100→80 | G |
-| 0.3–0.5 | 80→60 | F |
-| 0.5–1.0 | 60→0 | P |
-| >= 1.0 | 0 | B |
+| < 0.1 | 100 | A |
+| 0.1–0.3 | 100→80 | B |
+| 0.3–0.5 | 80→60 | C |
+| 0.5–1.0 | 60→0 | D |
+| >= 1.0 | 0 | F |
 
 #### Timing 评分
 
@@ -269,16 +269,16 @@ Frame 4:                 │
 
 | 偏离 | 得分 | 等级 |
 |------|------|------|
-| < 5% | 100 | E |
-| 5–20% | 100→80 | G |
-| 20–50% | 80→40 | F |
-| 50–100% | 40→0 | P |
-| >= 100% | 0 | B |
+| < 5% | 100 | A |
+| 5–20% | 100→80 | B |
+| 20–50% | 80→40 | C |
+| 50–100% | 40→0 | D |
+| >= 100% | 0 | F |
 
 ### 输出格式
 
 ```
-Audio:scr=30(P) Perf:scr=84(G) Timing:scr=74(G) | sh=18.07%(Bad) dr=25.9dB(Good) rtf=0.26 gen=2.8s dur=10.60s(std=14.1s-25%) Marginal...
+Audio:scr=30(D) Perf:scr=84(B) Timing:scr=74(B) | sh=18.07%(F) dr=25.9dB(A) rtf=0.26 gen=2.8s dur=10.60s(std=14.1s-25%) Marginal...
 ```
 
 三部分一目了然：音质→P、性能→G、语速→G，原始指标跟在 `|` 后。
@@ -298,7 +298,7 @@ cargo test --package api --test tts_analysis_test -- test_tts_matcha_zh_en_scan_
 
 | 模型 | 默认 `length_scale` |
 |------|-------------------|
-| matcha-icefall-zh-en | **1.3** |
+| matcha-icefall-zh-en | **1.0** |
 
 校准值已写入 `default_length_scale()`（`api/src/tts/mod.rs`），在 `tts_options` 未指定 `length_scale` 时自动生效。
 
@@ -402,6 +402,5 @@ cargo test --package api --test tts_analysis_test -- test_grid_search_compressor
 | 文件 | 作用 |
 |------|------|
 | `apps/server/api/src/util/compressor.rs` | `adaptive_normalize()`、`evaluate_compressed()`、历史 `pcm_compress()` / `grid_search_compressor()` |
-| `apps/server/api/src/tts/model/vits/mod.rs` | VITS 模型的 `stream()` 中调用 `adaptive_normalize()` |
-| `apps/server/api/src/tts/model/matcha/mod.rs` | Matcha 模型的 `stream()` 中调用 `adaptive_normalize()` |
+| `apps/server/api/src/util/compressor.rs` | `adaptive_normalize()` 定义位置（当前未被管线调用） |
 | `apps/server/api/tests/tts_analysis_test.rs` | `test_compare_raw_vs_processed`、`test_grid_search_compressor` |

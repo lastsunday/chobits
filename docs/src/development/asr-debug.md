@@ -4,24 +4,15 @@
 
 ASR 模块位于 `apps/server/api/src/asr/`，使用 **Factory 单例模式**管理模型实例，底层集成 **sherpa-onnx** 的 `OfflineRecognizer`。
 
-```
-apps/server/api/src/asr/
-├── mod.rs                 # Asr trait、AsrFactory、RecognizerResult
-└── model/
-    ├── mod.rs
-    ├── sense_voice/       # AsrSenseVoice
-    └── void/              # AsrVoid (no-op)
-```
-
 ### Factory 模式
 
 ```rust
-AsrFactory::init(config).await;          // 应用启动时初始化
-let model = AsrFactory::global().default(); // 获取 Arc<Mutex<Box<dyn Asr>>>
-let result = model.lock().await.transcribe(sample_rate, &samples).await;
+AsrFactory::init(config).await;                             // 应用启动时初始化
+let mut model = AsrFactory::global().default().lock().await; // 获取 Arc<Mutex<Box<dyn Asr>>>
+let result = model.transcribe(sample_rate, &samples).await;
 ```
 
-初始化在 `api/src/lib.rs:105`，消费点在 `ws/mod.rs:120`（WebSocket 实时语音）和 `matrix/client.rs:231`（Matrix 协议）。
+初始化在 `api/src/lib.rs:121`，消费点在 `ws/session/listener.rs:238`（WebSocket 实时语音）和 `matrix/client.rs`（Matrix 协议）。
 
 ### Asr trait
 
@@ -49,16 +40,16 @@ pub trait Asr: Send + Sync {
 
 ### Downloader Manifests
 
-| Manifest | 存档 URL |
-|----------|---------|
-| `manifests/asr/sense_voice.json` | `sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2` |
+| Manifest | 模型 |
+|----------|------|
+| `manifests/asr/sense_voice.json` | SenseVoice |
 
 ```shell
 # 下载当前配置的 ASR 模型
 moon run server:downloader -- asr
 
 # 下载指定 ASR 模型
-moon run server:downloader -- asr sensevoice
+moon run server:downloader -- asr sense_voice
 ```
 
 ## 性能基准
@@ -133,15 +124,15 @@ CER=XX.X%(X) WER=XX.X% Acc=XX.X% Perf=XX.X% Total=XX.X% | RTF=X.XXX ASR=X.Xs Aud
 
 ### Session 集成测试
 
-`session_test.rs` 中的 ASR 相关测试均使用真实 SenseVoice 模型：
-
 | 测试名 | ASR 角色 | 说明 |
 |--------|---------|------|
 | `test_asr_voice_input_manual` | SenseVoice + Echo LLM | 发送 JFK WAV 音频，断言 STT 文本精确匹配 |
 | `test_chat_flow_listen_auto` | SenseVoice (全管道) | VAD 判断语音结束 → ASR → LLM → TTS |
 | `test_chat_flow_listen_realtime` | SenseVoice (全管道) | 实时模式，发送音频 + Detect 文本 |
+| `test_chat_flow_listen_realtime_silent_voice_connection_timeout` | Void (断开测试) | 静默超时断开，无需真实 ASR |
 | `test_chat_flow_handle_text_message` | SenseVoice (全管道) | 文本输入 → LLM → TTS |
 | `test_chat_flow_handle_text_message_multiple_time` | SenseVoice (全管道) | 19 轮文本对话 |
+| `test_chat_flow_break` | Void (中断测试) | 中断恢复，无需真实 ASR |
 
 ### 测试命令
 
@@ -184,6 +175,6 @@ cargo test --package api --test asr_test -- --ignored --nocapture
 | `apps/server/api/src/config/asr.rs` | AsrConfig 结构体 |
 | `apps/server/api/src/config/mod.rs` | AsrModel 枚举 |
 | `apps/server/src/downloader/manifests/asr/` | 下载 manifest |
-| `apps/server/api/tests/asr_test.rs` | 5 个 ASR 集成测试 |
+| `apps/server/api/tests/asr_test.rs` | 3 个 ASR 集成测试 |
 | `apps/server/api/tests/common/asr.rs` | AsrDiagnostics 诊断系统 |
-| `apps/server/api/tests/session_test.rs` | Session 集成 ASR 测试 |
+| `apps/server/api/tests/session/asr.rs` | Session 集成 ASR 测试 |

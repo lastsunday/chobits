@@ -4,10 +4,10 @@
 
 ```shell
 pnpm i
-pnpm exec nx run @chobits/server-ui:build
+moon run server-ui:build
 chobits-server download
-# using cuda: pnpm nx run chobits-server:dev_cuda
-pnpm nx run chobits-server:dev
+# using cuda: moon run server:run --features cuda
+moon run server:run
 ```
 
 - Access home page <http://127.0.0.1:3000>
@@ -25,7 +25,7 @@ pnpm nx run chobits-server:dev
 
 ```shell
 pnpm i
-pnpm exec nx run @chobits/server-ui:dev
+moon run server-ui:dev
 ```
 
 #### apps/app

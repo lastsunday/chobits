@@ -7,16 +7,7 @@
 - **VAD**：纯决策引擎，只回答"当前帧是否有语音"，不管理任何音频缓冲区
 - **Listener**：音频管道管理器，负责 Opus 解码、VAD 窗口循环、音频积累和状态管理
 
-```
-apps/server/api/src/
-├── vad/                         # VAD 模块
-│   ├── mod.rs                   # Vad trait、VadFactory
-│   └── model/
-│       ├── earshot/mod.rs       # VadEarshot (Silero VAD)
-│       └── void/mod.rs          # VadVoid (no-op)
-└── ws/session/
-    └── listener.rs              # Listener trait、DefaultListener
-```
+VAD 模块位于 `apps/server/api/src/vad/`（Vad trait + VadFactory + model/），Listener 位于 `apps/server/api/src/ws/session/listener.rs`，会话记录位于 `apps/server/api/src/record/`。
 
 ### 处理流程
 
@@ -59,12 +50,15 @@ sequenceDiagram
 定义在 `apps/server/api/src/vad/mod.rs`：
 
 ```rust
-#[async_trait]
 pub trait Vad: Send + Sync {
-    async fn accept_waveform(&mut self, samples: &[f32]) -> Result<f32, ModelError>;
-    async fn is_speech(&mut self) -> bool;
-    async fn clear(&mut self);
-    async fn window_size(&self) -> usize;
+    /// Feed audio frame (window_size samples). Returns speech probability [0, 1].
+    fn accept_waveform(&mut self, samples: &[f32]) -> Result<f32, ModelError>;
+    /// Whether the state machine currently considers speech active.
+    fn is_speech(&mut self) -> bool;
+    /// Reset all internal state.
+    fn clear(&mut self);
+    /// Number of samples expected per frame.
+    fn window_size(&self) -> usize;
 }
 ```
 
@@ -147,12 +141,12 @@ vad_min_silence_duration = 1000.0
 ### Factory 模式
 
 ```rust
-// 初始化
-VadFactory::init(&config).await;
+// 初始化（应用启动时调用一次）
+VadFactory::init(config).await;
 
-// 使用
-let vad = VadFactory::global().default();  // Arc<Mutex<Box<dyn Vad>>>
-vad.lock().await.accept_waveform(&samples).await?;
+// 使用（create_model 为静态方法，无需 global()）
+let vad = VadFactory::create_model(&VadConfig { ... });  // Box<dyn Vad>
+vad.accept_waveform(&samples)?;
 ```
 
 ## Listener 模块
@@ -164,13 +158,15 @@ vad.lock().await.accept_waveform(&samples).await?;
 ```rust
 #[async_trait]
 pub trait Listener: Send + Sync {
-    async fn listen(&mut self, data: &[u8]);                                 // 处理 Opus 包
+    async fn accept(&mut self, input: ListenInput);                          // 处理 Opus 包或文本
     fn set_state(&mut self, state: ListenState);
     fn get_state(&self) -> ListenState;
-    async fn get_result(&mut self) -> Result<ListenResult, ModelError>;      // ASR 转录
     async fn reset(&mut self, silence_voice_timeout: Option<i64>);
-    async fn set_sender(&mut self, tx: Sender<Result<FrameResult, AppError>>);
-    async fn get_voice_data(&self) -> Vec<f32>;                              // 调试/测试用
+    async fn set_sender(&mut self, tx: UnboundedSender<OutputMessage>);
+    async fn take_voice(&mut self) -> Vec<f32>;                              // 提取语音数据（不触发 ASR）
+    async fn take_result(&mut self) -> (Vec<f32>, Result<ListenResult, ModelError>); // ASR 转录
+    fn clone_asr(&self) -> Option<Arc<Mutex<Box<dyn Asr>>>>;
+    async fn get_raw_pcm(&mut self) -> Vec<f32>;                             // 调试/测试用
 }
 ```
 
@@ -205,53 +201,61 @@ Idle ──(首次 listen())──▶ Listening(false)
 
 ```rust
 pub struct DefaultListener {
-    temp_voice_data: Arc<Mutex<Vec<f32>>>,   // Opus 解码后的 PCM 暂存区
-    voice_data: Arc<Mutex<Vec<f32>>>,        // 累积的语音 PCM（最终送 ASR）
-    vad: Arc<Mutex<Box<dyn Vad>>>,
+    temp_voice_data: Vec<f32>,                // Opus 解码后的 PCM 暂存区
+    voice_data: Vec<f32>,                     // 累积的语音 PCM（最终送 ASR）
+    vad: Box<dyn Vad>,
     asr: Arc<Mutex<Box<dyn Asr>>>,
-    decoder: Arc<Mutex<opus_rs::OpusDecoder>>,
-    state: ListenState,
+    decoder: StdMutex<opus::Decoder>,
+    pub state: ListenState,
     silence_voice_timeout: Option<i64>,       // 单位 ms
     latest_speaking_time: Option<i64>,
     audio_config: Arc<AudioConfig>,
+    error_tx: Option<UnboundedSender<OutputMessage>>,
 
     // 前缀缓冲（300ms ring buffer）
     prefix_buffer: Vec<f32>,                  // 最大 4800 samples
     prefix_flushed: bool,                     // 当前轮次是否已刷入
+    total_pcm: Vec<f32>,                      // 调试用累积 PCM
+    pending_text: Option<String>,             // 文本输入暂存
 }
 ```
 
-#### listen() 循环
+#### accept() 循环
 
 ```
-Opus 包
+ListenInput
   │
-  ▼
-OpusDecoder.decode() → PCM f32
+  ├── Text(text) → pending_text = Some(text)
   │
-  ▼
-追加到 temp_voice_data
-  │
-  ▼
-while temp_voice_data.len() > window_size:
-  │
-  ├─ drain 256 samples → window
-  ├─ prefix_buffer.extend(&window)
-  ├─ trim prefix_buffer to ≤4800
-  ├─ VAD.accept_waveform(&window)
-  │
-  └─ if VAD.is_speech():
-  │      state = Listening(true)
-  │      if !prefix_flushed:
-  │          voice_data += prefix_buffer (300ms 前缀)
-  │          prefix_flushed = true
-  │      else:
-  │          voice_data += window (仅当前帧)
-  │   else:
-  │      prefix_flushed = false
-  │
-  ▼
-检查静默超时
+  └── Audio(opus_packet)
+        │
+        ▼
+      OpusDecoder.decode_float() → PCM f32
+        │
+        ▼
+      追加到 temp_voice_data
+        │
+        ▼
+      while temp_voice_data.len() > window_size:
+        │
+        ├─ drain window_size samples → window
+        ├─ prefix_buffer.extend(&window)
+        ├─ trim prefix_buffer to ≤4800
+        ├─ VAD.accept_waveform(&window)  (同步)
+        │
+        └─ if VAD.is_speech():
+        │      state = Listening(true)
+        │      if !prefix_flushed:
+        │          voice_data += prefix_buffer (300ms 前缀)
+        │          prefix_flushed = true
+        │          prefix_buffer = Vec::new()
+        │      else:
+        │          voice_data += window (仅当前帧)
+        │   else:
+        │      prefix_flushed = false
+        │
+        ▼
+      检查静默超时
 ```
 
 #### 前缀缓冲设计
@@ -279,7 +283,7 @@ if let (Some(timeout), Some(last_speech)) = (self.silence_voice_timeout, self.la
 ```
 
 - `latest_speaking_time` 在每个 `is_speech()` 帧更新
-- 静默超时到达后 state 变为 `End`，由 Session 触发 ASR 转录
+- 静默超时到达后 state 变为 `End`，由 Session 调用 `take_result()` 触发 ASR 转录
 
 ## 测试策略
 
@@ -319,6 +323,6 @@ frames   correct  TP       FP       TN       FN       Precision    Recall       
 
 ### 集成测试
 
-`tests/session_test.rs` — 完整管道集成测试（`#[ignore]`，需真实模型文件）：
+`tests/session/` — 完整管道集成测试（`#[ignore]`，需真实模型文件）：
 - `test_chat_flow_hello`：Void VAD + Void ASR + Echo LLM + Mute TTS
 - `test_chat_flow_listen_manual`：Opus 编码/解码 + VAD + Void ASR

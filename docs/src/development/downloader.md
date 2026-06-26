@@ -4,23 +4,7 @@
 
 ## 目录结构
 
-```
-apps/server/src/downloader/
-├── manifests/           # 编译时嵌入的 manifest JSON
-│   ├── asr/             # 语音识别
-│   │   ├── qwen3.json
-│   │   └── whisper.json
-│   ├── llm/             # 大语言模型
-│   │   └── qwen3.json
-│   ├── reference/       # 参考音频
-│   │   └── audio.json
-│   ├── tts/             # 语音合成
-│   │   ├── pocket-tts.json
-│   │   └── voxcpm.json
-│   └── vad/             # 语音活动检测
-├── mod.rs               # 业务逻辑（932 行）
-└── tests.rs             # 单元测试（486 行，33 个用例）
-```
+Manifest JSON 位于 `apps/server/src/downloader/manifests/{category}/`，编译时通过 `include_dir!` 嵌入二进制。
 
 ## Manifest 文件格式
 
@@ -28,14 +12,14 @@ apps/server/src/downloader/
 
 ```json
 {
-  "config": { "category": "tts", "model": "voxcpm" },
-  "default_variant": "0.5b",
+  "config": { "category": "tts", "model": "matcha" },
+  "default_variant": "matcha-icefall-zh-en",
   "variants": {
-    "0.5b": {
+    "matcha-icefall-zh-en": {
       "files": [
         {
-          "url": "https://huggingface.co/openbmb/VoxCPM-0.5B/resolve/.../config.json",
-          "path": "tts/model/voxcpm/0.5b/config.json",
+          "url": "https://huggingface.co/.../model.onnx",
+          "path": "tts/model/matcha/matcha-icefall-zh-en/model.onnx",
           "sha256": null
         }
       ]
@@ -54,9 +38,41 @@ apps/server/src/downloader/
 | `files[].path` | string | 相对数据目录的存储路径 |
 | `files[].sha256` | string / null | 可选的 SHA256 校验值，`null` 表示跳过校验 |
 
+### archives 格式
+
+除 `files` 外，manifest 也支持 `archives` 字段，用于下载并解压压缩包。3/4 的 manifest 使用此格式：
+
+```json
+{
+  "config": { "category": "asr", "model": "sense_voice" },
+  "default_variant": "default",
+  "variants": {
+    "default": {
+      "archives": [
+        {
+          "url": "https://huggingface.co/.../sense-voice-zh-en-ja-ko-yue-2025-03-19.tar.bz2",
+          "path": "asr/model/sense_voice/default/",
+          "sha256": "abc123..."
+        }
+      ]
+    }
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `archives[].url` | string | 压缩包下载 URL |
+| `archives[].path` | string | 解压目标目录 |
+| `archives[].sha256` | string / null | 可选的 SHA256 校验值 |
+
+支持的压缩格式：`.tar.gz`, `.tar.bz2`, `.zip`。下载后自动解压到 `path` 目录。
+
+当前使用 `archives` 的 manifest：`asr/sense_voice.json`、`llm/qwen3.json`、`reference/audio.json`。仅 `tts/matcha.json` 使用 `files` 格式。
+
 ### 路径推导规则
 
-`path` 字段统一使用 `{category}/model/{model}/{variant}/{file}` 格式，全小写。例如 TTS VoxCPM 0.5b 的配置文件路径为 `tts/model/voxcpm/0.5b/config.json`。
+`path` 字段统一使用 `{category}/model/{model}/{variant}/{file}` 格式，全小写。例如 TTS Matcha 的配置文件路径为 `tts/model/matcha/matcha-icefall-zh-en/model.onnx`。
 
 配置中的 `*_path` 项（如 `tts_path`）现在为可选项。当缺省时，系统根据 `{model}+{variant}` 自动推导路径。
 
@@ -86,7 +102,7 @@ chobits downloader install [category] [model] [variant] [options]
 | 参数 | 说明 |
 |------|------|
 | `category` | 分类：`tts`, `asr`, `llm`, `vad`, `reference`；缺省为全部 |
-| `model` | 模型名，如 `qwen3`, `voxcpm`, `whisper` |
+| `model` | 模型名，如 `qwen3`, `matcha`, `sense_voice` |
 | `variant` | 变体名，如 `0.5b`, `1.7b`, `tiny`, `default` |
 | `--data-dir <path>` | 数据目录，默认 `data` |
 | `--quiet` | 静默模式，不输出进度 |
@@ -159,11 +175,8 @@ chobits downloader list [category] [--json]
 
 ```
 tts
-  ├── pocket-tts
-  │   └── default (default)
-  └── voxcpm
-      ├── 0.5b (default)
-      └── 1.5b
+  └── matcha
+      └── matcha-icefall-zh-en (default)
 ```
 
 **Moon tasks：**
@@ -171,7 +184,7 @@ tts
 ```shell
 moon run server:downloader                # 等价于 chobits downloader install
 moon run server:downloader -- vad         # 仅下载 VAD
-moon run server:downloader -- tts voxcpm  # 仅下载 TTS VoxCPM
+moon run server:downloader -- tts matcha  # 仅下载 TTS Matcha
 moon run server:downloader-list           # 列出所有可用模型
 moon run server:downloader-list -- --json # JSON 格式输出
 moon run server:download-all-and-checksums # 下载所有模型并更新 SHA
@@ -225,7 +238,7 @@ moon run server:download-all-and-checksums # 下载所有模型并更新 SHA
   "completed_at": "2026-06-16T12:00:00Z",
   "base_dir": "data",
   "files": [
-    { "path": "tts/model/voxcpm/0.5b/config.json", "size": 1024, "sha256": "abc...", "status": "downloaded" }
+    { "path": "tts/model/matcha/matcha-icefall-zh-en/vocos-16khz-univ.onnx", "size": 1024, "sha256": "abc...", "status": "downloaded" }
   ]
 }
 ```
@@ -240,8 +253,8 @@ moon run server:download-all-and-checksums # 下载所有模型并更新 SHA
 |----------|--------|----------|
 | `tts_model` | `matchatts` / `mute` | `mute` 跳过 |
 | `asr_model` | `sensevoice` / `void` | `void` 跳过 |
-| `llm_model` | `qwen3` / `echo` / `mini-cpm4` | `echo`/`mini-cpm4` 跳过 |
-| `vad_model` | `earshot` / `void` | `earshot`/`void` 跳过 |
+| `llm_model` | `qwen3` / `echo` | `echo` 跳过 |
+| `vad_model` | `earshot` / `void` | 均跳过（earshot 内嵌，void no-op） |
 
 ### config 文件查找
 
@@ -254,9 +267,9 @@ moon run server:download-all-and-checksums # 下载所有模型并更新 SHA
 | 模块 | 默认模型 | 说明 |
 |------|----------|------|
 | TTS | MatchaTts（`matcha-icefall-zh-en`） | 下载 `matcha` |
-| ASR | SenseVoice（默认变体） | 下载 `sensevoice` |
+| ASR | SenseVoice（默认变体） | 下载 `sense_voice` |
 | LLM | Qwen3（默认变体） | 下载 `qwen3` |
-| VAD | Earshot | 默认配置中跳过，不下载 |
+| VAD | Earshot | 内嵌权重，不下载 |
 
 ### load_selections / upsert_config
 
@@ -269,12 +282,12 @@ moon run server:download-all-and-checksums # 下载所有模型并更新 SHA
 
 ```json
 {
-  "tts/model/voxcpm/1.5b/config.json": {
-    "url": "http://localhost:8080/config.json",
+  "tts/model/matcha/matcha-icefall-zh-en/model.onnx": {
+    "url": "http://localhost:8080/model.onnx",
     "sha256": "abc123..."
   },
-  "tts/model/voxcpm/1.5b/model.safetensors": {
-    "url": "http://localhost:8080/model.safetensors",
+  "llm/model/qwen3/0.6b/model.gguf": {
+    "url": "http://localhost:8080/model.gguf",
     "sha256": null
   }
 }

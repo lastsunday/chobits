@@ -1,16 +1,10 @@
 # Contributing
 
-欢迎对项目的贡献！以下是参与开发的指南。
+Welcome! Here's how to get started contributing to this project.
 
 ## Development Environment
 
-### Prerequisites
-
-| Requirement | Version |
-|-------------|---------|
-| Node.js     | 22 (see `.node-version`) |
-| pnpm        | 10.13.1 |
-| Rust        | nightly (edition 2024) |
+This project uses **Lix** (a community fork of Nix) + **direnv** to manage the development environment. See the "Development Environment Setup" section in [AGENTS.md](../AGENTS.md) for details.
 
 ### Quick Start
 
@@ -18,14 +12,11 @@
 # Install dependencies
 pnpm install
 
-# Start extension dev server (hot-reload)
-pnpm exec nx run @job-hunting/extension:dev
+# Start backend dev server
+moon run server:run
 
-# Start server UI dev server
-pnpm exec nx run @job-hunting/server-ui:dev
-
-# Start Rust backend
-cd apps/server && cargo run
+# Start admin UI dev server (separate terminal)
+moon run server-ui:dev
 
 # Build docs
 cd docs && mdbook serve
@@ -41,17 +32,13 @@ We use [Conventional Commits](https://www.conventionalcommits.org/):
 
 Common types: `feat`, `fix`, `refactor`, `test`, `docs`, `ci`, `chore`, `style`, `perf`, `build`.
 
-Examples:
-- `feat(job): add resume parsing`
-- `fix(extension): correct auth redirect`
-- `docs: update API reference`
+Breaking changes use `feat!:` prefix or `BREAKING CHANGE:` footer.
 
 ### Before Submitting
 
-- Run `cargo fmt && cargo clippy` for Rust changes
-- Run `cargo test` to verify Rust tests
-- Run `pnpm exec nx typecheck` for TypeScript projects
-- Ensure all existing tests pass
+- Rust: `cargo fmt && cargo clippy && cargo test`
+- TypeScript: `moon run server-ui:typecheck`
+- Make sure all existing tests pass
 
 ## Pull Request Process
 
@@ -61,25 +48,12 @@ Examples:
 4. Push to the branch: `git push origin feat/my-feature`
 5. Open a Pull Request
 
-## Project Structure
-
-```
-├── apps/
-│   ├── server/         Rust backend (Axum + Sea-ORM)
-│   ├── server-ui/      Admin UI (React + Mantine + TanStack Router)
-│   └── extension/      Browser extension (WXT + React + Ant Design)
-├── libs/
-│   └── analysis/       Lit Web Components analysis library
-├── docs/               mdBook project documentation
-└── packages/           Workspace placeholders
-```
-
 ## Code Style
 
 - Rust: Edition 2024, snake_case for functions/variables, PascalCase for types
 - TypeScript: camelCase for functions/variables, PascalCase for components/classes
-- File naming: kebab-case for `.tsx`/`.ts` files
-- DB schema: snake_case for tables and columns
+- File naming: camelCase for `.tsx`/`.ts` files
+- DB schema: snake_case for table and column names
 - URI: snake_case for API endpoints
 
-See [AGENTS.md](./AGENTS.md) in the repository root for full details on code conventions, error handling, and development workflow.
+See [AGENTS.md](../AGENTS.md) in the repository root for full details on code conventions, error handling, and development workflow.
