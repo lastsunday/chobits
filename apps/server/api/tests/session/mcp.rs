@@ -1,4 +1,3 @@
-use api::ws::frame::{Frame, FrameResult};
 use rmcp::model::{
     CallToolResult, Content, Icon, Implementation, InitializeResult, ListToolsResult,
     ProtocolVersion, RawTextContent, ServerCapabilities,
@@ -10,6 +9,7 @@ use service::chobits::message::{
     mcp::McpMessage,
     tts::{TtsMessage, TtsState},
 };
+use service::ws::frame::{Frame, FrameResult};
 use std::sync::atomic::{AtomicI64, Ordering};
 use tokio_stream::StreamExt;
 use tracing::debug;

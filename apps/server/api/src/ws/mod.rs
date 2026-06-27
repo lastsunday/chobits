@@ -1,4 +1,3 @@
-pub mod frame;
 pub mod message_converter;
 pub mod session;
 
@@ -200,44 +199,44 @@ async fn on_send<W>(
     while let Some(msg) = output.next().await {
         match msg.payload {
             Ok(frame) => match frame {
-                frame::FrameResult::HelloResult(message) => {
+                service::ws::frame::FrameResult::HelloResult(message) => {
                     if send_text(&mut write, &message).await {
                         info!("send hello data failure");
                         break;
                     }
                 }
-                frame::FrameResult::STTResult(message) => {
+                service::ws::frame::FrameResult::STTResult(message) => {
                     if send_text(&mut write, &message).await {
                         info!("send stt data failure");
                         break;
                     }
                 }
-                frame::FrameResult::LLMResult(message) => {
+                service::ws::frame::FrameResult::LLMResult(message) => {
                     if send_text(&mut write, &message).await {
                         info!("send llm data failure");
                         break;
                     }
                 }
-                frame::FrameResult::TTSResult(message) => {
+                service::ws::frame::FrameResult::TTSResult(message) => {
                     if send_text(&mut write, &message).await {
                         info!("send tts data failure");
                         break;
                     }
                 }
-                frame::FrameResult::McpResult(message) => {
+                service::ws::frame::FrameResult::McpResult(message) => {
                     if send_text(&mut write, &message).await {
                         info!("send mcp request data failure");
                         break;
                     }
                 }
-                frame::FrameResult::AudioResult(audio_message) => {
+                service::ws::frame::FrameResult::AudioResult(audio_message) => {
                     let data = audio_message.data;
                     if write.send(Message::Binary(data.into())).await.is_err() {
                         info!("send audio data failure");
                         break;
                     }
                 }
-                frame::FrameResult::CloseResult => {
+                service::ws::frame::FrameResult::CloseResult => {
                     let result = write.close().await;
                     if result.is_err() {
                         info!("write close failure");

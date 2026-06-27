@@ -1,6 +1,6 @@
 use std::fmt;
 
-use service::chobits::message::{
+use crate::chobits::message::{
     abort::AbortMessage,
     audio::AudioMessage,
     close::CloseMessage,

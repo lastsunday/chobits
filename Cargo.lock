@@ -8063,6 +8063,7 @@ dependencies = [
  "rmcp",
  "sea-orm",
  "serde",
+ "serde_json",
  "testcontainers",
  "testcontainers-modules",
  "tokio",

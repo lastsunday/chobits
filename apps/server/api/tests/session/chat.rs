@@ -1,10 +1,10 @@
-use api::ws::frame::{Frame, FrameResult};
 use service::chobits::message::{
     audio::AudioMessage,
     hello::HelloMessage,
     listen::{ListenMessage, ListenMode, ListenState},
     tts::{TtsMessage, TtsState},
 };
+use service::ws::frame::{Frame, FrameResult};
 use std::time::Duration;
 use tokio::time::sleep;
 use tokio_stream::StreamExt;

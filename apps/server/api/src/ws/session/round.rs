@@ -1,4 +1,3 @@
-use super::super::frame::FrameResult;
 use crate::llm::client::{ChatRequest, Client};
 use crate::record::observer::{
     FrameContext, FrameDirection, LlmDeltaContext, RoundEndContext, RoundEndReason,
@@ -7,6 +6,7 @@ use crate::record::observer::{
 use crate::tts::Tts;
 use crate::util::llm::{EMOJI_MAP, analyze_emotion};
 use crate::ws::WsErrorCode;
+use service::ws::frame::FrameResult;
 pub struct OutputMessage {
     pub epoch: u64,
     pub payload: Result<FrameResult, AppError>,

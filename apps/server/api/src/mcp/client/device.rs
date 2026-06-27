@@ -3,8 +3,8 @@ use std::sync::{
     atomic::{AtomicI64, Ordering},
 };
 
+use crate::mcp::client::McpClient;
 use crate::ws::session::round::OutputMessage;
-use crate::{mcp::client::McpClient, ws::frame::FrameResult};
 use anyhow::Context;
 use async_trait::async_trait;
 use rig::{
@@ -23,6 +23,7 @@ use service::chobits::message::{
     hello::HelloMessage,
     mcp::{McpMessage, McpRequest},
 };
+use service::ws::frame::FrameResult;
 use tokio::sync::{
     Mutex,
     mpsc::{Receiver, UnboundedSender},

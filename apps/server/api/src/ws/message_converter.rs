@@ -1,10 +1,10 @@
-use super::frame::Frame;
 use axum::extract::ws::Message;
 use serde_json::Value;
 use service::chobits::message::{
     abort::AbortMessage, close::CloseMessage, hello::HelloMessage, listen::ListenMessage,
     mcp::McpMessage,
 };
+use service::ws::frame::Frame;
 use std::ops::ControlFlow;
 
 pub async fn convert_to_frame<'a>(

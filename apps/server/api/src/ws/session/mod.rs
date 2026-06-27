@@ -1,4 +1,3 @@
-use super::frame::{Frame, FrameResult};
 use super::session::listener::Listener;
 use super::session::round::{Command, OutputMessage, Round, TracedSender};
 use crate::config::audio::AudioConfig;
@@ -18,6 +17,7 @@ use rig::message::ToolResult;
 use service::chobits::message::hello::{AudioParam, HelloMessage};
 use service::chobits::message::listen::ListenState;
 use service::chobits::message::{AudioFormat, Transport};
+use service::ws::frame::{Frame, FrameResult};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use std::time::Instant;

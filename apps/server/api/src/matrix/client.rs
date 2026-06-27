@@ -40,11 +40,9 @@ use crate::{
         mcp_host::{McpHost, UnionMcpHost},
     },
     vad::VadFactory,
-    ws::{
-        frame::{Frame, FrameResult},
-        session::{Session, SessionBuilder, listener::DefaultListener},
-    },
+    ws::session::{Session, SessionBuilder, listener::DefaultListener},
 };
+use service::ws::frame::{Frame, FrameResult};
 
 pub async fn start(
     matrix_config: Arc<MatrixConfig>,
