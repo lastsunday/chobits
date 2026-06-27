@@ -167,7 +167,7 @@ where
     R: Stream<Item = Result<Message, axum::Error>> + Unpin + Send + 'static,
 {
     while let Some(Ok(msg)) = read.next().await {
-        let result = convert_to_frame(&msg).await;
+        let result = convert_to_frame(&msg);
         if result.is_break() {
             if let Some(item) = result.break_value() {
                 match item {
