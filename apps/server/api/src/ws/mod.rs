@@ -33,6 +33,7 @@ use rmcp::transport::{
     StreamableHttpClientTransport, streamable_http_client::StreamableHttpClientTransportConfig,
 };
 use serde::Serialize;
+use service::ws::frame::FrameResult;
 use session::round::OutputMessage;
 use session::{SessionBuilder, listener::DefaultListener};
 
@@ -199,47 +200,19 @@ async fn on_send<W>(
     while let Some(msg) = output.next().await {
         match msg.payload {
             Ok(frame) => match frame {
-                service::ws::frame::FrameResult::HelloResult(message) => {
-                    if send_text(&mut write, &message).await {
-                        info!("send hello data failure");
+                FrameResult::AudioResult(msg) => {
+                    if write.send(Message::Binary(msg.data.into())).await.is_err() {
                         break;
                     }
                 }
-                service::ws::frame::FrameResult::STTResult(message) => {
-                    if send_text(&mut write, &message).await {
-                        info!("send stt data failure");
+                FrameResult::CloseResult => {
+                    if write.close().await.is_err() {
                         break;
                     }
                 }
-                service::ws::frame::FrameResult::LLMResult(message) => {
-                    if send_text(&mut write, &message).await {
-                        info!("send llm data failure");
-                        break;
-                    }
-                }
-                service::ws::frame::FrameResult::TTSResult(message) => {
-                    if send_text(&mut write, &message).await {
-                        info!("send tts data failure");
-                        break;
-                    }
-                }
-                service::ws::frame::FrameResult::McpResult(message) => {
-                    if send_text(&mut write, &message).await {
-                        info!("send mcp request data failure");
-                        break;
-                    }
-                }
-                service::ws::frame::FrameResult::AudioResult(audio_message) => {
-                    let data = audio_message.data;
-                    if write.send(Message::Binary(data.into())).await.is_err() {
-                        info!("send audio data failure");
-                        break;
-                    }
-                }
-                service::ws::frame::FrameResult::CloseResult => {
-                    let result = write.close().await;
-                    if result.is_err() {
-                        info!("write close failure");
+                _ => {
+                    let data = serde_json::to_string(&frame).expect("frame to json failure");
+                    if write.send(Message::Text(data.into())).await.is_err() {
                         break;
                     }
                 }
@@ -247,31 +220,21 @@ async fn on_send<W>(
             Err(api_err) => {
                 api_err.log();
                 let AppError::App { code, message, .. } = &api_err;
-                send_text(
-                    &mut write,
-                    &ErrorFrame {
-                        mtype: "error",
-                        code: *code,
-                        message: message.clone(),
-                    },
-                )
-                .await;
+                let data = serde_json::to_string(&ErrorFrame {
+                    mtype: "error",
+                    code: *code,
+                    message: message.clone(),
+                })
+                .expect("error frame to json failure");
+                if write.send(Message::Text(data.into())).await.is_err() {
+                    break;
+                }
             }
         }
     }
-    let result = write.close().await;
-    if result.is_err() {
+    if write.close().await.is_err() {
         info!("write close failure");
     }
-}
-
-pub async fn send_text<W, T>(write: &mut W, value: &T) -> bool
-where
-    W: Sink<Message> + Unpin + Send + 'static,
-    T: ?Sized + Serialize,
-{
-    let result: String = serde_json::to_string(value).expect("value to json failure");
-    write.send(Message::Text(result.into())).await.is_err()
 }
 
 async fn create_server_mcp_client(uri: String) -> anyhow::Result<ServerMcpClient> {

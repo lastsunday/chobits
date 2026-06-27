@@ -1,5 +1,7 @@
 use std::fmt;
 
+use serde::Serialize;
+
 use crate::chobits::message::{
     abort::AbortMessage,
     audio::AudioMessage,
@@ -68,6 +70,23 @@ pub enum FrameResult {
     AudioResult(AudioMessage),
     CloseResult,
     McpResult(McpRequest),
+}
+
+impl Serialize for FrameResult {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            Self::HelloResult(msg) => msg.serialize(serializer),
+            Self::STTResult(msg) => msg.serialize(serializer),
+            Self::LLMResult(msg) => msg.serialize(serializer),
+            Self::TTSResult(msg) => msg.serialize(serializer),
+            Self::McpResult(msg) => msg.serialize(serializer),
+            Self::AudioResult(msg) => msg.serialize(serializer),
+            Self::CloseResult => serializer.serialize_unit(),
+        }
+    }
 }
 
 impl fmt::Display for FrameResult {
