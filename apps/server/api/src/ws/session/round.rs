@@ -10,6 +10,7 @@ use crate::ws::WsErrorCode;
 pub struct OutputMessage {
     pub epoch: u64,
     pub payload: Result<FrameResult, AppError>,
+    pub frame_ctx: Option<FrameContext>,
 }
 use anyhow::Context;
 use core::result::Result;
@@ -25,6 +26,7 @@ use service::chobits::message::tts::{TtsMessage, TtsState};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Instant;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::mpsc::error::SendError;
@@ -56,29 +58,29 @@ pub enum Command<'a> {
 #[derive(Clone)]
 pub struct TracedSender {
     inner: UnboundedSender<OutputMessage>,
-    observers: Vec<Arc<dyn SessionObserver>>,
     round_id: Option<String>,
     session_id: Option<String>,
     seq: Arc<AtomicU64>,
     epoch: u64,
+    round_started_at: Instant,
 }
 
 impl TracedSender {
     pub fn new(
         inner: UnboundedSender<OutputMessage>,
-        observers: Vec<Arc<dyn SessionObserver>>,
         round_id: Option<String>,
         session_id: Option<String>,
         seq: Arc<AtomicU64>,
         epoch: u64,
+        round_started_at: Instant,
     ) -> Self {
         Self {
             inner,
-            observers,
             round_id,
             session_id,
             seq,
             epoch,
+            round_started_at,
         }
     }
 
@@ -86,31 +88,33 @@ impl TracedSender {
         &self,
         item: Result<FrameResult, AppError>,
     ) -> Result<(), SendError<OutputMessage>> {
-        if let Some(ref round_id) = self.round_id {
+        let frame_ctx = self.round_id.as_ref().map(|round_id| {
             let detail = match &item {
                 Ok(r) => format!("{r}"),
                 Err(e) => format!("Err({e})"),
             };
             let seq = self.seq.fetch_add(1, Ordering::Relaxed);
-            for observer in &self.observers {
-                observer.on_frame(&FrameContext {
-                    round_id: Some(round_id.clone()),
-                    session_id: self.session_id.clone(),
-                    seq,
-                    direction: FrameDirection::Outbound,
-                    detail: detail.clone(),
-                });
+            FrameContext {
+                round_id: Some(round_id.clone()),
+                session_id: self.session_id.clone(),
+                seq,
+                direction: FrameDirection::Outbound,
+                detail,
+                data: None,
+                round_started_at: Some(self.round_started_at),
             }
-        }
+        });
         self.inner
             .send(OutputMessage {
                 epoch: self.epoch,
                 payload: item,
+                frame_ctx,
             })
             .map_err(|_| {
                 SendError(OutputMessage {
                     epoch: self.epoch,
                     payload: Err(err!(WsErrorCode::InternalError)),
+                    frame_ctx: None,
                 })
             })
     }
@@ -119,15 +123,37 @@ impl TracedSender {
         &self,
         item: Result<FrameResult, AppError>,
     ) -> Result<(), SendError<OutputMessage>> {
+        let frame_ctx = self.round_id.as_ref().map(|round_id| {
+            let detail = match &item {
+                Ok(r) => format!("{r}"),
+                Err(e) => format!("Err({e})"),
+            };
+            let data = match &item {
+                Ok(FrameResult::AudioResult(msg)) => Some(msg.data.clone()),
+                _ => None,
+            };
+            let seq = self.seq.fetch_add(1, Ordering::Relaxed);
+            FrameContext {
+                round_id: Some(round_id.clone()),
+                session_id: self.session_id.clone(),
+                seq,
+                direction: FrameDirection::Outbound,
+                detail,
+                data,
+                round_started_at: Some(self.round_started_at),
+            }
+        });
         self.inner
             .send(OutputMessage {
                 epoch: self.epoch,
                 payload: item,
+                frame_ctx,
             })
             .map_err(|_| {
                 SendError(OutputMessage {
                     epoch: self.epoch,
                     payload: Err(err!(WsErrorCode::InternalError)),
+                    frame_ctx: None,
                 })
             })
     }

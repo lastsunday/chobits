@@ -251,6 +251,7 @@ impl Listener for DefaultListener {
                     let _ = tx.send(OutputMessage {
                         epoch: 0,
                         payload: Err(err!(WsErrorCode::AsrFailure).with_extra(e.to_string())),
+                        frame_ctx: None,
                     });
                 }
                 (voice_data, Err(e))

@@ -1,4 +1,5 @@
 use super::round::OutputMessage;
+use crate::record::observer::SessionObserver;
 use crate::ws::frame::FrameResult;
 use chrono::Local;
 use service::chobits::message::tts::TtsState;
@@ -14,6 +15,7 @@ pub struct OutputController {
     latest_activity_time: Arc<AtomicI64>,
     interval: Option<tokio::time::Interval>,
     frame_duration: u64,
+    observers: Vec<Arc<dyn SessionObserver>>,
 }
 
 impl OutputController {
@@ -23,6 +25,7 @@ impl OutputController {
         epoch: Arc<AtomicU64>,
         latest_activity_time: Arc<AtomicI64>,
         frame_duration: u64,
+        observers: Vec<Arc<dyn SessionObserver>>,
     ) -> Self {
         Self {
             input_rx,
@@ -31,6 +34,7 @@ impl OutputController {
             latest_activity_time,
             interval: None,
             frame_duration,
+            observers,
         }
     }
 
@@ -53,6 +57,12 @@ impl OutputController {
             }
             if let Ok(FrameResult::AudioResult(_)) = msg.payload {
                 self.pace_audio().await;
+            }
+            // Record frame after pacing (actual send time)
+            if let Some(ref ctx) = msg.frame_ctx {
+                for observer in &self.observers {
+                    observer.on_frame(ctx);
+                }
             }
             self.latest_activity_time
                 .store(Local::now().timestamp_millis(), Ordering::Release);

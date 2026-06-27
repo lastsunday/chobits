@@ -17,6 +17,7 @@ pub struct Model {
     pub kind: String,
     pub detail: Option<String>,
     pub elapsed_us: Option<i64>,
+    pub data: Option<Vec<u8>>,
     #[schema(schema_with = date_time_with_time_zone_or_null_schema)]
     pub create_datetime: Option<DateTimeWithTimeZone>,
     #[schema(schema_with = date_time_with_time_zone_or_null_schema)]

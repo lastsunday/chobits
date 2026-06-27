@@ -318,28 +318,15 @@ export function Timeline({ roundId, dataItems }: TimelineProps) {
     if (ttsElapsedMs == null || ttsDurationMs == null || items.length === 0) return map;
 
     const baseMs = ttsElapsedMs - t0Ms;
-    const ttsFrames = items.filter(
-      (f) => f.detail?.startsWith('AudioResult') || f.detail?.startsWith('TTSResult'),
-    );
-    const audioFrames = ttsFrames.filter((f) => f.detail?.startsWith('AudioResult'));
-    const totalAudio = audioFrames.length;
+    const ttsFrames = items.filter((f) => f.detail?.startsWith('TTSResult'));
 
     for (const f of ttsFrames) {
-      if (f.detail?.startsWith('TTSResult')) {
-        if (f.detail.includes('Start') || f.detail.includes('SentenceStart')) {
-          map.set(f.seq, baseMs);
-        } else {
-          map.set(f.seq, baseMs + ttsDurationMs);
-        }
+      if (f.detail.includes('Start') || f.detail.includes('SentenceStart')) {
+        map.set(f.seq, baseMs);
+      } else {
+        map.set(f.seq, baseMs + ttsDurationMs);
       }
     }
-
-    audioFrames.forEach((f, i) => {
-      const pos = totalAudio > 1
-        ? baseMs + (i / (totalAudio - 1)) * ttsDurationMs
-        : baseMs;
-      map.set(f.seq, pos);
-    });
 
     return map;
   }, [syncMode, ttsStep, t0Ms, framesData]);

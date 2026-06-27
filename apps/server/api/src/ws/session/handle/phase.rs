@@ -530,6 +530,7 @@ impl Session {
         let result = tx.send(OutputMessage {
             epoch: 0,
             payload: Ok(FrameResult::HelloResult(data)),
+            frame_ctx: None,
         });
         if result.is_err() {
             info!(target:"session","tx send hello result failure");

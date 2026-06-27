@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
@@ -64,6 +66,8 @@ pub struct FrameContext {
     pub seq: u64,
     pub direction: FrameDirection,
     pub detail: String,
+    pub data: Option<Vec<u8>>,
+    pub round_started_at: Option<Instant>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

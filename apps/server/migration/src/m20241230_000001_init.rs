@@ -97,6 +97,7 @@ impl MigrationTrait for Migration {
                     .col(string(Frame::Dir))
                     .col(string(Frame::Kind))
                     .col(string_null(Frame::Detail))
+                    .col(blob_null(Frame::Data))
                     .col(big_integer_null(Frame::ElapsedUs))
                     .col(timestamp_with_time_zone_null(Frame::CreateDatetime))
                     .col(timestamp_with_time_zone_null(Frame::UpdateDatetime))
@@ -202,6 +203,7 @@ pub enum Frame {
     Dir,
     Kind,
     Detail,
+    Data,
     SessionId,
     CreateDatetime,
     UpdateDatetime,

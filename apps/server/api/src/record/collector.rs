@@ -23,6 +23,7 @@ struct FrameEntry {
     is_inbound: bool,
     detail: String,
     session_id: Option<String>,
+    data: Option<Vec<u8>>,
     received_at: Instant,
 }
 
@@ -237,26 +238,21 @@ impl RecordCollector {
         }
     }
 
-    fn record_frame(
-        &self,
-        round_id: Option<&str>,
-        session_id: Option<&str>,
-        seq: u64,
-        is_inbound: bool,
-        detail: &str,
-    ) {
+    fn record_frame(&self, ctx: &FrameContext) {
+        let is_inbound = matches!(ctx.direction, FrameDirection::Inbound);
         // If there's a round_id, try the pending buffer first
-        if let Some(rid) = round_id {
+        if let Some(ref rid) = ctx.round_id {
             let mut pending = self.pending.lock().expect("pending lock");
-            if let Some(buf) = pending.get_mut(rid) {
+            if let Some(buf) = pending.get_mut(rid.as_str()) {
                 if buf.frames.len() >= MAX_FRAMES_PER_ROUND {
                     return;
                 }
                 buf.frames.push(FrameEntry {
-                    seq,
+                    seq: ctx.seq,
                     is_inbound,
-                    detail: detail.to_string(),
-                    session_id: session_id.map(|s| s.to_string()),
+                    detail: ctx.detail.clone(),
+                    session_id: ctx.session_id.clone(),
+                    data: ctx.data.clone(),
                     received_at: Instant::now(),
                 });
                 return;
@@ -265,29 +261,33 @@ impl RecordCollector {
 
         // No round_id yet (before the first round is created) —
         // buffer as orphaned, will be flushed when a round starts
-        if round_id.is_none()
-            && let Some(sid) = session_id
+        if ctx.round_id.is_none()
+            && let Some(ref sid) = ctx.session_id
         {
             let mut orphaned = self.orphaned_frames.lock().expect("orphaned lock");
-            orphaned
-                .entry(sid.to_string())
-                .or_default()
-                .push(FrameEntry {
-                    seq,
-                    is_inbound,
-                    detail: detail.to_string(),
-                    session_id: Some(sid.to_string()),
-                    received_at: Instant::now(),
-                });
+            orphaned.entry(sid.clone()).or_default().push(FrameEntry {
+                seq: ctx.seq,
+                is_inbound,
+                detail: ctx.detail.clone(),
+                session_id: ctx.session_id.clone(),
+                data: ctx.data.clone(),
+                received_at: Instant::now(),
+            });
             return;
         }
 
-        // No session_id either — fallback: spawn DB insert
+        // Fallback: round buffer already flushed (race with OutputController) —
+        // insert directly into DB with elapsed_us computed from round_started_at
         let conn = self.conn.clone();
-        let round_id = round_id.map(|s| s.to_string());
-        let session_id = session_id.map(|s| s.to_string());
-        let detail = detail.to_string();
+        let round_id = ctx.round_id.clone();
+        let session_id = ctx.session_id.clone();
+        let detail = ctx.detail.clone();
+        let data = ctx.data.clone();
+        let seq = ctx.seq;
         let dir_str = if is_inbound { "inbound" } else { "outbound" };
+        let elapsed_us = ctx
+            .round_started_at
+            .map(|start| Instant::now().duration_since(start).as_micros() as i64);
         tokio::spawn(async move {
             let _ = frame::ActiveModel {
                 round_id: Set(round_id),
@@ -296,6 +296,8 @@ impl RecordCollector {
                 dir: Set(dir_str.to_string()),
                 kind: Set("frame".to_string()),
                 detail: Set(Some(detail)),
+                data: Set(data),
+                elapsed_us: Set(elapsed_us),
                 ..Default::default()
             }
             .insert(&conn)
@@ -515,6 +517,7 @@ impl RecordCollector {
                 dir: Set(dir_str.to_string()),
                 kind: Set("frame".to_string()),
                 detail: Set(Some(entry.detail.clone())),
+                data: Set(entry.data.clone()),
                 elapsed_us: Set(Some(elapsed_ms)),
                 ..Default::default()
             }
@@ -589,14 +592,7 @@ impl SessionObserver for RecordCollector {
     }
 
     fn on_frame(&self, ctx: &FrameContext) {
-        let is_inbound = matches!(ctx.direction, FrameDirection::Inbound);
-        self.record_frame(
-            ctx.round_id.as_deref(),
-            ctx.session_id.as_deref(),
-            ctx.seq,
-            is_inbound,
-            &ctx.detail,
-        );
+        self.record_frame(ctx);
     }
 
     async fn on_round_end(&self, ctx: &RoundEndContext) -> Result<(), anyhow::Error> {

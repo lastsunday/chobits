@@ -85,6 +85,7 @@ impl McpClient for DeviceMcpClient {
                     },
                 },
             ))),
+            frame_ctx: None,
         });
         if result.is_err() {
             Err(anyhow::anyhow!(
@@ -289,6 +290,7 @@ impl DeviceMcpClient {
         let result = tx.send(OutputMessage {
             epoch: 0,
             payload: Ok(FrameResult::McpResult(request)),
+            frame_ctx: None,
         });
         if result.is_err() {
             info!("tx send mcp initialize reqeust failure");
@@ -306,6 +308,7 @@ impl DeviceMcpClient {
             payload: Ok(FrameResult::McpResult(
                 self.create_tools_list_request().await,
             )),
+            frame_ctx: None,
         });
         if result.is_err() {
             info!("tx send mcp tools list reqeust failure");

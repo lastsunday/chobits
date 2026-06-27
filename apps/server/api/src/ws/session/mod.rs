@@ -20,6 +20,7 @@ use service::chobits::message::listen::ListenState;
 use service::chobits::message::{AudioFormat, Transport};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
+use std::time::Instant;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::{Sender, UnboundedSender, channel, unbounded_channel};
 use tokio_stream::wrappers::ReceiverStream;
@@ -179,6 +180,7 @@ impl Session {
         let result = tx.send(OutputMessage {
             epoch: 0,
             payload: Ok(FrameResult::CloseResult),
+            frame_ctx: None,
         });
         if result.is_err() {
             info!("tx send frame result close result failure");
@@ -205,11 +207,11 @@ impl Session {
         let epoch = self.output_epoch.load(Ordering::Acquire);
         let traced_tx = TracedSender::new(
             tx.clone(),
-            self.observers.clone(),
             Some(round_id.clone()),
             Some(self.id.clone()),
             self.seq.clone(),
             epoch,
+            Instant::now(),
         );
         for observer in &self.observers {
             observer.on_round_start(&RoundStartContext {
@@ -300,8 +302,14 @@ impl Session {
             return;
         }
 
-        // Capture round_id before dispatch (so Listen(Stop) belongs to the round it stops)
-        let round_id = self.current_round.as_ref().map(|r| r.id.clone());
+        // Capture round_id before dispatch for Listen(Stop) so it belongs to the round it stops
+        // Other frames (Listen(Detect), Voice, etc.) use the post-dispatch round
+        let round_id = match frame {
+            Frame::Listen(msg) if matches!(msg.state, ListenState::Stop) => {
+                self.current_round.as_ref().map(|r| r.id.clone())
+            }
+            _ => None,
+        };
 
         // Dispatch to phase handler (may create new round via new_round)
         let phase = self.phase.clone();
@@ -313,7 +321,7 @@ impl Session {
         }
 
         // Determine final round_id:
-        // - If we captured a round_id before dispatch (e.g., Listen(Stop)), keep it
+        // - If we captured a round_id for Listen(Stop), keep it
         // - If dispatch created a new round, use that round's ID
         // - Otherwise, it's a session-level frame (round_id = None)
         let final_round_id = round_id.or_else(|| self.current_round.as_ref().map(|r| r.id.clone()));
@@ -330,6 +338,8 @@ impl Session {
                 seq,
                 direction: FrameDirection::Inbound,
                 detail: format!("{}", frame),
+                data: None,
+                round_started_at: None,
             });
         }
     }
@@ -374,6 +384,7 @@ impl Session {
             self.output_epoch.clone(),
             self.latest_activity_time.clone(),
             frame_duration,
+            self.observers.clone(),
         );
         controller.spawn();
 
