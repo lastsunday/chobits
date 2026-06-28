@@ -18,6 +18,8 @@
   - [Server-ui](./development/server-ui.md)
   - [Esp32](./development/esp32.md)
   - [App](./development/app.md)
+- [Discussions](./discussions/README.md)
+  - [Documentation Style](./discussions/documentation-style.md)
 - [RelatedProject]()
   - [xiaozhi-esp32](./development/related-project/xiaozhi-esp32.md)
   - [xiaozhi-esp32-server](./development/related-project/xiaozhi-esp32-server.md)
