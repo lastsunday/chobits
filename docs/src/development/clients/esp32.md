@@ -1,18 +1,18 @@
 # ESP32
 
-## Checkout
+## 克隆代码
 
 ```shell
 git clone git@github.com:78/xiaozhi-esp32.git
 ```
 
-## Install ESP IDF
+## 安装 ESP-IDF
 
 > <https://docs.espressif.com/projects/esp-idf/zh_CN/v5.5.2/esp32/get-started/linux-macos-setup.html>
 
-## Development
+## 开发
 
-### Setup enviroment and flash device
+### 配置环境与烧录设备
 
 - esp32-s3
 
@@ -29,15 +29,15 @@ sudo chmod 777 /dev/ttyACM0
 idf.py -p /dev/ttyACM0 flash
 ```
 
-### Other useful command
+### 其他常用命令
 
-- Get PORT
+- 获取端口
 
 ```shell
 ls /dev/cu.*
 ```
 
-- Debug monitor
+- 调试监视器
 
 ```shell
 idf.py monitor

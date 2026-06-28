@@ -253,6 +253,31 @@ type:text
 type:abort
   session_id: string        必选
   reason: string            可选，"wake_word_detected"
+
+type:mcp, payload.method:"initialize"
+  payload: {}
+    jsonrpc: "2.0"          必选
+    method: "initialize"    必选
+    params: {}
+      capabilities: {}
+    id: int                 必选，请求标识
+
+type:mcp, payload.method:"tools/list"
+  payload: {}
+    jsonrpc: "2.0"          必选
+    method: "tools/list"    必选
+    params: {}
+      cursor: string        可选，分页游标
+    id: int                 必选
+
+type:mcp, payload.method:"tools/call"
+  payload: {}
+    jsonrpc: "2.0"          必选
+    method: "tools/call"    必选
+    params: {}
+      name: string          必选，工具名
+      arguments: {}         可选，工具参数
+    id: int                 必选
 ```
 
 A.2 服务端 → 客户端
@@ -291,7 +316,39 @@ type:system
   command: "reboot"
 
 type:mcp
-  payload: {}               JSON-RPC 2.0
+  payload: {}
+    jsonrpc: "2.0"
+    id: int                 对应请求 id
+    result: {}              成功时
+    error: {}               失败时
+      code: int
+      message: string
+
+type:mcp, response to "initialize"
+  payload.result: {}
+    protocolVersion: string
+    capabilities: {}
+    serverInfo: {}
+      name: string
+      version: string
+
+type:mcp, response to "tools/list"
+  payload.result: {}
+    tools: []
+      name: string
+      description: string
+      inputSchema: {}
+    nextCursor: string      可选
+
+type:mcp, response to "tools/call"
+  payload.result: {}        成功时
+    content: []
+      type: "text"
+      text: string
+    isError: false
+  payload.error: {}         失败时
+    code: int
+    message: string
 ```
 
 ---

@@ -222,11 +222,11 @@ nix develop             # 默认完整环境（含 moon、just、mdbook、pkg-co
 
 ## 附录 架构概述
 
-> 详细架构文档见 [Server Architecture](./docs/src/development/server-architecture.md)
+> 详细架构文档见 [Server Architecture](./docs/src/development/server/architecture.md)
 
 ### WebSocket 会话生命周期
 
-详细文档见 [Server Architecture](docs/src/development/server-architecture.md#session-生命周期)。
+详细文档见 [Server Architecture](docs/src/development/server/server-architecture.md#session-生命周期)。
 
 ```
 Client → WS Connect → Auth(JWT) → Session Created
@@ -271,6 +271,6 @@ chobits-macros (proc-macro: #[config_example_generator])
 | 503xxx | AI 模型 | Chat/TTS/ASR |
 | 504xxx | WebSocket | WsErrorCode |
 
-完整架构分析见 [Server Architecture](./docs/src/development/server-architecture.md)。
+完整架构分析见 [Server Architecture](./docs/src/development/server/architecture.md)。
 
-> 待办事项清单见 [TODO](./docs/src/development/TODO.md)。
+> 待办事项清单见 [TODO](./docs/src/development/server/TODO.md)。

@@ -165,7 +165,7 @@ cargo test --package api --test asr_test -- --ignored --nocapture
 5. **注册 Factory**：`api/src/asr/mod.rs` 的 `create_model()` 添加 match arm
 6. **添加测试**：`api/tests/asr_test.rs` 添加参考音频和闭环测试
 
-## Key Files
+## 关键文件
 
 | 文件 | 作用 |
 |------|------|

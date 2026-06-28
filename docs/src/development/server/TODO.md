@@ -11,17 +11,12 @@
 | stop_round 竞态 | `api/src/ws/session/round.rs` | `llm_tts_handle` 与 `stop_round` 之间缺少同步，可能 use-after-cancel | 🔴 P0 |
 | Opus 除零 | `api/src/ws/session/listener.rs` | channels=0 / sample_rate=0 时除零 | 🟡 P1 |
 | 时钟溢出 | `api/src/ws/session/` | `Local::now()` 非单调，减法可溢出 | 🟡 P1 |
-| OutputController | `api/src/ws/session/output_controller.rs` | `bounded(64)` 通道 + tokio interval 节流，结构合理 | ✅ 正常 |
-| Listener | `api/src/ws/session/listener.rs` | VAD + ASR 编排，300ms 前缀缓冲，Opus 解码 | ✅ 正常 |
-| Phase 状态机 | `api/src/ws/session/mod.rs` | 状态转换逻辑完整 | ✅ 正常 |
 
 ### 协议
 
 | 模块 | 文件 | 发现 | 严重程度 |
 |------|------|------|----------|
 | 消息类型 | `api/src/ws/frame.rs` | 缺失 `system`、`alert`、`custom` 消息类型（对比 xiaozhi-esp32 规范） | ⚠️ P2 |
-| Frame 枚举 | `api/src/ws/frame.rs` | 入站 Frame / 出站 FrameResult 结构清晰 | ✅ 正常 |
-| 消息解析 | `api/src/ws/message_converter.rs` | WS Message → Frame 反序列化 | ✅ 正常 |
 
 ### AI 模块
 
@@ -33,7 +28,6 @@
 | LLM 历史阻塞 | `api/src/llm/client.rs` | DB 落盘导致完整线程阻塞 | 🟡 P1 |
 | describe O(n) | `api/src/llm/client.rs` | 实时构建全消息历史 | 🟢 P3 |
 | TTS 循环克隆 | `api/src/tts/` | `Arc<str>` vs `String` 克隆风暴 | 🟢 P3 |
-| TTS | `api/src/tts/` | MatchaTTS + Opus 编码，Factory 全局单例 | ✅ 正常 |
 
 ### 持久化
 
@@ -42,7 +36,6 @@
 | on_session_end 未调用 | `api/src/record/observer.rs` | `SessionObserver::on_session_end` 定义了但从未调用，DB session.end_time 永远为 NULL | 🔴 P0 |
 | RecordCollector 无上限 | `api/src/record/collector.rs` | `Vec<RoundBuffer>` 无大小限制，高并发内存无限增长 | 🟡 P1 |
 | 双重序列化 | `api/src/record/` | record 路径双重 JSON 序列化 | 🟢 P3 |
-| SessionObserver trait | `api/src/record/observer.rs` | 9 个生命周期钩子，设计良好 | ✅ 正常 |
 
 ### 安全
 
@@ -102,4 +95,4 @@
 | 🟡 P1 | 应该修复 | 竞态、内存泄漏、安全风险 |
 | ⚠️ P2 | 功能缺失 | 协议不完整、配置化不足 |
 | 🟢 P3 | 优化 | 性能、代码质量 |
-| ✅ 正常 | 无需处理 | 现有实现满足需求 |
+

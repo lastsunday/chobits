@@ -1,4 +1,4 @@
-# App
+# 客户端
 
 ## 环境要求
 
@@ -31,59 +31,59 @@ flutter doctor
 5. 运行 `flutter doctor` 确认环境就绪
 
 > [!WARNING]
-> App not implement any chobits feature right now,just make a basic framework.
+> App 尚未实现 chobits 业务功能，当前仅为基础框架。
 
-## Framework
+## 框架
 
-- [x] Theme framework
-- [x] Adaptive
-  - [x] Desktop or not
-- [x] Text scale
-- [x] I18n
-- [x] Network
+- [x] 主题框架
+- [x] 自适应布局
+  - [x] 桌面端判断
+- [x] 文字缩放
+- [x] 国际化
+- [x] 网络层
   - [x] Dio
-- [x] Database
+- [x] 数据库
   - [x] Sqlite
-- [x] Util
-  - [x] Unique Id
+- [x] 工具
+  - [x] 唯一 ID
     - [x] nanoid2
-- [x] Event Bus
-- [x] Auto upgrade
+- [x] 事件总线
+- [x] 自动升级
   - [x] Android
-- [ ] Logging
-  - [x] Rotating log File(Without Web Env)
-  - [ ] Export log file or upload log file
-- [ ] Release
+- [ ] 日志
+  - [x] 轮转日志文件（不含 Web 环境）
+  - [ ] 导出/上传日志文件
+- [ ] 发布
   - [x] Android
-  - [ ] IOS
+  - [ ] iOS
   - [ ] Windows
-    - [x] exe(unpack)
+    - [x] exe（免安装）
   - [ ] Linux
-  - [ ] MacOS
+  - [ ] macOS
   - [x] Web
-- [x] Env Config
-  - [x] Dev
-  - [x] Prod
+- [x] 环境配置
+  - [x] 开发环境
+  - [x] 生产环境
 
-## Advance
+## 进阶
 
-- [x] Auth
+- [x] 认证
   - [x] Spring-authorization-server
-- [ ] User Profile
+- [ ] 用户信息
 
-## Develop Flow
+## 开发流程
 
-- [x] Changelog
+- [x] 变更日志
 - [ ] CI
-  - [x] Build
-  - [ ] Code Quality
-  - [ ] Test
-- [ ] Testing
-  - [x] Unit Test(Example)
-  - [x] Widget Test(Example)
-  - [ ] Integration Test
+  - [x] 构建
+  - [ ] 代码质量
+  - [ ] 测试
+- [ ] 测试
+  - [x] 单元测试（示例）
+  - [x] Widget 测试（示例）
+  - [ ] 集成测试
 
-## Coding
+## 编码
 
 ### Database Versioning
 
@@ -230,146 +230,105 @@ Response result = await HttpClient.instance().get("/");
 LogHelper.info(result.body().toString());
 ```
 
-## JSON Model Gen
+## JSON 模型生成
 
 ```shell
 dart run build_runner build
 ```
 
-## Release
+## 发布
 
 ### Android
 
-> [Build and release an Android app | Flutter](https://docs.flutter.dev/deployment/android)
+> [构建和发布 Android 应用 | Flutter](https://docs.flutter.dev/deployment/android)
 
-1. Create an keystore
+1. 创建密钥库
 
    ```shell
    keytool -genkey -v -keystore .\android-app-keystore.jks -storetype JKS -keyalg RSA -keysize 2048 -validity 10000 -alias android-app
    ```
 
-2. create [project]/android/key.properties and reference the keystore from the app
+2. 创建 `[project]/android/key.properties` 并引用密钥库
 
    ```properties
-   storePassword=<password from previous step>
-   keyPassword=<password from previous step>
+   storePassword=<上一步的密码>
+   keyPassword=<上一步的密码>
    keyAlias=android-app
-   storeFile=<location of the key store file, such as /Users/<user name>/android-app-keystore.jks or C:\\Users\\<user name>\\android-app-keystore.jks>
+   storeFile=<密钥库文件路径>
    ```
 
-3. run release command(eg: prod env)
+3. 执行发布命令（以生产环境为例）
 
    ```shell
    flutter build apk --dart-define=DART_DEFINE_APP_ENV=prod
    ```
 
-## Conventional Commits
+## 提交规范
 
-> <https://github.com/angular/angular/blob/main/CONTRIBUTING.md#-commit-message-format>
->
-> <https://www.conventionalcommits.org/en/v1.0.0/>
->
 > <https://www.conventionalcommits.org/zh-hans/v1.0.0/>
 
-The Conventional Commits specification is a lightweight convention on top of commit messages. It provides an easy set of rules for creating an explicit commit history; which makes it easier to write automated tools on top of. This convention dovetails with [SemVer](http://semver.org), by describing the features, fixes, and breaking changes made in commit messages.
 
-The commit message should be structured as follows:
-
----
-
-```txt
-<type>[optional scope]: <description>
-
-[optional body]
-
-[optional footer(s)]
-```
-
----
-
-The commit contains the following structural elements, to communicate intent to the consumers of your library:
-
-1. **fix:** a commit of the _type_ `fix` patches a bug in your codebase (this correlates with [`PATCH`](http://semver.org/#summary) in Semantic Versioning).
-2. **feat:** a commit of the _type_ `feat` introduces a new feature to the codebase (this correlates with [`MINOR`](http://semver.org/#summary) in Semantic Versioning).
-3. **BREAKING CHANGE:** a commit that has a footer `BREAKING CHANGE:`, or appends a `!` after the type/scope, introduces a breaking API change (correlating with [`MAJOR`](http://semver.org/#summary) in Semantic Versioning). A BREAKING CHANGE can be part of commits of any _type_.
-4. _types_ other than `fix:` and `feat:` are allowed, for example [@commitlint/config-conventional](https://github.com/conventional-changelog/commitlint/tree/master/%40commitlint/config-conventional) (based on the [Angular convention](https://github.com/angular/angular/blob/22b96b9/CONTRIBUTING.md#-commit-message-guidelines)) recommends `build:`, `chore:`, `ci:`, `docs:`, `style:`, `refactor:`, `perf:`, `test:`, and others.
-5. _footers_ other than `BREAKING CHANGE: <description>` may be provided and follow a convention similar to [git trailer format](https://git-scm.com/docs/git-interpret-trailers).
-
-Additional types are not mandated by the Conventional Commits specification, and have no implicit effect in Semantic Versioning (unless they include a BREAKING CHANGE). A scope may be provided to a commit’s type, to provide additional contextual information and is contained within parenthesis, e.g., `feat(parser): add ability to parse arrays`.
-
-## Sqlite3 on web
+## Web 端 Sqlite3
 
 > sqflite_common_ffi_web
 
-### Setup binaries
+### 安装二进制文件
 
-Implementation requires [sqlite3.wasm binaries](https://github.com/simolus3/sqlite3.dart/releases) into your web folder as well as a sqflite specific shared worker.
-
-You can install binaries using the command:
+需将 [sqlite3.wasm](https://github.com/simolus3/sqlite3.dart/releases) 及相关 worker 文件放入 web 目录：
 
 ```bash
 dart run sqflite_common_ffi_web:setup
 ```
 
-It should create the following files in your web folder:
+会在 web 目录下创建：
 
 - `sqlite3.wasm`
 - `sqflite_sw.js`
 
-that you can put in source control or not (personally I don't)
-
-Note: when sqlite3 and its wasm binary are updated, you may need to run the command again using the force option:
+更新 sqlite3 版本后需使用 `--force` 重新安装：
 
 ```bash
 dart run sqflite_common_ffi_web:setup --force
 ```
 
-## Offline Map
+## 离线地图
 
-1. Generate XYZ tiles(Directory)
-
-   QGIS->Toolbox->Generate XYZ tiles(Directory)
-
-2. Gen pubspec.yaml assets path
+1. 使用 QGIS 生成 XYZ 瓦片：工具箱 → 生成 XYZ 瓦片（目录）
+2. 生成 `pubspec.yaml` 资源路径
 
 ```bash
 ls -R assets | grep ':'
 ```
 
-## Coordinate
+## 坐标系
 
-1. Server save the coordinate format is WGS84
+1. 服务端使用 WGS84 格式存储坐标
+2. 客户端使用高德地图（GCJ-02 坐标系）
+3. 使用 [coordtransform_dart](https://pub-web.flutter-io.cn/packages/coordtransform_dart) 进行坐标转换
 
-2. Client map is gaode map,who's format is GCJ-02;
+## 常见问题
 
-3. So we must transform the coordinate from WGS84 to GCJ-02 and we use the util [coordtransform_dart](https://pub-web.flutter-io.cn/packages/coordtransform_dart).
-
-## Q&A
-
-Q1. setState() or markNeedsBuild() called during build. This ModelBinding widget cannot be marked as needing to build because the framework is already in the process of building widgets.
+Q1. setState() or markNeedsBuild() called during build
 
 > <https://fluttercorner.com/setstate-or-markneedsbuild-called-during-build-a-vertical-renderflex-overflowed/>
 
-Solution 1: use a call back function
-You just need to use a call back function. Because Should be setState method call before the build method had completed the process of building the widgets and thats why you are facing this error.
+解决方案：使用回调函数延迟 setState 调用
 
 ```dart
 WidgetsBinding.instance.addPostFrameCallback((_){
-
-// Your Code Here
-
+  // 你的代码
 });
 ```
 
-## Other
+## 其他
 
-1. pod install slow
+1. pod install 速度慢
 
 ```shell
 cd ./ios/
-#如有clash这类代理软件，则执行下面代理设置命令，使用代理进行依赖库的下载
-#export https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 all_proxy=socks5://127.0.0.1:7890
+# 如有代理，取消下面注释
+# export https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 all_proxy=socks5://127.0.0.1:7890
 pod install --verbose
 ```
 
-## Relate Project
+## 相关项目

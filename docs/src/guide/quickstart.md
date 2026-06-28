@@ -1,6 +1,8 @@
-### Development
+# 快速开始
 
-#### apps/server
+## 开发
+
+#### 服务端
 
 ```shell
 pnpm i
@@ -10,32 +12,32 @@ chobits-server download
 moon run server:run
 ```
 
-- Access home page <http://127.0.0.1:3000>
-- Access admin console <http://127.0.0.1:3000/login>
-  - default account: root/Change_Me
-- Access api documentation <http://127.0.0.1:3000/docs>
-- Access device test page <http://127.0.0.1:3000/test/device/test_page.html>
-- Client setting
-  - ota url
+- 首页 <http://127.0.0.1:3000>
+- 管理后台 <http://127.0.0.1:3000/login>
+  - 默认账号：root/Change_Me
+- API 文档 <http://127.0.0.1:3000/docs>
+- 设备测试页 <http://127.0.0.1:3000/test/device/test_page.html>
+- 客户端配置
+  - OTA 地址
     <http://127.0.0.1:3000/api/ota/>
-  - ws url
+  - WebSocket 地址
     <ws://127.0.0.1:3000/chobits/v1/>
 
-#### apps/server-ui
+#### 管理后台
 
 ```shell
 pnpm i
 moon run server-ui:dev
 ```
 
-#### apps/app
+#### App（Flutter）
 
 **_TODO_**
 
-### Building
+## 构建
 
 **_TODO_**
 
-### Using
+## 使用
 
 **_TODO_**

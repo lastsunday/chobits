@@ -1,10 +1,10 @@
-# Audio Debugging Journey
+# Audio 调试
 
-## Problem
+## 问题
 
 实时 WebSocket TTS 音频播放：开始正常，几秒后出现明显**卡顿**和**电流声**。
 
-## Investigation
+## 调查
 
 ### 1. Validate server output
 
@@ -57,7 +57,7 @@ const data = await this.queue.dequeue(99, 30);
 // 99 包一次喂入解码循环
 ```
 
-## Root Cause
+## 根因
 
 ### 时序线
 
@@ -98,7 +98,7 @@ Frame 228:                   │
 - 没有实时调度约束，WASM 解码阻塞不产生听觉影响
 - 离线 WAV = 所有帧无缝拼接 → 完全干净
 
-## Fix
+## 修复
 
 ### 方案
 
@@ -162,7 +162,7 @@ Frame 4:                 │
 | 主线程阻塞 | >1 秒 | <1ms |
 | Web Audio API | 调度断裂 | 连续调度 |
 
-## Key Files
+## 关键文件
 
 | 文件 | 作用 |
 |------|------|
@@ -397,7 +397,7 @@ cargo test --package api --test tts_analysis_test -- test_grid_search_compressor
 | `./test_data/compare_processed.wav` | 当前管道（重采样 + Opus） |
 | `./test_data/compare_adaptive.wav` | adaptive_normalize 处理后 |
 
-### Key Files
+### 关键文件
 
 | 文件 | 作用 |
 |------|------|
