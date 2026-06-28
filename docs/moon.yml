@@ -3,16 +3,25 @@ tags: ["docs"]
 
 tasks:
   build:
-    command: "mdbook build"
+    command: "zola build"
     inputs:
-      - "src/**/*"
-      - "book.toml"
+      - "content/**/*"
+      - "templates/**/*"
+      - "sass/**/*"
+      - "static/**/*"
+      - "zola.toml"
     outputs:
-      - "book"
+      - "public"
 
   dev:
-    command: "mdbook serve --open"
+    command: "zola serve --open"
     options:
       persistent: true
       cache: false
       runInCI: false
+
+  check-translation:
+    command: "scripts/check-translation.sh"
+    inputs:
+      - "content/**/*.en.md"
+      - "content/**/*.md"

@@ -80,3 +80,7 @@ logs/
 result
 
 /test_data
+\#*
+
+# Zola build output
+docs/public/

@@ -7,6 +7,7 @@
 - [3. 核心禁忌](#3-核心禁忌)
 - [4. 开发工作流](#4-开发工作流)
   - [4.1 开发环境设置（Lix）](#41-开发环境设置lix)
+  - [4.2 多语言文档维护](#42-多语言文档维护)
 - [5. 构建与 CI 调试](#5-构建与-ci-调试)
 - [6. 文档编写规范](#6-文档编写规范)
 - [附录 架构概述](#附录-架构概述)
@@ -177,6 +178,69 @@ nix develop             # 默认完整环境（含 moon、just、mdbook、pkg-co
 3. `components/`: 组件文件
 4. 翻译文本添加到 `public/locales/{lang}/{namespace}.json`
 5. 运行 `moon run server-ui:typecheck` 验证类型
+
+### 4.2 多语言文档维护
+
+多语言文档使用独立目录模式：中文为源语言（`docs/src/`），英文翻译在 `docs/en/`。
+
+#### 目录结构
+
+```
+docs/
+├── src/                     ← 中文源文件（源语言）
+│   ├── book.toml
+│   ├── SUMMARY.md
+│   └── development/...
+├── en/                      ← 英文翻译
+│   ├── SUMMARY.md
+│   └── development/...
+├── book.toml                ← 公共配置（plugin/output）
+├── translation-status.json  ← 翻译状态跟踪
+├── index.html               ← 语言选择页
+└── scripts/check-translation.sh
+```
+
+#### 工作流
+
+| 场景 | 操作 |
+|--------|------|
+| 新增文档 | 在 `docs/src/` 中创建 → 让 AI 翻译后写入 `docs/en/` 对应路径 |
+| 修改文档 | 改 `docs/src/` 中的文件 → 运行 `moon run docs:check-translation` 检查哪些过期 → 让 AI 重译过期文件 |
+| 构建中文 | `moon run docs:build` |
+| 构建英文 | `moon run docs:build-en` |
+| 检查过期 | `moon run docs:check-translation` |
+
+#### 翻译步骤
+
+1. 用 AI 读取 `docs/src/<path>` 的中文内容
+2. 要求 AI 翻译并写入 `docs/en/<path>`（保持相同目录结构）
+3. 用 `git diff docs/en/` 审查翻译变更
+4. 如有手动修正，直接编辑 `docs/en/` 下的 Markdown 文件
+5. 更新 `translation-status.json` 中对应文件的 `status` 为 `"translated"`，填入 `source_hash`（`git log -1 --format=%H -- docs/src/<path>`）和 `translated_at`
+
+#### translation-status.json 格式
+
+```json
+{
+  "version": 1,
+  "locales": {
+    "en": {
+      "files": {
+        "development/server/architecture.md": {
+          "status": "translated",
+          "source_hash": "abc123def456",
+          "translated_at": "2026-06-28T10:00:00Z"
+        }
+      }
+    }
+  }
+}
+```
+
+状态说明：
+- `"untranslated"` — 尚未翻译
+- `"translated"` — 已翻译且同步
+- 已翻译但 `source_hash` 与源文件不一致 = 过期（`check-translation` 标记 `⚠️ STALE`）
 
 ## 5. 构建与 CI 调试
 

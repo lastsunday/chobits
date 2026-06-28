@@ -66,8 +66,7 @@
               just
               pkg-config
               moon
-              mdbook
-              mdbook-mermaid
+              zola
               git-cliff
               lefthook
               protobuf

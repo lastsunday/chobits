@@ -113,9 +113,32 @@ jobs:
           path: apps/extension/cucumber-report/
           retention-days: 30
 
+  docs-check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@e50d5f73bfe71c2dd0aa4218de8f4afa59f8f81d
+        with:
+          extra-conf: |
+            accept-flake-config = true
+
+      - name: Cache Nix store
+        uses: DeterminateSystems/magic-nix-cache-action@6221693898146dc97e38ad0e013488a16477a4c4
+        continue-on-error: true
+
+      - name: Check translations
+        run: nix develop --command moon run docs:check-translation
+
   docs-deploy:
     if: github.event_name != 'pull_request'
-    needs: ci
+    needs: [ci, docs-check]
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -142,6 +165,6 @@ jobs:
         uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./docs/book
+          publish_dir: ./docs/public
           publish_branch: gh-pages
           force_orphan: true
