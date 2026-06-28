@@ -32,7 +32,7 @@ while IFS= read -r -d '' en_file; do
     continue
   fi
 
-  cn_rel="$root_rel/${cn_file#$content_dir/}"
+  cn_rel="${cn_file#$git_root/}"
   current_hash=$(cd "$git_root" && git log -1 --format='%H' -- "$cn_rel" 2>/dev/null || echo "")
   stored_hash=$(get_hash_from_toml "$en_file" || true)
   if [ -z "$stored_hash" ]; then
