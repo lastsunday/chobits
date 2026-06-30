@@ -8,7 +8,8 @@ use std::thread;
 use tokio::sync::mpsc::channel;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{debug, error};
+use tokio_util::sync::CancellationToken;
+use tracing::error;
 
 pub struct TtsMute {}
 
@@ -25,25 +26,26 @@ impl Tts for TtsMute {
         mut text_stream: Pin<
             Box<dyn Stream<Item = core::result::Result<String, ModelError>> + Send + Sync>,
         >,
+        cancel: CancellationToken,
     ) -> Pin<Box<dyn Stream<Item = core::result::Result<TtsData, TtsError>> + Send + Sync>> {
         let (tx, rx) = channel(10);
         thread::spawn(move || {
             block_on(async move {
                 while let Some(text) = text_stream.next().await {
-                    // let instance = instance.clone();
+                    if cancel.is_cancelled() {
+                        break;
+                    }
                     let tx = tx.clone();
                     match &text {
                         Ok(text) => {
-                            debug!("[TTS] receive, text = {}", text);
                             let data = TtsData {
                                 audio: None,
                                 text: text.to_string(),
+                                raw_pcm: None,
                             };
                             if let Err(e) = tx.send(Ok(data)).await {
                                 error!("output packet error = {}", e);
                                 break;
-                            } else {
-                                debug!("[TTS] encode and send audio success");
                             }
                         }
                         Err(e) => {

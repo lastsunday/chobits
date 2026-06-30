@@ -1,4 +1,3 @@
-pub mod frame;
 pub mod message_converter;
 pub mod session;
 
@@ -11,12 +10,11 @@ use crate::{
         client::server::ServerMcpClient,
         mcp_host::{McpHost, UnionMcpHost},
     },
+    record::collector::RecordCollector,
+    record::observer::SessionObserver,
     tts::TtsFactory,
     vad::VadFactory,
-    ws::{
-        frame::{FrameError, FrameResult},
-        session::Session,
-    },
+    ws::session::Session,
 };
 
 use axum::{
@@ -26,19 +24,32 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use axum_extra::{TypedHeader, headers};
+use framework::error::AppError;
 use framework::id::gen_id;
+use framework::prelude::error as error_code;
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
 use message_converter::convert_to_frame;
 use rmcp::transport::{
     StreamableHttpClientTransport, streamable_http_client::StreamableHttpClientTransportConfig,
 };
 use serde::Serialize;
+use service::ws::frame::FrameResult;
+use session::round::OutputMessage;
 use session::{SessionBuilder, listener::DefaultListener};
+
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
-use tracing::{Instrument, Level, debug, error, info, span, trace};
+use tracing::{Instrument, Level, debug, error, info, span, trace, warn};
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
+
+#[derive(Serialize)]
+struct ErrorFrame {
+    #[serde(rename = "type")]
+    mtype: &'static str,
+    code: u32,
+    message: String,
+}
 
 const TAG: &str = "ws";
 
@@ -69,6 +80,7 @@ async fn ws_handler(
     _headers: HeaderMap,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(AppState {
+        conn,
         session_config,
         mcp_config,
         vad_config,
@@ -76,51 +88,60 @@ async fn ws_handler(
         ..
     }): State<AppState>,
 ) -> impl IntoResponse {
-    info!("user_agent = {:?}", user_agent);
+    debug!("user_agent = {:?}", user_agent);
     ws.on_upgrade(move |socket| {
-        let session_id = gen_id();
         let (write, read) = socket.split();
         handle_socket(
-            session_id,
-            session_config,
-            mcp_config,
-            vad_config,
-            audio_config,
+            SocketContext {
+                session_id: gen_id(),
+                conn,
+                session_config,
+                mcp_config,
+                vad_config,
+                audio_config,
+            },
             write,
             read,
         )
     })
 }
 
-pub async fn handle_socket<W, R>(
+pub(crate) struct SocketContext {
     session_id: String,
+    conn: sea_orm::DatabaseConnection,
     session_config: Arc<SessionConfig>,
     mcp_config: Arc<McpConfig>,
     vad_config: Arc<VadConfig>,
     audio_config: Arc<AudioConfig>,
-    mut write: W,
-    read: R,
-) where
+}
+
+pub(crate) async fn handle_socket<W, R>(ctx: SocketContext, mut write: W, read: R)
+where
     W: Sink<Message> + Unpin + Send + 'static,
     R: Stream<Item = Result<Message, axum::Error>> + Unpin + Send + 'static,
 {
-    let span = span!(Level::DEBUG, "socket", id=%session_id);
+    let span = span!(Level::DEBUG, "socket", id=%ctx.session_id);
     let _guard = span.enter();
+    let record = RecordCollector::new(ctx.conn);
     let mut session = SessionBuilder::new()
-        .with_id(session_id.clone())
+        .with_id(ctx.session_id.clone())
         .with_listener(Box::new(DefaultListener::new(
-            Arc::new(Mutex::new(VadFactory::create_model(&vad_config))),
+            VadFactory::create_model(&ctx.vad_config),
             AsrFactory::global().default().clone(),
-            audio_config.clone(),
+            ctx.audio_config.clone(),
         )))
         .with_model(LlmFactory::global().default())
         .with_tts(TtsFactory::global().default())
         .with_mcp_host(Arc::new(Mutex::new(
-            create_mcp_host(session_id.clone(), mcp_config.clone()).await,
+            create_mcp_host(ctx.session_id.clone(), ctx.mcp_config.clone()).await,
         )))
-        .with_config(session_config.clone())
-        .with_audio_config(audio_config.clone())
+        .with_config(ctx.session_config.clone())
+        .with_audio_config(ctx.audio_config.clone())
+        .add_observer(Arc::new(record) as Arc<dyn SessionObserver>)
         .build();
+    for observer in &session.observers {
+        observer.on_session_start(&ctx.session_id).await;
+    }
     if let Err(e) = session.start().instrument(span.clone()).await {
         error!("{}", e);
         let result = write.close().await;
@@ -129,14 +150,15 @@ pub async fn handle_socket<W, R>(
         }
         return;
     }
-    let session_id_clone = session_id.clone();
-    let output = session.output_frame().await;
+    let session_id_clone = ctx.session_id.clone();
+    let (output_stream, _epoch, _latest_activity_time, _frame_duration, _session_epoch) =
+        session.output_frame().await;
     tokio::spawn(async move {
         let span = span!(parent:None,Level::DEBUG, "socket", id=%session_id_clone);
-        on_send(output, write).instrument(span).await
+        on_send(output_stream, write).instrument(span).await
     });
     tokio::spawn(async move {
-        let span = span!(parent:None,Level::DEBUG, "socket", id=%session_id);
+        let span = span!(parent:None,Level::DEBUG, "socket", id=%ctx.session_id);
         on_recv(session, read).instrument(span).await
     });
 }
@@ -146,159 +168,73 @@ where
     R: Stream<Item = Result<Message, axum::Error>> + Unpin + Send + 'static,
 {
     while let Some(Ok(msg)) = read.next().await {
-        let result = convert_to_frame(&msg).await;
+        let result = convert_to_frame(&msg);
         if result.is_break() {
             if let Some(item) = result.break_value() {
                 match item {
-                    Some(frame) => {
-                        match frame {
-                            frame::Frame::Voice { data: _data } => {
-                                trace!(target:"frame","[RECV] Voice");
-                            }
-                            _ => {
-                                debug!(target:"frame","[RECV] {:?}", frame);
-                            }
-                        }
-                        match frame {
-                            frame::Frame::Close(close_message) => {
-                                info!("break value close message = {:?}", close_message);
-                                session.stop().await;
-                                return;
-                            }
-                            _ => {
-                                session.accept_frame(&frame).await;
-                            }
-                        }
-                    }
-                    None => {
-                        info!("break value none");
-                        session.stop().await;
-                        return;
-                    }
+                    Some(frame) => session.accept_frame(&frame).await,
+                    None => trace!("break value none"),
                 }
             }
+            session.stop().await;
             return;
         }
         if result.is_continue()
             && let Some(item) = result.continue_value()
+            && let Some(frame) = item
         {
-            match item {
-                Some(frame) => {
-                    match frame {
-                        frame::Frame::Voice { data: _data } => {
-                            trace!(target:"frame","[RECV] Voice");
-                        }
-                        _ => {
-                            debug!(target:"frame","[RECV] {:?}", frame);
-                        }
-                    }
-                    match frame {
-                        frame::Frame::Abort(abort_message) => {
-                            debug!(",abort message = {:?}", abort_message);
-                            session.new_round().await;
-                        }
-                        frame::Frame::Ping { data } => {
-                            debug!("ping,len = {}", data.len());
-                        }
-                        frame::Frame::Pong { data } => {
-                            debug!("pong,len = {}", data.len());
-                        }
-                        _ => {
-                            session.accept_frame(&frame).await;
-                        }
-                    }
-                }
-                None => {
-                    info!("unkonw continue message");
-                }
-            }
+            session.accept_frame(&frame).await
+        } else {
+            warn!("unknown continue message");
         }
     }
+    session.stop().await;
 }
 
 async fn on_send<W>(
-    mut output: impl Stream<Item = Result<FrameResult, FrameError>> + Unpin + Send + 'static,
+    mut output: impl Stream<Item = OutputMessage> + Unpin + Send + 'static,
     mut write: W,
 ) where
     W: Sink<Message> + Unpin + Send + 'static,
 {
-    while let Some(data) = output.next().await {
-        match data {
-            Ok(frame) => {
-                match &frame {
-                    frame::FrameResult::AudioResult(_audio_message) => {
-                        trace!(target:"frame","[SEND] Audio");
-                    }
-                    _ => {
-                        debug!(target:"frame","[SEND] {:?}", frame);
+    while let Some(msg) = output.next().await {
+        match msg.payload {
+            Ok(frame) => match frame {
+                FrameResult::AudioResult(msg) => {
+                    if write.send(Message::Binary(msg.data.into())).await.is_err() {
+                        break;
                     }
                 }
-                match frame {
-                    frame::FrameResult::HelloResult(message) => {
-                        if send_text(&mut write, &message).await {
-                            info!("send hello data failure");
-                            break;
-                        }
-                    }
-                    frame::FrameResult::STTResult(message) => {
-                        if send_text(&mut write, &message).await {
-                            info!("send stt data failure");
-                            break;
-                        }
-                    }
-                    frame::FrameResult::LLMResult(message) => {
-                        if send_text(&mut write, &message).await {
-                            info!("send llm data failure");
-                            break;
-                        }
-                    }
-                    frame::FrameResult::TTSResult(message) => {
-                        if send_text(&mut write, &message).await {
-                            info!("send tts data failure");
-                            break;
-                        }
-                    }
-                    frame::FrameResult::McpResult(message) => {
-                        if send_text(&mut write, &message).await {
-                            info!("send mcp request data failure");
-                            break;
-                        }
-                    }
-                    frame::FrameResult::AudioResult(audio_message) => {
-                        let data = audio_message.data;
-                        if write.send(Message::Binary(data.into())).await.is_err() {
-                            info!("send audio data failure");
-                            break;
-                        }
-                    }
-                    frame::FrameResult::CloseResult => {
-                        let result = write.close().await;
-                        if result.is_err() {
-                            info!("write close failure");
-                            break;
-                        }
+                FrameResult::CloseResult => {
+                    if write.close().await.is_err() {
+                        break;
                     }
                 }
-            }
-            Err(e) => {
-                error!("{:?}", e);
-                return;
+                _ => {
+                    let data = serde_json::to_string(&frame).expect("frame to json failure");
+                    if write.send(Message::Text(data.into())).await.is_err() {
+                        break;
+                    }
+                }
+            },
+            Err(api_err) => {
+                api_err.log();
+                let AppError::App { code, message, .. } = &api_err;
+                let data = serde_json::to_string(&ErrorFrame {
+                    mtype: "error",
+                    code: *code,
+                    message: message.clone(),
+                })
+                .expect("error frame to json failure");
+                if write.send(Message::Text(data.into())).await.is_err() {
+                    break;
+                }
             }
         }
     }
-    let result = write.close().await;
-    if result.is_err() {
+    if write.close().await.is_err() {
         info!("write close failure");
     }
-}
-
-pub async fn send_text<W, T>(write: &mut W, value: &T) -> bool
-where
-    W: Sink<Message> + Unpin + Send + 'static,
-    T: ?Sized + Serialize,
-{
-    let result: String = serde_json::to_string(value).expect("value to json failure");
-    write.send(Message::Text(result.into())).await.is_err()
 }
 
 async fn create_server_mcp_client(uri: String) -> anyhow::Result<ServerMcpClient> {
@@ -352,4 +288,13 @@ where
             _ => Err((StatusCode::NOT_FOUND, "unknown version").into_response()),
         }
     }
+}
+
+#[error_code]
+pub enum WsErrorCode {
+    TtsEncode = 504001,
+    TtsText = 504002,
+    AsrFailure = 504003,
+    LlmFailure = 504004,
+    InternalError = 504005,
 }

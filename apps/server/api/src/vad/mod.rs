@@ -3,25 +3,17 @@ use crate::config::VadModel;
 use crate::config::vad::VadConfig;
 use crate::vad::model::earshot::VadEarshot;
 use crate::{common::ModelError, vad::model::void::VadVoid};
-use async_trait::async_trait;
-use model::silero::VadSilero;
 use std::sync::{Arc, OnceLock};
 
-#[async_trait]
 pub trait Vad: Send + Sync {
-    async fn accept_waveform(&mut self, samples: Vec<f32>) -> Result<(), ModelError>;
-    async fn front(&mut self) -> SpeechSegment;
-    async fn is_empty(&mut self) -> bool;
-    async fn is_speech(&mut self) -> bool;
-    async fn pop(&mut self);
-    async fn clear(&mut self);
-    async fn window_size(&self) -> usize;
-}
-
-#[derive(Debug)]
-pub struct SpeechSegment {
-    pub start: i32,
-    pub samples: Vec<f32>,
+    /// Feed audio frame (window_size samples). Returns speech probability [0, 1].
+    fn accept_waveform(&mut self, samples: &[f32]) -> Result<f32, ModelError>;
+    /// Whether the state machine currently considers speech active.
+    fn is_speech(&mut self) -> bool;
+    /// Reset all internal state.
+    fn clear(&mut self);
+    /// Number of samples expected per frame.
+    fn window_size(&self) -> usize;
 }
 
 static VAD_INSTANCE: OnceLock<VadFactory> = OnceLock::new();
@@ -50,11 +42,8 @@ impl VadFactory {
 
     pub fn create_model(config: &VadConfig) -> Box<dyn Vad> {
         match config.model.as_ref().expect("vad model empty") {
-            VadModel::Silero => {
-                Box::new(VadSilero::new(config.path.clone().expect("vad path is empty")).unwrap())
-            }
             VadModel::Void => Box::new(VadVoid::new().unwrap()),
-            VadModel::Earshot => Box::new(VadEarshot::new().unwrap()),
+            VadModel::Earshot => Box::new(VadEarshot::new(config).unwrap()),
         }
     }
 }

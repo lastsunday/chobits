@@ -4,7 +4,7 @@ pub mod model;
 
 use crate::{
     config::{self, llm::LlmConfig},
-    llm::model::{echo::Echo, minicpm4::Minicpm4, qwen3::LlmQwen},
+    llm::model::{echo::Echo, qwen3::LlmQwen},
 };
 use async_trait::async_trait;
 use rig::{
@@ -59,9 +59,6 @@ impl LlmFactory {
         match config.model.as_ref().expect("llm model is empty") {
             config::LlmModel::Qwen3 => {
                 Box::new(LlmQwen::new(config.path.as_ref().expect("llm path is empty")).unwrap())
-            }
-            config::LlmModel::MiniCPM4 => {
-                Box::new(Minicpm4::new(config.path.as_ref().expect("llm path is empty")).unwrap())
             }
             config::LlmModel::Echo => Box::new(Echo::new().unwrap()),
         }

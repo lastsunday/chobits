@@ -1,9 +1,4 @@
-use async_trait::async_trait;
-
-use crate::{
-    common::ModelError,
-    vad::{SpeechSegment, Vad},
-};
+use crate::{common::ModelError, vad::Vad};
 
 #[derive(Clone)]
 pub struct VadVoid {}
@@ -14,32 +9,18 @@ impl VadVoid {
     }
 }
 
-#[async_trait]
 impl Vad for VadVoid {
-    async fn accept_waveform(&mut self, _samples: Vec<f32>) -> Result<(), ModelError> {
-        Ok(())
+    fn accept_waveform(&mut self, _samples: &[f32]) -> Result<f32, ModelError> {
+        Ok(1.0)
     }
 
-    async fn front(&mut self) -> SpeechSegment {
-        SpeechSegment {
-            start: 0,
-            samples: vec![],
-        }
-    }
-
-    async fn is_empty(&mut self) -> bool {
+    fn is_speech(&mut self) -> bool {
         true
     }
 
-    async fn is_speech(&mut self) -> bool {
-        true
-    }
+    fn clear(&mut self) {}
 
-    async fn pop(&mut self) {}
-
-    async fn clear(&mut self) {}
-
-    async fn window_size(&self) -> usize {
+    fn window_size(&self) -> usize {
         512
     }
 }

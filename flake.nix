@@ -1,0 +1,149 @@
+{
+  description = "chobits monorepo development environment";
+
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/3e41b24abd260e8f71dbe2f5737d24122f972158";
+    flake-utils.url = "github:numtide/flake-utils";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-utils.follows = "flake-utils";
+    };
+  };
+
+  outputs = { self, nixpkgs, flake-utils, rust-overlay }:
+    flake-utils.lib.eachDefaultSystem (system:
+      let
+        pkgs = import nixpkgs {
+          inherit system;
+          overlays = [ rust-overlay.overlays.default ];
+        };
+
+        rustToolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+
+        nodeMajor = builtins.head (builtins.match "([0-9]+)\\..*" (
+          pkgs.lib.trim (builtins.readFile ./.node-version)
+        ));
+        nodejs = pkgs."nodejs_${nodeMajor}";
+
+        # moonrepo CLI v2 — prebuilt binary from GitHub releases
+        moonVersion = "2.3.2";
+        moonTarget = {
+          x86_64-linux   = "x86_64-unknown-linux-gnu";
+          aarch64-linux  = "aarch64-unknown-linux-gnu";
+          x86_64-darwin  = "x86_64-apple-darwin";
+          aarch64-darwin = "aarch64-apple-darwin";
+        }.${system};
+        moonSha256 = {
+          x86_64-linux   = "ed7a7b67c3afa5ab47bfda360dfb27dd47e82e4b3847d0e9de711c3f05292ac9";
+          aarch64-linux  = "22930ff68775fd515fee39e4eea19ea5775e46151bf54368eccfbcf645b59f12";
+          x86_64-darwin  = "e48a47f56e8333879cbf18f3c871ae8a85515c0733091d7a27608cdeedd2bfa4";
+          aarch64-darwin = "5e7994592f46cb3b044296be64839a1017ce38f16748f0ab893d83d3ef192c7a";
+        }.${system};
+        moon = pkgs.stdenv.mkDerivation {
+          name = "moon-${moonVersion}";
+          src = pkgs.fetchurl {
+            url = "https://github.com/moonrepo/moon/releases/download/v${moonVersion}/moon_cli-${moonTarget}.tar.xz";
+            sha256 = moonSha256;
+          };
+          sourceRoot = "moon_cli-${moonTarget}";
+          installPhase = ''
+            install -m755 -D moon "$out/bin/moon"
+            install -m755 -D moonx "$out/bin/moonx"
+          '';
+          meta.mainProgram = "moon";
+        };
+      in {
+        packages.moon = moon;
+
+        devShells = {
+          default = pkgs.mkShell {
+            packages = with pkgs; [
+              git
+              rustToolchain
+              nodejs
+              pnpm
+              just
+              pkg-config
+              moon
+              zola
+              git-cliff
+              lefthook
+              protobuf
+              sccache
+              flutter
+              jdk17
+              cmake
+              ninja
+            ];
+
+            buildInputs = with pkgs; [
+              openssl
+              sqlite
+              postgresql_16
+              openblas
+              libopus.dev
+            ] ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
+              pkgs.libiconv
+            ];
+
+            shellHook = ''
+              # macOS native xcrun wrapper — override Nix xcbuild's xcrun
+              # which breaks Flutter's codesign invocation.
+              mkdir -p /tmp/nix-xcrun-wrapper
+              printf '%s\n' '#!/bin/sh' 'unset DEVELOPER_DIR SDKROOT' 'exec /usr/bin/xcrun "$@"' > /tmp/nix-xcrun-wrapper/xcrun
+              chmod +x /tmp/nix-xcrun-wrapper/xcrun
+              export PATH="/tmp/nix-xcrun-wrapper:$PATH"
+
+              # Ensure PUB_CACHE is writable (HOME may be missing in CI)
+              if [ -z "$PUB_CACHE" ]; then
+                if [ -n "$HOME" ]; then
+                  export PUB_CACHE="$HOME/.pub-cache"
+                else
+                  export PUB_CACHE="/tmp/.pub-cache"
+                fi
+              fi
+
+              echo "✦ chobits devShell (${system})"
+              echo "  Rust: $(rustc --version)"
+              echo "  Node: $(node --version)"
+              echo "  pnpm: $(pnpm --version)"
+              echo "  sccache: $(sccache --version | head -1)"
+              echo ""
+              echo "  Run: moon run <task>"
+              export CARGO_BUILD_RUSTC_WRAPPER=sccache
+            '';
+          };
+
+          server = pkgs.mkShell {
+            packages = with pkgs; [
+              git
+              rustToolchain
+              pkg-config
+              protobuf
+              sccache
+            ];
+            buildInputs = with pkgs; [
+              openssl
+              sqlite
+              postgresql_16
+              openblas
+              libopus.dev
+            ] ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
+              pkgs.libiconv
+            ];
+            shellHook = ''
+              export CARGO_BUILD_RUSTC_WRAPPER=sccache
+            '';
+          };
+
+          frontend = pkgs.mkShell {
+            packages = with pkgs; [
+              git
+              nodejs
+              pnpm
+            ];
+          };
+        };
+      });
+}

@@ -25,7 +25,7 @@ use rig::{
 };
 use std::thread;
 use tokenizers::Tokenizer;
-use tracing::{error, trace};
+use tracing::error;
 
 #[derive(Clone)]
 pub struct LlmQwen {
@@ -40,27 +40,13 @@ impl LlmQwen {
         let token_path = format!("{}tokenizer.json", path);
         let mut file = std::fs::File::open(model_path.clone())
             .map_err(|_e| ModelError::ModelFileNotFound(model_path.clone()))?;
-        // let start = std::time::Instant::now();
         let device = device(false)?;
         let model = {
             let model = gguf_file::Content::read(&mut file)
                 .map_err(|_e| ModelError::ModelInitFailure(model_path.clone()))?;
-            // let mut total_size_in_bytes = 0;
-            // for (_, tensor) in model.tensor_infos.iter() {
-            //     let elem_count = tensor.shape.elem_count();
-            //     total_size_in_bytes +=
-            //         elem_count * tensor.ggml_dtype.type_size() / tensor.ggml_dtype.block_size();
-            // }
-            // debug!(
-            //     "loaded {:?} tensors ({}) in {:.2}s",
-            //     model.tensor_infos.len(),
-            //     &format_size(total_size_in_bytes),
-            //     start.elapsed().as_secs_f32(),
-            // );
             Qwen3::from_gguf(model, &mut file, &device)
                 .map_err(|_e| ModelError::ModelInitFailure(model_path.clone()))?
         };
-        // debug!("model built");
         let tokenizer = Tokenizer::from_file(token_path.clone())
             .map_err(|_e| ModelError::TokenInitFailure(token_path.clone()))?;
         Ok(Self {
@@ -184,7 +170,7 @@ fn convert_request_to_prompt(request: &CompletionRequest) -> String {
     //control tokens see https://qwen.readthedocs.io/en/latest/getting_started/concepts.html
     let mut prompt = String::new();
     prompt.push_str(&create_system_prompt(&request.preamble));
-    // prompt.push_str(" /no_think\n");
+
     //<|im_start|>system\n{} /no_think
     // tools handle
     if !&request.tools.is_empty() {
@@ -213,15 +199,13 @@ async fn handle(
 ) -> Result<(), CompletionError> {
     let mut tos = TokenOutputStream::new(tokenizer);
     let prompt_str = convert_request_to_prompt(request);
-    trace!("formatted prompt: {}", &prompt_str);
-    // debug!("prompt str len: {}", prompt_str.len());
 
     let tokens = tos
         .tokenizer()
         .encode(prompt_str, true)
         .map_err(|e| ModelError::Chat(format!("tokenizer encode error {}", e)))?;
     let tokens = tokens.get_ids();
-    // debug!("tokens len = {}", tokens.len());
+
     // TODO:setting
     // https://huggingface.co/Qwen/Qwen3-1.7B
     let to_sample = request.max_tokens.unwrap_or(32768) as usize;
@@ -234,8 +218,6 @@ async fn handle(
     let mut token_converter = TokenConverter::new();
 
     let mut logits_processor = LogitsProcessor::from_sampling(seed, Sampling::All { temperature });
-
-    // let start_prompt_processing = std::time::Instant::now();
 
     let input = Tensor::new(tokens, &device)
         .map_err(|e| ModelError::Chat(format!("tensor create error {}", e)))?
@@ -250,8 +232,6 @@ async fn handle(
     let mut next_token = logits_processor
         .sample(&logits)
         .map_err(|e| ModelError::Chat(format!("tensor processor sample error {}", e)))?;
-
-    // let prompt_dt = start_prompt_processing.elapsed();
 
     all_tokens.push(next_token);
     if let Some(t) = tos
@@ -271,8 +251,6 @@ async fn handle(
         .get_vocab(true)
         .get("<|im_end|>")
         .ok_or_else(|| ModelError::Chat("tensor can't get eos_token error ".to_string()))?;
-
-    // let start_post_prompt = std::time::Instant::now();
 
     let mut sampled = 0;
     for index in 0..to_sample {
@@ -331,16 +309,6 @@ async fn handle(
         }
     }
 
-    // let dt = start_post_prompt.elapsed();
-    // debug!(
-    //     "{:4} prompt tokens processed: {:.2} token/s",
-    //     tokens.len(),
-    //     tokens.len() as f64 / prompt_dt.as_secs_f64(),
-    // );
-    // debug!(
-    //     "{sampled:4} tokens generated: {:.2} token/s",
-    //     sampled as f64 / dt.as_secs_f64(),
-    // );
     let message = RawStreamingChoice::FinalResponse(
         rig::providers::openai::streaming::StreamingCompletionResponse {
             usage: Usage {
@@ -378,10 +346,10 @@ impl Model for LlmQwen {
         thread::spawn(move || {
             block_on(async move {
                 // TODO:
-                if let Err(e) = handle(&request, tokenizer, model, device, tx.clone()).await {
-                    if let Err(e) = tx.send(Err(e)).await {
-                        error!("chat llmError send error = {}", e);
-                    };
+                if let Err(e) = handle(&request, tokenizer, model, device, tx.clone()).await
+                    && let Err(e) = tx.send(Err(e)).await
+                {
+                    error!("chat llmError send error = {}", e);
                 };
                 drop(tx);
             })
@@ -410,7 +378,6 @@ mod tests {
         completion::{CompletionRequest, ToolDefinition},
         message::{AssistantContent, Message, UserContent},
     };
-    use tracing::debug;
     use tracing_test::traced_test;
 
     use crate::llm::model::qwen3::convert_request_to_prompt;
@@ -501,7 +468,6 @@ mod tests {
             tool_choice: None,
             additional_params: None,
         };
-        let result = convert_request_to_prompt(&request);
-        // debug!("{}", result);
+        let _result = convert_request_to_prompt(&request);
     }
 }

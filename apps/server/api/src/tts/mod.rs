@@ -1,17 +1,17 @@
 pub mod model;
 
-use self::model::voxcpm::TtsVoxCPM;
+use self::model::matcha::TtsMatcha;
+use self::model::mute::TtsMute;
 use crate::common::ModelError;
 use crate::config;
 use crate::config::audio::AudioConfig;
 use crate::config::tts::TtsConfig;
-use crate::tts::model::mute::TtsMute;
 use async_trait::async_trait;
 use futures::Stream;
-use model::kokoro::TtsKokoro;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::sync::OnceLock;
-use std::{cmp, sync::Arc};
+use tokio_util::sync::CancellationToken;
 
 #[async_trait]
 pub trait Tts: Send + Sync {
@@ -20,12 +20,14 @@ pub trait Tts: Send + Sync {
         text_stream: Pin<
             Box<dyn Stream<Item = core::result::Result<String, ModelError>> + Send + Sync>,
         >,
+        cancel: CancellationToken,
     ) -> Pin<Box<dyn Stream<Item = core::result::Result<TtsData, TtsError>> + Send + Sync>>;
 }
 
 pub struct TtsData {
     pub audio: Option<Vec<Vec<u8>>>,
     pub text: String,
+    pub raw_pcm: Option<(Vec<f32>, i32)>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -76,44 +78,25 @@ impl TtsFactory {
         audio_config: &AudioConfig,
     ) -> Result<Box<dyn Tts>, anyhow::Error> {
         match tts_config.model.clone().expect("tts model is empty") {
-            config::TtsModel::Kokoro => Ok(Box::new(
-                TtsKokoro::new(
-                    &tts_config.path.clone().expect("tts path is empty"),
-                    audio_config
-                        .output_sample_rate
-                        .expect("tts output sample rate is empty"),
-                    audio_config
-                        .output_channel
-                        .expect("tts output channel is empty"),
-                    audio_config
-                        .output_frame_duration
-                        .expect("tts output frame duration is empty"),
-                )
-                .await?,
-            )),
-            config::TtsModel::Voxcpm => Ok(Box::new(
-                TtsVoxCPM::new(
-                    &tts_config.path.clone().expect("tts path is empty"),
-                    audio_config
-                        .output_sample_rate
-                        .expect("tts output sample rate is empty"),
-                    audio_config
-                        .output_channel
-                        .expect("tts output channel is empty"),
-                    audio_config
-                        .output_frame_duration
-                        .expect("tts output frame duration is empty"),
-                    tts_config.reference_prompt_text.clone(),
-                    tts_config.reference_prompt_wav_path.clone(),
-                )
-                .await?,
-            )),
             config::TtsModel::Mute => Ok(Box::new(TtsMute::new().await?)),
+            config::TtsModel::MatchaTts => {
+                Ok(Box::new(TtsMatcha::new(tts_config, audio_config).await?))
+            }
         }
     }
 
     pub fn global() -> &'static TtsFactory {
         INSTANCE.get().unwrap()
+    }
+}
+
+use crate::common::ModelErrorCode;
+use framework::err;
+use framework::error::AppError;
+
+impl From<TtsError> for AppError {
+    fn from(value: TtsError) -> Self {
+        err!(ModelErrorCode::Tts).with_extra(value.to_string())
     }
 }
 
@@ -126,12 +109,14 @@ pub fn encode_sample_to_tts_packet(
 ) -> Vec<Vec<u8>> {
     let len = sample.len();
     let size = calcalute_tts_packet_size(encode_sample_rate, encode_channel, encode_frame_duration);
-    let count = len / size;
-    let mut audio: Vec<Vec<u8>> = Vec::new();
-    for n in 1..count {
-        let start = (n - 1) * size;
-        let end = cmp::min(n * size, len);
-        let packet = encoder.encode_vec_float(&sample[start..end], size).unwrap();
+    let count = len.div_ceil(size);
+    let mut audio: Vec<Vec<u8>> = Vec::with_capacity(count);
+    for n in 0..count {
+        let start = n * size;
+        let end = std::cmp::min(start + size, len);
+        let mut frame: Vec<f32> = sample[start..end].to_vec();
+        frame.resize(size, 0.0);
+        let packet = encoder.encode_vec_float(&frame, size).unwrap();
         audio.push(packet);
     }
     audio

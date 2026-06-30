@@ -43,16 +43,24 @@ impl Session {
                         if let Some(mode) = mode {
                             match mode {
                                 service::chobits::message::listen::ListenMode::Auto => {
+                                    self.interrupt_output().await;
                                     self.phase = Phase::Listen(ListenMode::Auto);
+                                    self.current_mode = RoundMode::Auto;
+                                    self.handle_phase_listen_for_auto_mode(frame).await;
                                 }
                                 service::chobits::message::listen::ListenMode::Manual => {
+                                    self.interrupt_output().await;
                                     self.phase = Phase::Listen(ListenMode::Manual);
+                                    self.current_mode = RoundMode::Manual;
+                                    self.listener.reset(None).await;
                                 }
                                 service::chobits::message::listen::ListenMode::RealTime => {
+                                    self.interrupt_output().await;
                                     self.phase = Phase::Listen(ListenMode::RealTime);
+                                    self.current_mode = RoundMode::RealTime;
+                                    self.handle_phase_listen_for_realtime_mode(frame).await;
                                 }
                             }
-                            Box::pin(self.accept_frame(frame)).await;
                         } else {
                             error!(
                                 "invalid frame in phase = {:?},frame = {:?}, state = {:?}",
@@ -67,21 +75,27 @@ impl Session {
                                 match mode {
                                     service::chobits::message::listen::ListenMode::Auto => {
                                         self.phase = Phase::Listen(ListenMode::Auto);
+                                        self.current_mode = RoundMode::Auto;
+                                        self.handle_phase_listen_for_auto_mode(frame).await;
                                     }
                                     service::chobits::message::listen::ListenMode::Manual => {
                                         self.phase = Phase::Listen(ListenMode::Manual);
+                                        self.current_mode = RoundMode::Manual;
+                                        self.handle_phase_listen_for_manual_mode(frame).await;
                                     }
                                     service::chobits::message::listen::ListenMode::RealTime => {
                                         self.phase = Phase::Listen(ListenMode::RealTime);
+                                        self.current_mode = RoundMode::RealTime;
+                                        self.handle_phase_listen_for_realtime_mode(frame).await;
                                     }
                                 }
-                                Box::pin(self.accept_frame(frame)).await;
                             }
                             None => {
                                 // eps32-c3 default listen mode is none
                                 // set listen mode to realtime
                                 self.phase = Phase::Listen(ListenMode::RealTime);
-                                Box::pin(self.accept_frame(frame)).await;
+                                self.current_mode = RoundMode::RealTime;
+                                self.handle_phase_listen_for_realtime_mode(frame).await;
                             }
                         }
                     }
@@ -94,7 +108,9 @@ impl Session {
                 }
             }
             Frame::Voice { data } => {
-                self.listener.listen(data).await;
+                self.listener
+                    .accept(listener::ListenInput::Audio(data.to_vec()))
+                    .await;
             }
             _ => {
                 error!(
@@ -106,7 +122,6 @@ impl Session {
     }
 
     async fn handle_phase_listen<'a>(&mut self, mode: &ListenMode, frame: &Frame<'a>) {
-        trace!("mode = {:?}", mode);
         match mode {
             ListenMode::Auto => self.handle_phase_listen_for_auto_mode(frame).await,
             ListenMode::Manual => self.handle_phase_listen_for_manual_mode(frame).await,
@@ -124,9 +139,11 @@ impl Session {
                         if let Some(mode) = mode {
                             match mode {
                                 service::chobits::message::listen::ListenMode::Auto => {
+                                    self.interrupt_output().await;
                                     self.phase = Phase::Listen(ListenMode::Auto);
-                                    self.update_latest_activity_time().await;
-                                    self.new_round().await;
+                                    self.current_mode = RoundMode::Auto;
+                                    self.update_latest_activity_time();
+                                    self.new_round(RoundMode::Auto).await;
                                     if let Some(round) = &mut self.current_round {
                                         round.accept_command(Command::Wake { text: "Hello" }).await;
                                         let silence_voice_timeout = self
@@ -140,11 +157,15 @@ impl Session {
                                     }
                                 }
                                 service::chobits::message::listen::ListenMode::Manual => {
+                                    self.interrupt_output().await;
                                     self.phase = Phase::Listen(ListenMode::Manual);
+                                    self.current_mode = RoundMode::Manual;
                                     self.listener.reset(None).await;
                                 }
                                 service::chobits::message::listen::ListenMode::RealTime => {
+                                    self.interrupt_output().await;
                                     self.phase = Phase::Listen(ListenMode::RealTime);
+                                    self.current_mode = RoundMode::RealTime;
                                 }
                             }
                         } else {
@@ -165,20 +186,26 @@ impl Session {
             Frame::Voice { data } => {
                 let state = self.listener.get_state();
                 match &self.current_round {
-                    Some(_round) => {
-                        // debug!(
-                        //     "listener listen round end = {} state = {:?}",
-                        //     round_end, state,
-                        // );
-                        self.listener.listen(data).await;
-                        if state == crate::ws::session::listener::ListenState::End {
+                    Some(round) => {
+                        self.listener
+                            .accept(listener::ListenInput::Audio(data.to_vec()))
+                            .await;
+                        let new_state = self.listener.get_state();
+                        if new_state == listener::ListenState::Listening(true)
+                            && state != listener::ListenState::Listening(true)
+                        {
+                            round.stop().await;
+                        }
+                        if state == listener::ListenState::End
+                            || new_state == listener::ListenState::End
+                        {
                             self.handle_listen_end().await;
                             let silence_voice_timeout = self
                                 .config
                                 .silence_voice_timeout
                                 .expect("logic silence voice timeout is empty");
                             self.listener.reset(Some(silence_voice_timeout)).await;
-                            self.update_latest_activity_time().await;
+                            self.update_latest_activity_time();
                         }
                     }
                     None => {
@@ -189,11 +216,11 @@ impl Session {
                                 .silence_voice_timeout
                                 .expect("logic silence voice timeout is empty");
                             self.listener.reset(Some(silence_voice_timeout)).await;
-                            self.update_latest_activity_time().await;
+                            self.update_latest_activity_time();
                         } else {
-                            trace!("before listen data len = {}", data.len());
-                            self.listener.listen(data).await;
-                            trace!("listen data len = {}", data.len());
+                            self.listener
+                                .accept(listener::ListenInput::Audio(data.to_vec()))
+                                .await;
                         }
                     }
                 }
@@ -201,24 +228,15 @@ impl Session {
                     listener::ListenState::Listening(speech) => speech,
                     _ => false,
                 };
-                // trace!("speech: {:?}", is_speech);
-                // trace!("before update latest_activity_time");
                 if is_speech {
-                    self.update_latest_activity_time().await;
+                    self.update_latest_activity_time();
                 } else {
-                    let latest_activity_time = self.get_latest_activity_time().await;
-                    // debug!("latest activity time: {:?}", latest_activity_time);
-                    // debug!(
-                    //     "close connection time: {:?}",
-                    //     self.config.close_connection_no_voice_time
-                    // );
+                    let latest_activity_time = self.get_latest_activity_time();
                     if let (Some(latest_activity_time), Some(close_connection_no_voice_time)) = (
                         latest_activity_time,
                         self.config.close_connection_no_voice_time,
                     ) {
-                        //connection timeout handle
                         let offset_time = Local::now().timestamp_millis() - latest_activity_time;
-                        // debug!("offset_time = {}", offset_time);
                         if offset_time >= close_connection_no_voice_time {
                             info!(
                                 target:"session",
@@ -229,8 +247,6 @@ impl Session {
                         }
                     }
                 }
-                // trace!("after update latest_activity_time");
-                // debug!("latest_activity_time = {:?}", self.latest_activity_time);
             }
             _ => {
                 error!(
@@ -251,7 +267,9 @@ impl Session {
                         if let Some(mode) = mode {
                             match mode {
                                 service::chobits::message::listen::ListenMode::Auto => {
+                                    self.interrupt_output().await;
                                     self.phase = Phase::Listen(ListenMode::Auto);
+                                    self.current_mode = RoundMode::Auto;
                                     let silence_voice_timeout = self
                                         .config
                                         .silence_voice_timeout
@@ -260,12 +278,15 @@ impl Session {
                                     self.listener.reset(Some(silence_voice_timeout)).await;
                                 }
                                 service::chobits::message::listen::ListenMode::Manual => {
+                                    self.interrupt_output().await;
                                     self.phase = Phase::Listen(ListenMode::Manual);
+                                    self.current_mode = RoundMode::Manual;
                                     self.listener.reset(None).await;
-                                    self.new_round().await;
                                 }
                                 service::chobits::message::listen::ListenMode::RealTime => {
+                                    self.interrupt_output().await;
                                     self.phase = Phase::Listen(ListenMode::RealTime);
+                                    self.current_mode = RoundMode::RealTime;
                                 }
                             }
                         } else {
@@ -276,22 +297,21 @@ impl Session {
                         }
                     }
                     ListenState::Stop => {
-                        self.listener
-                            .set_state(crate::ws::session::listener::ListenState::End);
-                        self.handle_listen_end().await;
+                        if self.current_mode != RoundMode::Text {
+                            self.listener
+                                .set_state(crate::ws::session::listener::ListenState::End);
+                            self.handle_listen_end().await;
+                        }
                     }
                     ListenState::Detect => {
                         let text = &listen_message.text;
                         match text {
                             Some(text) => {
-                                self.new_round().await;
-                                //if match walk word
-                                if let Some(round) = &mut self.current_round {
-                                    // handle send text
-                                    round.accept_command(Command::Chat { text }).await;
-                                } else {
-                                    panic!("current round is none");
-                                }
+                                self.interrupt_output().await;
+                                self.listener
+                                    .accept(listener::ListenInput::Text(text.to_string()))
+                                    .await;
+                                self.handle_listen_end().await;
                             }
                             None => {
                                 error!(
@@ -310,7 +330,17 @@ impl Session {
                 }
             }
             Frame::Voice { data } => {
-                self.listener.listen(data).await;
+                let state = self.listener.get_state();
+                self.listener
+                    .accept(listener::ListenInput::Audio(data.to_vec()))
+                    .await;
+                let new_state = self.listener.get_state();
+                if new_state == listener::ListenState::Listening(true)
+                    && state != listener::ListenState::Listening(true)
+                    && let Some(round) = &self.current_round
+                {
+                    round.stop().await;
+                }
             }
             _ => {
                 error!(
@@ -331,14 +361,20 @@ impl Session {
                         if let Some(mode) = mode {
                             match mode {
                                 service::chobits::message::listen::ListenMode::Auto => {
+                                    self.interrupt_output().await;
                                     self.phase = Phase::Listen(ListenMode::Auto);
+                                    self.current_mode = RoundMode::Auto;
                                 }
                                 service::chobits::message::listen::ListenMode::Manual => {
+                                    self.interrupt_output().await;
                                     self.phase = Phase::Listen(ListenMode::Manual);
+                                    self.current_mode = RoundMode::Manual;
                                     self.listener.reset(None).await;
                                 }
                                 service::chobits::message::listen::ListenMode::RealTime => {
+                                    self.interrupt_output().await;
                                     self.phase = Phase::Listen(ListenMode::RealTime);
+                                    self.current_mode = RoundMode::RealTime;
                                 }
                             }
                         } else {
@@ -352,18 +388,15 @@ impl Session {
                         let text = &listen_message.text;
                         match text {
                             Some(text) => {
-                                self.update_latest_activity_time().await;
-                                self.new_round().await;
+                                self.update_latest_activity_time();
+                                self.new_round(self.current_mode).await;
                                 //if match walk word
                                 if let Some(round) = &mut self.current_round {
                                     // TODO: detech voice id
                                     self.listener
                                         .set_state(crate::ws::session::listener::ListenState::End);
-                                    let command = self.listener.get_result().await;
-                                    match command {
-                                        Ok(_command) => {
-                                            // TODO: handle command
-                                            //say hello
+                                    match self.listener.take_result().await.1 {
+                                        Ok(_) => {
                                             round.accept_command(Command::Wake { text }).await;
                                         }
                                         Err(e) => {
@@ -399,20 +432,26 @@ impl Session {
             Frame::Voice { data } => {
                 let state = self.listener.get_state();
                 match &self.current_round {
-                    Some(_round) => {
-                        // debug!(
-                        //     "listener listen round end = {} state = {:?}",
-                        //     round_end, state,
-                        // );
-                        self.listener.listen(data).await;
-                        if state == crate::ws::session::listener::ListenState::End {
+                    Some(round) => {
+                        self.listener
+                            .accept(listener::ListenInput::Audio(data.to_vec()))
+                            .await;
+                        let new_state = self.listener.get_state();
+                        if new_state == listener::ListenState::Listening(true)
+                            && state != listener::ListenState::Listening(true)
+                        {
+                            round.stop().await;
+                        }
+                        if state == listener::ListenState::End
+                            || new_state == listener::ListenState::End
+                        {
                             self.handle_listen_end().await;
                             let silence_voice_timeout = self
                                 .config
                                 .silence_voice_timeout
                                 .expect("logic silence voice timeout is empty");
                             self.listener.reset(Some(silence_voice_timeout)).await;
-                            self.update_latest_activity_time().await;
+                            self.update_latest_activity_time();
                         }
                     }
                     None => {
@@ -423,11 +462,11 @@ impl Session {
                                 .silence_voice_timeout
                                 .expect("logic silence voice timeout is empty");
                             self.listener.reset(Some(silence_voice_timeout)).await;
-                            self.update_latest_activity_time().await;
+                            self.update_latest_activity_time();
                         } else {
-                            trace!("before listen data len = {}", data.len());
-                            self.listener.listen(data).await;
-                            trace!("listen data len = {}", data.len());
+                            self.listener
+                                .accept(listener::ListenInput::Audio(data.to_vec()))
+                                .await;
                         }
                     }
                 }
@@ -435,24 +474,15 @@ impl Session {
                     listener::ListenState::Listening(speech) => speech,
                     _ => false,
                 };
-                // trace!("speech: {:?}", is_speech);
-                // trace!("before update latest_activity_time");
                 if is_speech {
-                    self.update_latest_activity_time().await;
+                    self.update_latest_activity_time();
                 } else {
-                    let latest_activity_time = self.get_latest_activity_time().await;
-                    // debug!("latest activity time: {:?}", latest_activity_time);
-                    // debug!(
-                    //     "close connection time: {:?}",
-                    //     self.config.close_connection_no_voice_time
-                    // );
+                    let latest_activity_time = self.get_latest_activity_time();
                     if let (Some(latest_activity_time), Some(close_connection_no_voice_time)) = (
                         latest_activity_time,
                         self.config.close_connection_no_voice_time,
                     ) {
-                        //connection timeout handle
                         let offset_time = Local::now().timestamp_millis() - latest_activity_time;
-                        // debug!("offset_time = {}", offset_time);
                         if offset_time >= close_connection_no_voice_time {
                             info!(
                                 target:"session",
@@ -463,8 +493,6 @@ impl Session {
                         }
                     }
                 }
-                // trace!("after update latest_activity_time");
-                // debug!("latest_activity_time = {:?}", self.latest_activity_time);
             }
             _ => {
                 error!(
@@ -499,26 +527,64 @@ impl Session {
             features: None,
             session_id: Some(self.id.clone()),
         };
-        let result = tx.send(Ok(FrameResult::HelloResult(data))).await;
+        let result = tx.send(OutputMessage {
+            epoch: 0,
+            payload: Ok(FrameResult::HelloResult(data)),
+            frame_ctx: None,
+        });
         if result.is_err() {
             info!(target:"session","tx send hello result failure");
         }
     }
 
-    async fn handle_listen_end(&mut self) {
-        let command = self.listener.get_result().await;
-        match command {
-            Ok(command) => {
-                self.new_round().await;
-                info!(                                target:"session",
-"command = {:?}", command.clone());
-                let text = command.text.as_str();
-                let is_speech_clear = self.is_speech_clear(&command.text, command.prob);
+    async fn interrupt_output(&mut self) {
+        self.stop_round().await;
+        self.output_epoch.fetch_add(1, Ordering::Release);
+    }
+
+    async fn finish_asr_inner(
+        &mut self,
+        voice_pcm: Vec<f32>,
+        result: (Vec<f32>, core::result::Result<listener::ListenResult, crate::common::ModelError>),
+        sample_rate: u32,
+    ) {
+        let (_voice_data_from_result, result) = result;
+        match result {
+            Ok(listener::ListenResult::Text(text)) => {
+                self.new_round(RoundMode::Text).await;
+                if let Some(round) = &mut self.current_round {
+                    round.accept_command(Command::Chat { text: &text }).await;
+                } else {
+                    panic!("current round is none");
+                }
+            }
+            Ok(listener::ListenResult::Audio { text, prob }) => {
+                self.new_round(self.current_mode).await;
+                let round_id = self
+                    .current_round
+                    .as_ref()
+                    .map(|r| r.id.clone())
+                    .unwrap_or_default();
+                if !voice_pcm.is_empty() {
+                    for observer in &self.observers {
+                        observer.on_asr(&AsrContext {
+                            round_id: round_id.clone(),
+                            voice_pcm: voice_pcm.clone(),
+                            sample_rate,
+                            text: text.clone(),
+                            confidence: prob,
+                        });
+                    }
+                    for observer in &self.observers {
+                        observer.on_asr_complete(&round_id);
+                    }
+                }
+                let is_speech_clear = self.is_speech_clear(&text, prob);
                 if let Some(round) = &mut self.current_round {
                     if is_speech_clear {
-                        round.accept_command(Command::Chat { text }).await;
+                        round.accept_command(Command::AsrChat { text: &text }).await;
                     } else {
-                        round.accept_command(Command::ListenUnclear { text }).await;
+                        round.accept_command(Command::ListenUnclear { text: &text }).await;
                     }
                 } else {
                     panic!("current round is none");
@@ -526,6 +592,49 @@ impl Session {
             }
             Err(e) => {
                 error!("{:?}", e);
+                self.stop_round().await;
+            }
+        }
+    }
+
+    async fn handle_listen_end(&mut self) {
+        let sample_rate = self
+            .audio_config
+            .input_sample_rate
+            .expect("input sample rate is empty");
+
+        let voice_pcm = self.listener.take_voice().await;
+
+        if voice_pcm.is_empty() {
+            // Text path — harvest pending text from listener
+            let (voice_data, result) = self.listener.take_result().await;
+            self.finish_asr_inner(voice_data.clone(), (voice_data, result), sample_rate).await;
+        } else {
+            // Voice path — run ASR inline (all speech ended, no more audio coming)
+            let Some(asr) = self.listener.clone_asr() else {
+                error!("no ASR engine available, skipping transcription");
+                return;
+            };
+            let mut asr = asr.lock().await;
+            match asr.transcribe(sample_rate, &voice_pcm).await {
+                Ok(transcript) => {
+                    self.finish_asr_inner(
+                        voice_pcm.clone(),
+                        (
+                            voice_pcm,
+                            Ok(listener::ListenResult::Audio {
+                                text: transcript.text,
+                                prob: transcript.prob,
+                            }),
+                        ),
+                        sample_rate,
+                    )
+                    .await;
+                }
+                Err(e) => {
+                    error!("ASR transcription error: {:?}", e);
+                    self.stop_round().await;
+                }
             }
         }
     }

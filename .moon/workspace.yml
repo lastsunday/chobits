@@ -1,0 +1,11 @@
+projects:
+  - 'apps/*'
+  - 'libs/*'
+  - 'docs'
+
+vcs:
+  defaultBranch: 'dev'
+  client: 'git'
+
+pipeline:
+  cacheLifetime: '7 days'

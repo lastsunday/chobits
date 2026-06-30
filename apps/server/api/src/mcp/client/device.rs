@@ -3,10 +3,8 @@ use std::sync::{
     atomic::{AtomicI64, Ordering},
 };
 
-use crate::{
-    mcp::client::McpClient,
-    ws::frame::{FrameError, FrameResult},
-};
+use crate::mcp::client::McpClient;
+use crate::ws::session::round::OutputMessage;
 use anyhow::Context;
 use async_trait::async_trait;
 use rig::{
@@ -25,9 +23,10 @@ use service::chobits::message::{
     hello::HelloMessage,
     mcp::{McpMessage, McpRequest},
 };
+use service::ws::frame::FrameResult;
 use tokio::sync::{
     Mutex,
-    mpsc::{Receiver, Sender},
+    mpsc::{Receiver, UnboundedSender},
 };
 
 use tracing::{error, info};
@@ -46,7 +45,7 @@ pub struct DeviceMcpClient {
     next_cursor: Option<String>,
     pub tools: Vec<Tool>,
     pub phase: DeviceMcpPhase,
-    output_tx: Sender<Result<FrameResult, FrameError>>,
+    output_tx: UnboundedSender<OutputMessage>,
     call_tool_result_rx: Arc<Mutex<Receiver<anyhow::Result<ToolResult>>>>,
 }
 
@@ -73,8 +72,9 @@ impl McpClient for DeviceMcpClient {
             task: None,
         });
         let tx = self.output_tx.clone();
-        let result = tx
-            .send(Ok(FrameResult::McpResult(McpRequest::new(
+        let result = tx.send(OutputMessage {
+            epoch: 0,
+            payload: Ok(FrameResult::McpResult(McpRequest::new(
                 self.session_id.clone(),
                 JsonRpcRequest {
                     jsonrpc: JsonRpcVersion2_0,
@@ -85,8 +85,9 @@ impl McpClient for DeviceMcpClient {
                         ..Default::default()
                     },
                 },
-            ))))
-            .await;
+            ))),
+            frame_ctx: None,
+        });
         if result.is_err() {
             Err(anyhow::anyhow!(
                 "tx send mcp tool call failure,name = {}",
@@ -108,7 +109,7 @@ impl McpClient for DeviceMcpClient {
 impl DeviceMcpClient {
     pub fn new(
         session_id: Option<String>,
-        output_tx: Sender<Result<FrameResult, FrameError>>,
+        output_tx: UnboundedSender<OutputMessage>,
         call_tool_result_rx: Arc<Mutex<Receiver<anyhow::Result<ToolResult>>>>,
     ) -> Self {
         Self {
@@ -287,8 +288,11 @@ impl DeviceMcpClient {
     pub async fn request_mcp_initialize(&mut self, _hello_message: &HelloMessage) {
         let tx = self.output_tx.clone();
         let request = self.create_initialize_request().await;
-        // mcp request send
-        let result = tx.send(Ok(FrameResult::McpResult(request))).await;
+        let result = tx.send(OutputMessage {
+            epoch: 0,
+            payload: Ok(FrameResult::McpResult(request)),
+            frame_ctx: None,
+        });
         if result.is_err() {
             info!("tx send mcp initialize reqeust failure");
         }
@@ -300,11 +304,13 @@ impl DeviceMcpClient {
 
     async fn request_mcp_tools_list(&mut self) {
         let tx = self.output_tx.clone();
-        let result = tx
-            .send(Ok(FrameResult::McpResult(
+        let result = tx.send(OutputMessage {
+            epoch: 0,
+            payload: Ok(FrameResult::McpResult(
                 self.create_tools_list_request().await,
-            )))
-            .await;
+            )),
+            frame_ctx: None,
+        });
         if result.is_err() {
             info!("tx send mcp tools list reqeust failure");
         }
