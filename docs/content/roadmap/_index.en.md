@@ -3,7 +3,7 @@ title = "Roadmap"
 weight = 20
 sort_by = "weight"
 [extra]
-source_file_hash = "709257c1d624eec9873fb366d80b4b345d84fb36"
+source_file_hash = "1971250e81ee3cd23ff63b4bf58ef43fa1d3b4f0"
 translated_at = "2026-09-06T12:26:30Z"
 +++
 
@@ -366,12 +366,12 @@ Column reference:
 
 | Status | Test | Item                | Description                                             | Link |
 | ------ | ---- | ------------------- | ------------------------------------------------------- | ---- |
-| ❌     | ❌   | apps/iot scaffold   | Independent workspace + board-agnostic core library     |      |
-| ❌     | ❌   | core peripheral/capability modules | base (network/config/HTTP/OTA) + optional peripheral features combined arbitrarily |  |
-| ❌     | ❌   | LED app             | esp32c6 esp-hal blinky, compilable and flashable (first peripheral validation) |  |
-| ❌     | ❌   | Build/flash tasks   | moon check/test/build/flash                             |      |
-| ❌     | ❌   | CI integration      | moon ci runs automatically, compiles firmware binaries  |      |
-| ❌     | ❌   | CD release          | iot release workflow, firmware artifact publishing      |      |
+| ❌     | ❌   | apps/iot scaffold   | Independent Cargo workspace + board-agnostic core library; esp32c6 no_std (riscv32imac target, no espup/ESP-IDF required) |      |
+| ❌     | ❌   | core peripheral/capability modules | base (network/config/HTTP/OTA) + optional peripheral features combined arbitrarily; layering app → bsp → core, bsp selects board via feature (esp-bsp-rs pattern) |  |
+| ❌     | ❌   | LED app             | First in-app peripheral sub-feature (feature-gated `core::peripherals::led`), esp32c6 esp-hal blinky compilable and flashable |  |
+| ❌     | ❌   | Build/flash tasks   | moon check/test/build/flash, artifacts .elf/.bin         |      |
+| ❌     | ❌   | CI integration      | moon ci runs automatically, compiles firmware binaries and uploads artifacts |      |
+| ❌     | ❌   | CD release          | iot release workflow (tag `iot@x.y.z`), firmware artifacts published to GitHub Release |      |
 
 #### Near-term (P1)
 

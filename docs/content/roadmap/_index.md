@@ -361,14 +361,14 @@ sort_by = "weight"
 
 #### 本期（P0）
 
-| 状态 | 测试 | 项目              | 描述                                                             | 链接 |
-| ---- | ---- | ----------------- | ---------------------------------------------------------------- | ---- |
-| ❌   | ❌   | apps/iot 骨架     | 独立 workspace + 品牌无关 core 库                                |      |
-| ❌   | ❌   | core 外设/能力模块 | base（network/config/HTTP/OTA）+ 可选外设 feature 任意组合       |      |
-| ❌   | ❌   | LED 应用          | esp32c6 esp-hal blinky，可编译可烧录（首个外设验证）             |      |
-| ❌   | ❌   | 构建/烧录任务     | moon check/test/build/flash                                      |      |
-| ❌   | ❌   | CI 集成           | moon ci 自动纳入，编译固件产物二进制                             |      |
-| ❌   | ❌   | CD release        | iot release workflow，固件产物发布                               |      |
+| 状态 | 测试 | 项目              | 描述                                                                                                  | 链接 |
+| ---- | ---- | ----------------- | ----------------------------------------------------------------------------------------------------- | ---- |
+| ❌   | ❌   | apps/iot 骨架     | 独立 Cargo workspace + 品牌无关 core 库；esp32c6 no_std（riscv32imac 目标，无需 espup/ESP-IDF）        |      |
+| ❌   | ❌   | core 外设/能力模块 | base（network/config/HTTP/OTA）+ 可选外设 feature 任意组合；分层 app → bsp → core，bsp 按 feature 选板子（参照 esp-bsp-rs） |      |
+| ❌   | ❌   | LED 应用          | 作为应用内首个外设子功能（feature-gated `core::peripherals::led`），esp32c6 esp-hal blinky 可编译可烧录 |      |
+| ❌   | ❌   | 构建/烧录任务     | moon check/test/build/flash，产物 .elf/.bin                                                           |      |
+| ❌   | ❌   | CI 集成           | moon ci 自动纳入，编译固件产物二进制并上传 artifact                                                   |      |
+| ❌   | ❌   | CD release        | iot release workflow（tag `iot@x.y.z`），固件产物发布到 GitHub Release                                |      |
 
 #### 近期（P1）
 
