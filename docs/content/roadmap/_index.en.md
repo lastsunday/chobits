@@ -3,8 +3,8 @@ title = "Roadmap"
 weight = 20
 sort_by = "weight"
 [extra]
-source_file_hash = "bc2fa26632c26279e7e392a35230ffeb1368cbc9"
-translated_at = "2026-09-06T00:00:00Z"
+source_file_hash = "709257c1d624eec9873fb366d80b4b345d84fb36"
+translated_at = "2026-09-06T12:26:30Z"
 +++
 
 ## Overview
@@ -354,10 +354,46 @@ Column reference:
 
 ### Flutter App
 
-| Status | Test | Item           | Description                                   | Link |
-| ------ | ---- | -------------- | --------------------------------------------- | ---- |
-| ❌     | ❌   | WS + Auth integration | Flutter scaffold exists, no WS/auth integration |  |
-| ❌     | ❌   | CI/CD          | iOS/Android build/signing/publishing pipeline not implemented |  |
+| Status | Test | Item                | Description                                             | Link |
+| ------ | ---- | ------------------- | ------------------------------------------------------- | ---- |
+| ❌     | ❌   | Shared client protocol | device identity (isomorphic to IoT), WS voice + telemetry + MCP tool surface | [Spec](../../development/clients/shared-protocol.en.md) |
+| ❌     | ❌   | USB peripheral telemetry | Android first (OTG/USB-Host), iOS voice + screen only |      |
+| ❌     | ❌   | CI/CD               | iOS/Android build/signing/publishing pipeline not implemented |  |
+
+### IoT
+
+#### Current (P0)
+
+| Status | Test | Item                | Description                                             | Link |
+| ------ | ---- | ------------------- | ------------------------------------------------------- | ---- |
+| ❌     | ❌   | apps/iot scaffold   | Independent workspace + board-agnostic core library     |      |
+| ❌     | ❌   | core peripheral/capability modules | base (network/config/HTTP/OTA) + optional peripheral features combined arbitrarily |  |
+| ❌     | ❌   | LED app             | esp32c6 esp-hal blinky, compilable and flashable (first peripheral validation) |  |
+| ❌     | ❌   | Build/flash tasks   | moon check/test/build/flash                             |      |
+| ❌     | ❌   | CI integration      | moon ci runs automatically, compiles firmware binaries  |      |
+| ❌     | ❌   | CD release          | iot release workflow, firmware artifact publishing      |      |
+
+#### Near-term (P1)
+
+| Status | Test | Item                | Description                                             | Link |
+| ------ | ---- | ------------------- | ------------------------------------------------------- | ---- |
+| ❌     | ❌   | Device-side config  | softAP config page + peripheral enable/disable + persistence |  |
+| ❌     | ❌   | Telemetry path ① (persist) | HTTP short-transaction + device_key, stored to server state store |  |
+| ❌     | ❌   | Screen display      | Page-based rendering peripheral (Display indicator; chat voice-only, protocol-driven; home/config/ota device-local pages, available to any device; LED/Audio/Web indicators pluggable) | [Spec](../../development/clients/shared-protocol.en.md) |
+| ❌     | ❌   | Server capability negotiation | hello capability set → dynamic pipeline assembly + in-session hot reload |  |
+| ❌     | ❌   | Telemetry path ② (session read) | MCP home_state tool queries store + device MCP real-time direct read |  |
+| ❌     | ❌   | Server auth tightening | WS accepts device-identity JWT only (token_type=device), telemetry owned by device dimension |  |
+| ❌     | ❌   | server IoT API      | telemetry ingestion + device management                |      |
+
+#### Long-term (P2)
+
+| Status | Test | Item                | Description                                             | Link |
+| ------ | ---- | ------------------- | ------------------------------------------------------- | ---- |
+| ❌     | ❌   | Voice assistant peripheral | Opus codec + WS voice client + wake word           |      |
+| ❌     | ❌   | MQTT extended telemetry | rumqttd broker + QoS/LWT online status + transport negotiation (prefer MQTT, fallback HTTP) |  |
+| ❌     | ❌   | OTA firmware update | version check/download verify/dual-partition rollback   |      |
+| ❌     | ❌   | SNTP time sync      | Trustworthy data timestamps                             |      |
+| ❌     | ❌   | Reconnect/buffer    | Backfill + message buffering                            |      |
 
 ### Infrastructure
 
