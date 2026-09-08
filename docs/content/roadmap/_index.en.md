@@ -3,8 +3,8 @@ title = "Roadmap"
 weight = 20
 sort_by = "weight"
 [extra]
-source_file_hash = "1971250e81ee3cd23ff63b4bf58ef43fa1d3b4f0"
-translated_at = "2026-09-06T12:26:30Z"
+source_file_hash = "b22ba7ac0a54418c66a3489dd783d734c9690b57"
+translated_at = "2026-09-08T09:22:19Z"
 +++
 
 ## Overview
@@ -165,6 +165,101 @@ translated_at = "2026-09-06T12:26:30Z"
                             │ Response
                             │
                             ▼
+
+```
+
+### IOT
+
+```txt
+
+                                          ┌───────────────┐───────────────┐
+                                          │ Reporter      │               │
+                                          └───────────────┘               │
+                                          │                               │
+        ┌───────────────────┐──┐          │                               │
+        │Device Signal Input│  │          │                               │
+        └───────────────────┘  │          │                               │
+  │────►│  1.Button            │───┐      │                               │
+  │     │                      │   │      └───────────────────────────────┘
+  │     └──────────────────────┘   │                │        ▲
+  │                                │                │ Query  │ Query Response
+  │                                │                ▼        │
+  │                                │      ┌───────────────┐───────────────┐
+  │                                │      │ State Manager │               │
+  │     ┌────────────┐─────────┐   │      └───────────────┘               │
+  │     │Other Input │         │   │      │                               │
+  │     └────────────┘         │   │      │                               │
+  │────►│  1.Intent(JSON)      │   │      │                               │
+  │     │                      │   │      │                               │
+  │     └──────────────────────┘   │      │                               │
+  │             ▲  │               │      └───────────────────────────────┘
+  │             │  │               │                 │             ▲   │
+  │             │  │               │ Signal          │             │   │
+  │             │  │               │                 │             │   │
+  │             │  │               ▼                 ▼             │   │
+  │             │  │              ┌───────────────┐──────┐         │   │
+  │             │  │  Intent      │Intent Resolver│      │         │   │
+  │             │  └────────────► └───────────────┘      │         │   │
+  │             └─────────────────│                      │         │   │
+  │                   Ack         │                      │         │   │
+  │                               └──────────────────────┘         │   │
+  │                                             │                  │   │
+  │                                             │ Intent           │   │
+  │                                             │                  │   │
+  │                   ┌─────────────────────────│──────────────────│───│──┐
+  │                   │ Loop Logic│             │                  │   │  │
+  │                   │───────────┘             │                  │   │  │
+  │                   │                         ▼                  │   │  │
+  │                   │           ┌───────────┐───────────────┐    │   │  │
+  │                   │           │ Intent Bus│               │    │   │  │
+  │                   │           └───────────┘               │    │   │  │
+  │                   │           │                           │    │   │  │
+  │                   │           │                           │    │   │  │
+  │                   │           └───────────────────────────┘    │   │  │
+  │                   │                        │                   │   │  │
+  │                   │                        │ Intent            │   │  │
+  │                   │                        │                   │   │  │
+  │                   │                        ▼                   │   │  │
+  │                   │           ┌──────────┐────────────────┐    │   │  │
+  │                   │           │ Logic    │                │    │   │  │
+  │                   │           └──────────┘                │◄───┘   │  │
+  │                   │           │                           │        │  │
+  │                   │           │                           │        │  │
+  │                   │           └───────────────────────────┘        │  │
+  │                   │                        │                       │  │
+  │                   │                        │                       │  │
+  │                   │                        │                       │  │
+  │                   │                        ▼                       │  │
+  │                   │           ┌──────────┐────────────────┐        │  │
+  │                   │           │ Render   │                │        │  │
+  │                   │           └──────────┘                │◄───────┘  │
+  │                   │           │                           │           │
+  │                   │           │                           │           │
+  │                   │           └───────────────────────────┘           │
+  │                   │               │                                   │
+  │                   │               │                                   │
+  │                   │               │ Send Signal                       │
+  │                   │               │                                   │
+  │                   └───────────────│───────────────────────────────────┘
+  │                                   │
+  │                                   │
+  │                                   │
+  │                                   │
+  │                                   ▼
+  │                   ┌───────┐───────────────────────────────────────────┐
+  │                   │ Board │                                           │
+  │                   └───────┘                                           │
+  │                   │                                                   │
+  │                   │                                                   │
+  │                   │       ┌───────────────────────────────────┐       │
+  │                   │       │ Device│                           │       │
+  └───────────────────│       │───────┘                           │       │
+                      │       │  1. RGBLED                        │       │
+                      │       │                                   │       │
+                      │       │                                   │       │
+                      │       └───────────────────────────────────┘       │
+                      │                                                   │
+                      └───────────────────────────────────────────────────┘
 
 ```
 
@@ -366,12 +461,13 @@ Column reference:
 
 | Status | Test | Item                | Description                                             | Link |
 | ------ | ---- | ------------------- | ------------------------------------------------------- | ---- |
-| ❌     | ❌   | apps/iot scaffold   | Independent Cargo workspace + board-agnostic core library; esp32c6 no_std (riscv32imac target, no espup/ESP-IDF required) |      |
-| ❌     | ❌   | core peripheral/capability modules | base (network/config/HTTP/OTA) + optional peripheral features combined arbitrarily; layering app → bsp → core, bsp selects board via feature (esp-bsp-rs pattern) |  |
-| ❌     | ❌   | LED app             | First in-app peripheral sub-feature (feature-gated `core::peripherals::led`), esp32c6 esp-hal blinky compilable and flashable |  |
-| ❌     | ❌   | Build/flash tasks   | moon check/test/build/flash, artifacts .elf/.bin         |      |
+| ❌     | ❌   | apps/iot scaffold   | Independent Cargo workspace (four layers: core/chip/bsp/app); board-agnostic core + esp runtime chip + pure-board bsp + single-task app; esp32c6 no_std (riscv32imac target, no espup/ESP-IDF required) |      |
+| ❌     | ❌   | core peripheral/capability modules | base (network/config/HTTP/OTA) + optional peripheral capability traits combined arbitrarily; layering core → chip → bsp → app, bsp selects board via feature (esp-bsp-rs pattern), modules assembled via iot-core capability interfaces |  |
+| ❌     | ❌   | LED app             | First in-app peripheral sub-feature (feature-gated `iot-core` Led capability + bsp WS2812 impl); ESP32-C6-DevKitC-1 onboard WS2812 RGB LED on GPIO8, driven via esp-hal-smartled + RMT (Blocking); async breathing via esp-rtos (Embassy runtime) (`iot-app::breath`) |  |
+| ❌     | ❌   | Button app          | Layered input architecture: `ButtonScanner` (10ms scan + N=3 consecutive-sample debounce, produces `InputEvent{Click,LongPress}`) → `InputMap` (stateless pure fn `resolve(InputEvent + &LedState) -> Option<Intent>`, lookup current value in PALETTE/BREATH_PERIODS_MS tables, wrap-around advance) → `Intent::Led(LedState)` (absolute target state, subsystem-categorized, server commands use same bus homogeneously) → `Channel<'static, 8>` queue (button producer `try_send`, drop-on-full so debounce timing is never broken) → `DeviceManager.apply(LedState)` → render; current LedState shared via `embassy-sync::Watch<T, 1>` snapshot (single writer = consumer); ESP32-C6-DevKitC-1 BootButton on GPIO9 (pull-up, low = pressed) |  |
+| ❌     | ❌   | Build/flash tasks   | moon check/test/build/flash, artifacts .elf/.bin; espflash in flake.nix devShell (riscv32imac target runner) |      |
 | ❌     | ❌   | CI integration      | moon ci runs automatically, compiles firmware binaries and uploads artifacts |      |
-| ❌     | ❌   | CD release          | iot release workflow (tag `iot@x.y.z`), firmware artifacts published to GitHub Release |      |
+| ❌     | ❌   | CD release          | iot release workflow (tag `vanling-iot@x.y.z`), firmware artifacts published to GitHub Release |      |
 
 #### Near-term (P1)
 
@@ -384,6 +480,9 @@ Column reference:
 | ❌     | ❌   | Telemetry path ② (session read) | MCP home_state tool queries store + device MCP real-time direct read |  |
 | ❌     | ❌   | Server auth tightening | WS accepts device-identity JWT only (token_type=device), telemetry owned by device dimension |  |
 | ❌     | ❌   | server IoT API      | telemetry ingestion + device management                |      |
+| ❌     | ❌   | Business composition model | Three orthogonal axes (board feature ⊥ module feature ⊥ capability trait); modules see capabilities only, boards provide them; composition point = bin board manifest (capability in injected by move, missing capability = compile error, not silent); product profile = feature alias (profile picks module set, board picks support set, intersection validated at compile time) |  |
+| ❌     | ❌   | Multi-chip portability base | app business is chip-free already; esp family runtime lives in `iot-chip-esp`, esp-hal/esp-rtos feature-gated in app per family; change/add chip = per-family crates `iot-chip-<family>`/`iot-bsp-<family>` (esp already `-esp`) + swap cfg'd family entry macro in main + toolchain/CI matrix (esp32s3 needs xtensa target) |  |
+| ❌     | ❌   | First non-esp family migration | esp family crates are already `iot-chip-esp`/`iot-bsp-esp`; add `-stm32` variants → app family alias (`stm32f4 = ["iot-chip-stm32", "dep:embassy-stm32", …]`) → add `#[cfg(feature)]` family entry block in main (`#[embassy_executor::main]`) → toolchain thumbv7em + `rust-toolchain.toml`/CI matrix rows → scope `moon`/`lefthook` `--workspace --target` per firmware → special boards may write their own `boards/` manifest |  |
 
 #### Long-term (P2)
 
