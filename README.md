@@ -8,6 +8,8 @@
 [![app-release](https://github.com/lastsunday/vanling/actions/workflows/app-release.yml/badge.svg)](https://github.com/lastsunday/vanling/actions/workflows/app-release.yml)
 [![server-dev-release](https://github.com/lastsunday/vanling/actions/workflows/server-dev-release.yml/badge.svg)](https://github.com/lastsunday/vanling/actions/workflows/server-dev-release.yml)
 [![server-release](https://github.com/lastsunday/vanling/actions/workflows/server-release.yml/badge.svg)](https://github.com/lastsunday/vanling/actions/workflows/server-release.yml)
+[![iot-dev-release](https://github.com/lastsunday/vanling/actions/workflows/iot-dev-release.yml/badge.svg)](https://github.com/lastsunday/vanling/actions/workflows/iot-dev-release.yml)
+[![iot-release](https://github.com/lastsunday/vanling/actions/workflows/iot-release.yml/badge.svg)](https://github.com/lastsunday/vanling/actions/workflows/iot-release.yml)
 
 [![GitHub Release](https://img.shields.io/github/v/release/lastsunday/vanling)](https://github.com/lastsunday/vanling/releases)
 [![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=fff)](https://hub.docker.com/r/lastsunday/vanling/tags)

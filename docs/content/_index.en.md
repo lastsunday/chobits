@@ -1,8 +1,8 @@
 +++
 title = "Vanling"
 [extra]
-source_file_hash = "2d77c61365fb9981ee0a39128e90c3c415690075"
-translated_at = "2026-07-30T00:00:00Z"
+source_file_hash = "1f45db195c1b370d088c3d67aa047ed18ff54139"
+translated_at = "2026-09-09T00:00:00Z"
 +++
 
 # Vanling
@@ -15,6 +15,8 @@ translated_at = "2026-07-30T00:00:00Z"
 [![app-release](https://github.com/lastsunday/vanling/actions/workflows/app-release.yml/badge.svg)](https://github.com/lastsunday/vanling/actions/workflows/app-release.yml)
 [![server-dev-release](https://github.com/lastsunday/vanling/actions/workflows/server-dev-release.yml/badge.svg)](https://github.com/lastsunday/vanling/actions/workflows/server-dev-release.yml)
 [![server-release](https://github.com/lastsunday/vanling/actions/workflows/server-release.yml/badge.svg)](https://github.com/lastsunday/vanling/actions/workflows/server-release.yml)
+[![iot-dev-release](https://github.com/lastsunday/vanling/actions/workflows/iot-dev-release.yml/badge.svg)](https://github.com/lastsunday/vanling/actions/workflows/iot-dev-release.yml)
+[![iot-release](https://github.com/lastsunday/vanling/actions/workflows/iot-release.yml/badge.svg)](https://github.com/lastsunday/vanling/actions/workflows/iot-release.yml)
 
 [![GitHub Release](https://img.shields.io/github/v/release/lastsunday/vanling)](https://github.com/lastsunday/vanling/releases)
 [![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=fff)](https://hub.docker.com/r/lastsunday/vanling/tags)
