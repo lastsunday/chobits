@@ -71,7 +71,8 @@ jobs:
           -k SCCACHE_GHA_ENABLED
           -k ACTIONS_CACHE_URL
           -k ACTIONS_RUNTIME_TOKEN
-          --command cargo build -p iot-app --bin vanling --release
+          --command cargo build --manifest-path apps/iot/Cargo.toml
+          -p iot-app --bin vanling --release
           --target riscv32imac-unknown-none-elf
           --no-default-features --features ${{ matrix.board }}
         env:
