@@ -1,0 +1,25 @@
+[workspace]
+resolver = "2"
+members = ["crates/core", "crates/chip-esp", "crates/bsp-esp", "crates/app"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+
+[workspace.dependencies]
+embedded-alloc = "0.5"
+esp-backtrace = { version = "0.20", features = ["esp32c6", "panic-handler", "println"] }
+esp-bootloader-esp-idf = { version = "0.6.0", features = ["esp32c6"] }
+esp-hal = { version = "~1.2", default-features = false, features = ["rt", "esp32c6", "unstable"] }
+esp-hal-smartled = "0.18"
+esp-println = { version = "0.18", features = ["esp32c6", "auto", "log-04"] }
+esp-rtos = { version = "0.4", features = ["esp32c6", "embassy"] }
+embassy-executor = { version = "0.10", default-features = false }
+embassy-futures = "0.1"
+embassy-sync = "0.8"
+embassy-time = "0.5"
+log = "0.4"
+smart-leds = "0.4"
+iot-core = { path = "crates/core" }
+iot-chip-esp = { path = "crates/chip-esp", default-features = false }
+iot-bsp-esp = { path = "crates/bsp-esp", default-features = false }

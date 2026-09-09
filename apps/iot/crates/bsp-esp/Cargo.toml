@@ -1,0 +1,14 @@
+[package]
+name = "iot-bsp-esp"
+version.workspace = true
+edition.workspace = true
+
+[features]
+default = ["esp32c6-devkitc-1"]
+esp32c6-devkitc-1 = []
+
+[dependencies]
+esp-hal = { workspace = true }
+esp-hal-smartled = { workspace = true }
+smart-leds = { workspace = true }
+iot-core = { workspace = true }

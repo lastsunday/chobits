@@ -293,6 +293,7 @@
               fvm
               curl
               unzip
+              espflash
               # Flutter build dependencies
               jdk17
               cmake

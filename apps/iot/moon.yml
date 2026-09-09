@@ -1,0 +1,51 @@
+language: 'rust'
+tags: ['iot']
+
+tasks:
+  bump:
+    script: |
+      bash ../../scripts/bump.sh \
+        "vanling-iot" \
+        "Cargo.toml" \
+        "apps/iot/**"
+    options:
+      runInCI: false
+
+  format:
+    command: 'cargo fmt --check'
+
+  check:
+    command: 'cargo check --workspace --target riscv32imac-unknown-none-elf'
+    deps:
+      - ~:format
+
+  build:
+    command: 'cargo build --release --workspace --target riscv32imac-unknown-none-elf'
+    outputs:
+      - 'target/riscv32imac-unknown-none-elf/release/vanling'
+    deps:
+      - ~:check
+
+  test:
+    command: 'cargo test -p iot-core'
+    deps:
+      - ~:check
+
+  lint:
+    command: 'cargo clippy --workspace --target riscv32imac-unknown-none-elf -- -D warnings'
+    deps:
+      - ~:check
+
+  lint-host:
+    command: 'cargo clippy -p iot-core --all-targets -- -D warnings'
+    deps:
+      - ~:check
+
+  flash:
+    command: 'cargo run --target riscv32imac-unknown-none-elf -p iot-app --release'
+    deps:
+      - ~:build
+    options:
+      persistent: true
+      cache: false
+      runInCI: false

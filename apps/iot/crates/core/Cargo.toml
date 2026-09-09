@@ -1,0 +1,4 @@
+[package]
+name = "iot-core"
+version.workspace = true
+edition.workspace = true

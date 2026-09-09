@@ -1,0 +1,9 @@
+#![no_std]
+
+use esp_backtrace as _;
+
+#[cfg(feature = "esp32c6")]
+pub(crate) mod esp32c6;
+
+#[cfg(feature = "esp32c6")]
+pub use esp32c6::{chip_init, init_logging, start_rtos};

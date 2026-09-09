@@ -1,0 +1,131 @@
+name: iot-build
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+        description: "Version string for artifacts"
+      prerelease:
+        required: false
+        type: boolean
+        default: false
+        description: "Create a GitHub Pre-release instead of Release"
+      dry-run:
+        required: false
+        type: boolean
+        default: false
+        description: "Skip GitHub release"
+      tag-name:
+        required: false
+        type: string
+        default: ""
+        description: "Git tag for the release (defaults to GITHUB_REF_NAME)"
+      boards:
+        required: false
+        type: string
+        default: '["esp32c6-devkitc-1"]'
+        description: "JSON array of board feature names"
+
+env:
+  CARGO_TERM_COLOR: always
+  ARTIFACT_PREFIX: vanling-iot
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        board: ${{ fromJson(inputs.boards) }}
+    env:
+      CARGO_TARGET_DIR: apps/iot/target_${{ matrix.board }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          fetch-depth: 1
+
+      - uses: ./.github/actions/setup-nix
+
+      - name: Check IoT workspace (default board)
+        run: >
+          nix develop
+          --ignore-env
+          -k HOME
+          -k CARGO_BUILD_RUSTC_WRAPPER
+          -k SCCACHE_GHA_ENABLED
+          -k ACTIONS_CACHE_URL
+          -k ACTIONS_RUNTIME_TOKEN
+          --command moon run iot:check iot:lint
+        env:
+          MOON_OUTPUT_STYLE: buffer-only-failure
+          MOON_LOG: error
+
+      - name: Build firmware for ${{ matrix.board }}
+        run: >
+          nix develop
+          --ignore-env
+          -k HOME
+          -k CARGO_BUILD_RUSTC_WRAPPER
+          -k SCCACHE_GHA_ENABLED
+          -k ACTIONS_CACHE_URL
+          -k ACTIONS_RUNTIME_TOKEN
+          --command cargo build -p iot-app --bin vanling --release
+          --target riscv32imac-unknown-none-elf
+          --no-default-features --features ${{ matrix.board }}
+        env:
+          MOON_OUTPUT_STYLE: buffer-only-failure
+          MOON_LOG: error
+
+      - name: Rename firmware for artifact
+        run: |
+          cp apps/iot/target_${{ matrix.board }}/riscv32imac-unknown-none-elf/release/vanling \
+             "${{ env.ARTIFACT_PREFIX }}-${{ matrix.board }}-${{ inputs.version }}-riscv32imac-unknown-none-elf.elf"
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ${{ env.ARTIFACT_PREFIX }}-${{ matrix.board }}-${{ inputs.version }}-riscv32imac-unknown-none-elf
+          path: ${{ env.ARTIFACT_PREFIX }}-${{ matrix.board }}-${{ inputs.version }}-riscv32imac-unknown-none-elf.elf
+          retention-days: 7
+
+  create-release:
+    needs: build
+    if: ${{ !inputs.dry-run }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Prepare release body
+        run: |
+          {
+            echo "Firmware for boards: ${{ inputs.boards }}"
+            echo ""
+            echo "Flash with: \`espflash flash <vanling-iot-<board>-<version>-riscv32imac-unknown-none-elf.elf>\`"
+            echo ""
+            echo "Run number: ${GITHUB_RUN_NUMBER}"
+            echo "Version: ${{ inputs.version }}"
+          } > /tmp/RELEASE_BODY.md
+
+      - name: Download firmware
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          pattern: ${{ env.ARTIFACT_PREFIX }}-*
+          merge-multiple: true
+
+      - name: Clean up existing release for this tag
+        run: |
+          TAG="${{ inputs.tag-name || github.ref_name }}"
+          gh release delete "$TAG" --yes 2>/dev/null || true
+          gh api -X DELETE "/repos/${GITHUB_REPOSITORY}/git/refs/tags/${TAG}" 2>/dev/null || true
+
+      - uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b
+        with:
+          token: ${{ github.token }}
+          body_path: /tmp/RELEASE_BODY.md
+          prerelease: ${{ inputs.prerelease }}
+          make_latest: false
+          tag_name: ${{ inputs.tag-name || github.ref_name }}
+          name: ${{ inputs.tag-name || github.ref_name }}
+          files: ${{ env.ARTIFACT_PREFIX }}-*

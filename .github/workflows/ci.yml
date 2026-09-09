@@ -166,3 +166,58 @@ jobs:
           publish_dir: ./docs/public-gh
           publish_branch: gh-pages
           force_orphan: true
+
+  iot-build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        board: [esp32c6-devkitc-1]
+    env:
+      CARGO_TARGET_DIR: apps/iot/target_${{ matrix.board }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          fetch-depth: 1
+          ref: ${{ inputs.ref || github.ref }}
+
+      - uses: ./.github/actions/setup-nix
+
+      - name: Check IoT workspace (default board)
+        run: >
+          nix develop
+          --ignore-env
+          -k HOME
+          -k CARGO_BUILD_RUSTC_WRAPPER
+          -k SCCACHE_GHA_ENABLED
+          -k ACTIONS_CACHE_URL
+          -k ACTIONS_RUNTIME_TOKEN
+          --command moon run iot:check iot:lint
+        env:
+          MOON_OUTPUT_STYLE: buffer-only-failure
+          MOON_LOG: error
+
+      - name: Build IoT firmware for ${{ matrix.board }}
+        run: >
+          nix develop
+          --ignore-env
+          -k HOME
+          -k CARGO_BUILD_RUSTC_WRAPPER
+          -k SCCACHE_GHA_ENABLED
+          -k ACTIONS_CACHE_URL
+          -k ACTIONS_RUNTIME_TOKEN
+          --command cargo build -p iot-app --bin vanling --release
+          --target riscv32imac-unknown-none-elf
+          --no-default-features --features ${{ matrix.board }}
+        env:
+          MOON_OUTPUT_STYLE: buffer-only-failure
+          MOON_LOG: error
+
+      - name: Upload IoT firmware for ${{ matrix.board }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: vanling-${{ matrix.board }}-elf
+          path: apps/iot/target_${{ matrix.board }}/riscv32imac-unknown-none-elf/release/vanling
+          retention-days: 7

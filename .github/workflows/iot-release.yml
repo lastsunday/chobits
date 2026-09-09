@@ -1,0 +1,39 @@
+name: iot-release
+run-name: ${{ github.actor }} iot release
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Skip GitHub release
+        type: boolean
+        default: false
+      boards:
+        description: 'JSON array of board feature names (e.g. ["esp32c6-devkitc-1"])'
+        type: string
+        default: '["esp32c6-devkitc-1"]'
+  push:
+    tags:
+      - "vanling-iot@*"
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.set-version.outputs.VERSION }}
+    steps:
+      - name: Set VERSION
+        id: set-version
+        run: echo "VERSION=${GITHUB_REF_NAME#vanling-iot@}" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: prepare
+    uses: ./.github/workflows/reusable-iot-build.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+      dry-run: ${{ inputs.dry-run || false }}
+      boards: ${{ inputs.boards || '["esp32c6-devkitc-1"]' }}
+    secrets: inherit

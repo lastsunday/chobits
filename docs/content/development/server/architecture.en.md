@@ -2,8 +2,8 @@
 title = "Core Architecture"
 weight = 200
 [extra]
-source_file_hash = "87da0d6865242832fa74d0204f273eb7309da048"
-translated_at = "2026-08-31T00:00:00Z"
+source_file_hash = "c0b2cc141cc2f781c22d1312c3e0534308c7ddf2"
+translated_at = "2026-09-09T00:00:00Z"
 +++
 
 # Core Architecture
@@ -308,3 +308,8 @@ Logs use a structured output format:
 | `trace!` | Raw frame data, debugging details |
 
 `println!()` / `eprintln!()` are prohibited.
+
+## Adding a Module
+
+- **Rust business logic** (layers: see "Startup Flow" and "Route Structure" above): `migration/` table → `entity/` definition → `api/` handler → `service/` business logic → register routes via `create_routes(state)` → test
+- **AI model** (pattern: see "AI Manager Pattern" above): implement the Trait → config enum variant → manifest → register in `model/mod.rs` → Manager match arm → test → update example config

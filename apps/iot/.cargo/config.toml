@@ -1,0 +1,6 @@
+[build]
+target-dir = "target"
+
+[target.riscv32imac-unknown-none-elf]
+runner = "espflash flash --monitor"
+rustflags = ["-C", "link-arg=-Tlinkall.x"]

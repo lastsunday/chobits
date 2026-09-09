@@ -309,3 +309,8 @@ Session 在主循环中通过空闲时间戳实现无活动超时：
 | `trace!` | 数据帧内容、调试用细节 |
 
 禁止 `println!()` / `eprintln!()`。
+
+## 新增模块
+
+- **Rust 业务**（分层见上文「启动流程」与「路由结构」）：`migration/` 建表 → `entity/` 定义 → `api/` handler → `service/` 业务逻辑 → 经 `create_routes(state)` 注册路由 → 测试验证
+- **AI 模型**（模式见上文「AI Manager 模式」）：实现 Trait → 配置枚举变体 → manifest → `model/mod.rs` 注册 → Manager match arm → 测试 → 更新配置示例

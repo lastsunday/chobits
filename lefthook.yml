@@ -6,6 +6,18 @@ pre-commit:
     clippy:
       glob: "apps/server/**/*.rs"
       run: cargo clippy -- -D warnings
+    iot-fmt:
+      glob: "**/*.rs"
+      root: apps/iot/
+      run: cargo fmt --check
+    iot-clippy:
+      glob: "**/*.rs"
+      root: apps/iot/
+      run: cargo clippy --workspace --target riscv32imac-unknown-none-elf -- -D warnings
+    iot-clippy-host:
+      glob: "crates/core/**/*.rs"
+      root: apps/iot/
+      run: cargo clippy -p iot-core --all-targets -- -D warnings
     dart-format:
       glob: "apps/app/**/*.dart"
       run: dart format --set-exit-if-changed .

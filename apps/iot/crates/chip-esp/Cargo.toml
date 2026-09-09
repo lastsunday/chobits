@@ -1,0 +1,16 @@
+[package]
+name = "iot-chip-esp"
+version.workspace = true
+edition.workspace = true
+
+[features]
+default = ["esp32c6"]
+esp32c6 = []
+
+[dependencies]
+esp-backtrace = { workspace = true }
+esp-bootloader-esp-idf = { workspace = true }
+esp-hal = { workspace = true }
+esp-println = { workspace = true }
+esp-rtos = { workspace = true }
+log = { workspace = true }

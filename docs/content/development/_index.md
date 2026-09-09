@@ -16,7 +16,8 @@ Vanling 服务端和相关项目的开发指南。
 - [对话流程](@/development/server/dialogue-flow.md) — 握手、通讯、Listen Mode、MCP 流程
 - [WebSocket 协议](@/development/server/websocket-protocol.md) — 协议字段参考
 - [模型与部署](@/development/server/models-and-deployment.md) — 模型规格、CUDA 安装、参考规范
-- [待办事项](@/development/server/TODO.md) — 待办事项
+- [TODO](@/development/server/TODO.md) — 已完成 / 未完成清单（开工入口）
+- [定位与取舍参考](@/development/server/research.md) — 功能探索、技术选型与参考项目
 
 ## [客户端](@/development/clients/app.md)
 
@@ -34,6 +35,12 @@ Vanling 服务端和相关项目的开发指南。
 - [Audio 调试](@/development/debugging/audio-debug.md)
 - [ASR 调试](@/development/debugging/asr-debug.md)
 
+## [IoT 固件](@/development/iot/features.md)
+
+Vanling 自有 ESP32 固件（`apps/iot`）开发文档。
+
+- [Cargo Feature 判据与内聚](@/development/iot/features.md) — 硬/软 feature 定义、引入判据、内聚规则
+
 ## [模型下载](@/development/downloader.md)
 
 模型下载工具的使用说明。
@@ -46,3 +53,7 @@ Vanling 服务端和相关项目的开发指南。
 - [xiaozhi-esp32-server](@/development/related-project/xiaozhi-esp32-server.md)
 - [xiaozhi-esp32-server-java](@/development/related-project/xiaozhi-esp32-server-java.md)
 - [xiaozhi-android-client](@/development/related-project/xiaozhi-android-client.md)
+
+## 多语文档
+
+改动 `docs/` 下中文页面后，需同步翻译为 `.en.md`，并执行 `git hash-object <source.md>` 更新其 front matter 中的 `source_file_hash` 与 `translated_at`。

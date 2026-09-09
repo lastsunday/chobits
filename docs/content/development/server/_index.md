@@ -16,6 +16,7 @@ vanling 服务端基于 Rust + axum 构建，实现 Xiaozhi 智能音箱协议�
 | [对话流程](@/development/server/dialogue-flow.md) | 201 | 握手与通讯阶段的完整序列图 |
 | [WebSocket 通信协议](@/development/server/websocket-protocol.md) | 202 | 协议字段定义与二进制格式 |
 | [模型与部署](@/development/server/models-and-deployment.md) | 203 | AI 模型规格、配置系统、Downloader、CUDA 部署 |
-| [TODO](@/development/server/TODO.md) | 204 | 待办事项与已知问题 |
+| [TODO](@/development/server/TODO.md) | 204 | 已完成/未完成清单（开工入口） |
 | [统一管道重构](@/development/server/pipeline-redesign.md) | 205 | 统一管道重构实现计划（PipelineNode 取代 Ling/Tts/Listener） |
 | [组件与模块结构](@/development/server/components.md) | 206 | 核心骨架层级、双层 component、ling 特殊节点、sub-pipeline 规划 |
+| [定位与取舍参考](@/development/server/research.md) | 207 | 功能探索、技术选型与参考项目 |

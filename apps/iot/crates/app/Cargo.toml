@@ -1,0 +1,26 @@
+[package]
+name = "iot-app"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "vanling"
+path = "src/main.rs"
+
+[features]
+default = ["esp32c6-devkitc-1"]
+esp32c6 = ["iot-chip-esp/esp32c6", "dep:esp-hal", "dep:esp-rtos"]
+esp32c6-devkitc-1 = ["esp32c6", "iot-bsp-esp/esp32c6-devkitc-1"]
+
+[dependencies]
+embassy-executor = { workspace = true }
+embassy-futures = { workspace = true }
+embassy-sync = { workspace = true }
+embassy-time = { workspace = true }
+embedded-alloc = { workspace = true }
+esp-hal = { workspace = true, optional = true }
+esp-rtos = { workspace = true, optional = true }
+iot-bsp-esp = { workspace = true }
+iot-chip-esp = { workspace = true }
+iot-core = { workspace = true }
+log = { workspace = true }

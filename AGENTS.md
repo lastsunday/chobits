@@ -20,31 +20,35 @@
 
 ## 技术栈
 
-> 完整依赖见 `apps/server/Cargo.toml` / `apps/server-ui/package.json`
-
-关键约束：Edition 2024（RPIT 捕获规则、无 `'_` elision）/ Mantine v9 / zod v4 / OXC 插件 / sherpa-onnx / rig-core / rmcp / Flutter WIP
+Edition 2024（RPIT 捕获规则、无 `'_` elision）/ Mantine v9 / zod v4 / OXC / sherpa-onnx / rig-core / rmcp / Flutter WIP；完整依赖见 `apps/server/Cargo.toml` / `apps/server-ui/package.json`
 
 ## 边界
 
 ### ✅ Always
 
-- **路由**: `create_routes(state) → OpenApiRouter`，在 `create_router` 的 `setup_*` 中注册。禁止直接挂载到主路由
-- **AI 模块**: `XxxManager::init(config).await` 初始化 → `XxxManager::global().default()` 使用。禁止 `new()` 直接实例化
-- **结构化日志**: 所有 tracing 调用必须含 `component` + `event` 字段；格式 `tracing::info!(component = "xxx", event = "yyy", key = %value, "human msg")`；禁止 `#[instrument]`（用 component/event 替代 span 前缀）；console→`FmtSpan::NONE`、file→`FmtSpan::CLOSE`；禁止 `println!()` / `eprintln!()`
-- **日志格式**: `[<COMPONENT> human msg] component=xxx event=yyy session_id=...`；组件名大写（SESSION、VAD、ROUND、LISTENER、ASR、MCP、WS）；仅 Text/Compact 启用，Pretty/Json 不变
+- **路由**: `create_routes(state)` → `OpenApiRouter`，经 `create_router` 的 `setup_*` 注册；禁止直接挂载主路由
+- **AI 模块**: `XxxManager::init(config).await` 初始化 → `global().default()` 取用；禁止 `new()` 直接实例化
+- **日志**: tracing 必带 `component` + `event`，格式 `tracing::info!(component = "x", event = "y", key = %v, "msg")`；行格式 `[<组件> msg] component=x event=y [session_id=…]`、组件名大写；console→`FmtSpan::NONE`、file→`FmtSpan::CLOSE`；禁 `#[instrument]`/`println!()`
 - **测试**: `apps/server/api/tests/` 按功能分类；每次修改增/改对应测试
-- **命名**: Rust snake_case / PascalCase 类型；TS camelCase 变量 / PascalCase 组件 / PascalCase.tsx
-- **提交**: Conventional Commits（`feat:|fix:|perf:|remove:|deprecate:|security:`）。破坏性用 `feat!:` 或 BREAKING CHANGE。禁止自由格式信息
+- **命名**: Rust snake_case/PascalCase 类型；TS camelCase 变量/PascalCase 组件（`.tsx`）
+- **自文档化代码**: 语义命名承载意图；不写逐步注释、不为未改代码补注释；仅注不直观的 Why/约束；改代码须删/改过时注释
+- **提交**: Conventional Commits（`feat:|fix:|perf:|remove:|deprecate:|security:`）；破坏性用 `feat!:`/BREAKING CHANGE；禁自由格式
 - `cargo fmt && cargo clippy` 零警告后提交
 - 运行下载器时用 `--data-dir ../../data`（从 `apps/server/` 执行）
 - 重命名类型后用 `rg <旧名> --type rust` 确认无残留
+- **IoT 分层**: `iot-core(纯逻辑) → iot-chip-esp(esp 家族运行时) → iot-bsp-esp(每板接线) → iot-app(单任务二进制)`；接线只在 bsp 板模块（`Board::new` 固定引脚、业务零引脚号）；命名约定「板层用板名、应用层用产品名 `vanling`」；新增板/多芯片流程见 `docs/content/development/iot/architecture.md`
+- **IoT 组合**: 三轴正交（硬件⊥模块⊥能力）；组合点 = bin 板清单（能力 move 注入、缺能力 = 编译错）；产品档 = feature 别名；渲染层运行时可插拔（`RenderController` + renderer 注册表）；详见 architecture.md
+- **IoT 日志**: 只用 `log` façade（`log::info!` 等），输出通道由家族 `iot-chip-esp` 初始化（esp 为 `esp_println::logger`）；业务代码禁止 `println!` / `esp_println::println!`
+- **IoT 软 feature**: 一个 feature = 一个模块（`mod` 处门控一次、off 即文件不存在）；消费者文件禁 `#[cfg(feature=...)]`（能力经 trait 注入）；新增须每子集独立编译过测；判据与六规则见 `docs/content/development/iot/features.md`
 
 ### ⚠️ Ask First
 
 - 添加新 crate / npm package
 - 修改 `flake.nix` / `flake.lock`。版本号在 `versions` attrset，平台数据在 `platformData`。升级 moon/sherpa-onnx 请用 `scripts/update-moon.sh` / `scripts/update-sherpa-hashes.sh`
+- 新增/回归 IoT 软 feature（非硬件轴的能力/行为开关）——先过 `docs/content/development/iot/features.md` 四判据
 - 数据库 schema 变更或修改已有迁移
 - 删除已有文件或模块
+- 为 TODO/roadmap 文档分配或修改优先级：语义依据 `docs/content/roadmap/_index.md` 的「优先级说明」；**分辨不清时必须问人类，禁止自行推断**
 
 ### ❌ Never
 
@@ -63,32 +67,15 @@
 - [ ] 无遗留 `dbg!()` / `console.log()` / `TODO` / `FIXME`
 - [ ] 提交信息符合 Conventional Commits
 
-### When Stuck
-
-1. `rg <pattern> --type rust` / `rg <pattern> --type ts` 搜索代码库
-2. 搜索网络主流方案再动手
-3. 查看同类模块测试文件了解预期行为
-4. 阅读 trait 定义（`service/src/ling/`）
-5. 检查 `docs/content/development/server/` 架构文档
-6. 分支实验 + `cargo check`
-
 ## 环境
 
 首次: `curl -sSf -L https://install.lix.systems/lix | sh` → `nix develop`（全功能：Rust + Node + Flutter + Android SDK）。`.envrc` 自动执行 hook + commit template。
 
-## 新增模块
+## 参考文档
 
-| 模块 | 关键路径 |
-|---|---|
-| Rust 业务 | `migration/` → `entity/` → `api/` handler → `service/` 逻辑 → 注册路由 → 验证 |
-| AI 模型 | 实现 Trait → config 枚举变体 → manifest → `model/mod.rs` 注册 → Manager match arm → 测试 → 更新配置示例 |
-| 前端页面 | `routes/` `.tsx` → `data/` 类型 → `api/` 调用 → `components/` → i18n → typecheck |
-| 多语文档 | 改 `docs/` 下中文 `.md` → 翻译为英文 `.en.md` → `git hash-object <source.md>` 获取 blob hash 填入 `source_file_hash` + 更新 `translated_at` → 提交 |
+> 深度知识与操作流程见 `docs/content/development/`；卡住时先读对应域，再 `rg` 搜索 + 参照同类测试。
 
-## 架构
-
-> 详见 `docs/content/development/server/architecture.md`
-
-`Client → WS → Auth → Session → [VAD] → [ASR] → [LingCore (LLM + MCP)] → [TTS] → Client`
-
-要点：Xiaozhi 协议 / Manager + OnceLock 单例 / Config 原子指针 + 本地缓存 / Session + RoundLoop
+- **server**: `server/architecture.md` — 架构与数据流 / AI Manager / 新增模块路径；`server/TODO.md` — 已完成/未完成清单（开工入口）；`server/research.md` — 定位与取舍参考
+- **iot**: `iot/architecture.md` — 分层与组合 / 新增板 / 新增芯片；`iot/features.md` — 软 feature 判据与内聚
+- **clients**: `clients/server-ui.md` — 新增页面路径
+- **多语文档**: 维护规则见 `development/_index.md`
