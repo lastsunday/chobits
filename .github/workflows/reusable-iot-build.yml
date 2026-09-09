@@ -96,7 +96,15 @@ jobs:
 
       - name: Generate merged image for ${{ matrix.board }}
         run: >
-          espflash save-image
+          nix develop
+          --ignore-env
+          -k HOME
+          -k CARGO_BUILD_RUSTC_WRAPPER
+          -k CARGO_ESP_TARGET
+          -k SCCACHE_GHA_ENABLED
+          -k ACTIONS_CACHE_URL
+          -k ACTIONS_RUNTIME_TOKEN
+          --command espflash save-image
           --chip ${{ inputs.chip }}
           --merge
           "${{ env.ARTIFACT_PREFIX }}-${{ matrix.board }}-${{ inputs.version }}-${{ env.CARGO_ESP_TARGET }}.elf"
