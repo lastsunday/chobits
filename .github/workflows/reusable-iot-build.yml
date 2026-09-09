@@ -32,6 +32,11 @@ on:
         type: string
         default: "riscv32imac-unknown-none-elf"
         description: "Rust target triple of the chip the boards belong to"
+      chip:
+        required: false
+        type: string
+        default: "esp32c6"
+        description: "Espressif chip the boards belong to (for merged image generation)"
 
 env:
   CARGO_TERM_COLOR: always
@@ -89,11 +94,21 @@ jobs:
           cp apps/iot/target/${{ env.CARGO_ESP_TARGET }}/release/vanling \
              "${{ env.ARTIFACT_PREFIX }}-${{ matrix.board }}-${{ inputs.version }}-${{ env.CARGO_ESP_TARGET }}.elf"
 
+      - name: Generate merged image for ${{ matrix.board }}
+        run: >
+          espflash save-image
+          --chip ${{ inputs.chip }}
+          --merge
+          "${{ env.ARTIFACT_PREFIX }}-${{ matrix.board }}-${{ inputs.version }}-${{ env.CARGO_ESP_TARGET }}.elf"
+          "${{ env.ARTIFACT_PREFIX }}-${{ matrix.board }}-${{ inputs.version }}-merged.bin"
+
       - name: Upload firmware artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: ${{ env.ARTIFACT_PREFIX }}-${{ matrix.board }}-${{ inputs.version }}-${{ env.CARGO_ESP_TARGET }}
-          path: ${{ env.ARTIFACT_PREFIX }}-${{ matrix.board }}-${{ inputs.version }}-${{ env.CARGO_ESP_TARGET }}.elf
+          name: ${{ env.ARTIFACT_PREFIX }}-${{ matrix.board }}-${{ inputs.version }}
+          path: |
+            ${{ env.ARTIFACT_PREFIX }}-${{ matrix.board }}-${{ inputs.version }}-${{ env.CARGO_ESP_TARGET }}.elf
+            ${{ env.ARTIFACT_PREFIX }}-${{ matrix.board }}-${{ inputs.version }}-merged.bin
           retention-days: 7
 
   create-release:
@@ -110,6 +125,7 @@ jobs:
             echo ""
             echo "Flash:"
             for board in $(printf '%s' '${{ inputs.boards }}' | jq -r '.[]'); do
+              echo "- \`esptool.py write_flash 0x0 vanling-iot-${board}-${{ inputs.version }}-merged.bin\` (merged image)"
               echo "- \`espflash flash vanling-iot-${board}-${{ inputs.version }}-${{ inputs.target }}.elf\`"
             done
             echo ""
