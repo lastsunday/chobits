@@ -15,14 +15,14 @@ tasks:
     command: 'cargo fmt --check'
 
   check:
-    command: 'cargo check --workspace --target riscv32imac-unknown-none-elf'
+    command: 'cargo check -p iot-app --bin vanling --target $CARGO_ESP_TARGET'
     deps:
       - ~:format
 
   build:
-    command: 'cargo build --release --workspace --target riscv32imac-unknown-none-elf'
+    command: 'cargo build --release -p iot-app --bin vanling --target $CARGO_ESP_TARGET'
     outputs:
-      - 'target/riscv32imac-unknown-none-elf/release/vanling'
+      - 'target/$CARGO_ESP_TARGET/release/vanling'
     deps:
       - ~:check
 
@@ -32,7 +32,7 @@ tasks:
       - ~:check
 
   lint:
-    command: 'cargo clippy --workspace --target riscv32imac-unknown-none-elf -- -D warnings'
+    command: 'cargo clippy -p iot-app --bin vanling --target $CARGO_ESP_TARGET -- -D warnings'
     deps:
       - ~:check
 
@@ -42,7 +42,7 @@ tasks:
       - ~:check
 
   flash:
-    command: 'cargo run --target riscv32imac-unknown-none-elf -p iot-app --release'
+    command: 'cargo run -p iot-app --release --target $CARGO_ESP_TARGET'
     deps:
       - ~:build
     options:

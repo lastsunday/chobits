@@ -15,6 +15,10 @@ on:
         description: 'JSON array of board feature names (e.g. ["esp32c6-devkitc-1"])'
         type: string
         default: '["esp32c6-devkitc-1"]'
+      target:
+        description: "Rust target triple of the chip the boards belong to"
+        type: string
+        default: "riscv32imac-unknown-none-elf"
   push:
     tags:
       - "vanling-iot@*"
@@ -36,4 +40,5 @@ jobs:
       version: ${{ needs.prepare.outputs.version }}
       dry-run: ${{ inputs.dry-run || false }}
       boards: ${{ inputs.boards || '["esp32c6-devkitc-1"]' }}
+      target: ${{ inputs.target || 'riscv32imac-unknown-none-elf' }}
     secrets: inherit

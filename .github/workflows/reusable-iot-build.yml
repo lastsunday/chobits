@@ -26,7 +26,12 @@ on:
         required: false
         type: string
         default: '["esp32c6-devkitc-1"]'
-        description: "JSON array of board feature names"
+        description: "JSON array of board feature names (boards must share the chip of the target triple)"
+      target:
+        required: false
+        type: string
+        default: "riscv32imac-unknown-none-elf"
+        description: "Rust target triple of the chip the boards belong to"
 
 env:
   CARGO_TERM_COLOR: always
@@ -40,7 +45,7 @@ jobs:
       matrix:
         board: ${{ fromJson(inputs.boards) }}
     env:
-      CARGO_TARGET_DIR: apps/iot/target_${{ matrix.board }}
+      CARGO_ESP_TARGET: ${{ inputs.target }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
@@ -54,6 +59,7 @@ jobs:
           --ignore-env
           -k HOME
           -k CARGO_BUILD_RUSTC_WRAPPER
+          -k CARGO_ESP_TARGET
           -k SCCACHE_GHA_ENABLED
           -k ACTIONS_CACHE_URL
           -k ACTIONS_RUNTIME_TOKEN
@@ -68,27 +74,26 @@ jobs:
           --ignore-env
           -k HOME
           -k CARGO_BUILD_RUSTC_WRAPPER
+          -k CARGO_ESP_TARGET
           -k SCCACHE_GHA_ENABLED
           -k ACTIONS_CACHE_URL
           -k ACTIONS_RUNTIME_TOKEN
-          --command cargo build --manifest-path apps/iot/Cargo.toml
-          -p iot-app --bin vanling --release
-          --target riscv32imac-unknown-none-elf
-          --no-default-features --features ${{ matrix.board }}
+          --command moon run iot:build
+          -- --no-default-features --features ${{ matrix.board }}
         env:
           MOON_OUTPUT_STYLE: buffer-only-failure
           MOON_LOG: error
 
       - name: Rename firmware for artifact
         run: |
-          cp apps/iot/target_${{ matrix.board }}/riscv32imac-unknown-none-elf/release/vanling \
-             "${{ env.ARTIFACT_PREFIX }}-${{ matrix.board }}-${{ inputs.version }}-riscv32imac-unknown-none-elf.elf"
+          cp apps/iot/target/${{ env.CARGO_ESP_TARGET }}/release/vanling \
+             "${{ env.ARTIFACT_PREFIX }}-${{ matrix.board }}-${{ inputs.version }}-${{ env.CARGO_ESP_TARGET }}.elf"
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: ${{ env.ARTIFACT_PREFIX }}-${{ matrix.board }}-${{ inputs.version }}-riscv32imac-unknown-none-elf
-          path: ${{ env.ARTIFACT_PREFIX }}-${{ matrix.board }}-${{ inputs.version }}-riscv32imac-unknown-none-elf.elf
+          name: ${{ env.ARTIFACT_PREFIX }}-${{ matrix.board }}-${{ inputs.version }}-${{ env.CARGO_ESP_TARGET }}
+          path: ${{ env.ARTIFACT_PREFIX }}-${{ matrix.board }}-${{ inputs.version }}-${{ env.CARGO_ESP_TARGET }}.elf
           retention-days: 7
 
   create-release:
@@ -103,7 +108,7 @@ jobs:
           {
             echo "Firmware for boards: ${{ inputs.boards }}"
             echo ""
-            echo "Flash with: \`espflash flash <vanling-iot-<board>-<version>-riscv32imac-unknown-none-elf.elf>\`"
+            echo "Flash with: \`espflash flash <vanling-iot-<board>-<version>-${{ inputs.target }}.elf>\`"
             echo ""
             echo "Run number: ${GITHUB_RUN_NUMBER}"
             echo "Version: ${{ inputs.version }}"
