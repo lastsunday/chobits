@@ -2,7 +2,7 @@
 title = "Layering and Composition"
 weight = 20
 [extra]
-source_file_hash = "191fa272e77e1f0141c522512acbb9d9e2d65e02"
+source_file_hash = "9004760ab874479dbad7cacaa76c5ea51b2ebfaf"
 translated_at = "2026-09-09T00:00:00Z"
 +++
 
@@ -37,7 +37,7 @@ Only the `log` facade (`log::info!` etc.); the output channel is initialized by 
 1. Add the board module to `bsp-esp/` (Board + HasXxx traits) with feature gating.
 2. Add the `type Board` / run-dispatch cfg branch in `app/src/main.rs`.
 3. Forward the app feature `iot-bsp-esp/<board>`.
-4. Add a row to the CI matrix.
+4. Add the board to the `boards` list in `reusable-iot-build.yml` and `iot-dev-release.yml`.
 5. Verify: `cargo build -p iot-app --bin vanling --target riscv32imac-unknown-none-elf --no-default-features --features <board>`
 
 ## Adding a chip family
@@ -46,6 +46,6 @@ The esp family is fixed as `iot-chip-esp`/`iot-bsp-esp`; adding a non-esp family
 
 1. Add the `iot-chip-<family>`/`iot-bsp-<family>` crates.
 2. Gate that family's entry dependencies behind the app family-alias feature; add the family entry block to `main` (`#[cfg(feature)]`).
-3. Toolchain target + `rust-toolchain.toml` + a CI matrix row.
+3. Toolchain target + `rust-toolchain.toml` + entries in `reusable-iot-build.yml` and `iot-dev-release.yml` (boards / inputs.target).
 4. Switch `moon`/`lefthook` `--workspace --target` to the firmware scope; the toolchain target flows into moon tasks via `CARGO_ESP_TARGET` (set in `.envrc`/CI env and workflow inputs; tasks take `- '$CARGO_ESP_TARGET'` in `inputs` to keep cross-chip build caches isolated).
 5. Verify.

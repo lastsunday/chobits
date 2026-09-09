@@ -34,7 +34,7 @@ weight = 20
 1. `bsp-esp/` 增板模块（Board + HasXxx traits）+ feature 门控
 2. `app/src/main.rs` 加 `type Board`/run 分发 cfg 分支
 3. app feature 透传 `iot-bsp-esp/<board>`
-4. CI matrix 加一行
+4. `reusable-iot-build.yml` 与 `iot-dev-release.yml` 的 boards 列表加一行
 5. 验证：`cargo build -p iot-app --bin vanling --target riscv32imac-unknown-none-elf --no-default-features --features <board>`
 
 ## 新增芯片家族
@@ -43,6 +43,6 @@ esp 家族仓固定为 `iot-chip-esp`/`iot-bsp-esp`；新增非 esp 家族：
 
 1. 新增 `iot-chip-<family>`/`iot-bsp-<family>` crate
 2. app 家族别名 feature 门控该家族 entry deps；`main` 加家族入口块（`#[cfg(feature)]`）
-3. 工具链目标 + `rust-toolchain.toml` + CI matrix 行
+3. 工具链目标 + `rust-toolchain.toml` + `reusable-iot-build.yml` 与 `iot-dev-release.yml` 的 boards/inputs.target
 4. `moon`/`lefthook` 的 `--workspace --target` 改按固件作用域；工具链目标经 `CARGO_ESP_TARGET` 传入 moon 任务（`.envrc`/CI env 与 workflow inputs 提供，moon 任务以 `- '$CARGO_ESP_TARGET'` 收入 inputs 保证跨芯片缓存隔离）
 5. 验证
