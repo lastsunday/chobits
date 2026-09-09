@@ -10,3 +10,4 @@ Vanling 自有 ESP32 固件（`apps/iot`）的分层、组合与 Cargo feature �
 
 - [Cargo Feature 判据与内聚](@/development/iot/features.md) — 硬/软 feature 定义、引入四判据、内聚六规则、本次删除决策记录
 - [分层与组合](@/development/iot/architecture.md) — 分层、三轴正交组合、渲染插拔、新增板/芯片流程
+- [固件安装](@/development/iot/flashing.md) — 浏览器一键安装、esptool/GUI、批量烧录与调试

@@ -3,7 +3,7 @@ title = "Roadmap"
 weight = 20
 sort_by = "weight"
 [extra]
-source_file_hash = "fc2856b469072367bd00a2b599508032dfb16b09"
+source_file_hash = "0585763257dfefaa1f778860f9b41321b9e30309"
 translated_at = "2026-09-09T03:46:33Z"
 +++
 
@@ -492,6 +492,7 @@ Priority reference:
 | 🟠 P1    | ❌     | ❌   | First non-esp family migration | `-stm32` variant: app family alias + entry block + thumbv7em + firmware scoping |                                                      |
 | 🟠 P1    | ❌     | ❌   | Voice assistant peripheral  | Opus codec + WS voice client + wake word                                |                                                      |
 | 🟠 P1    | ❌     | ❌   | On-device validation/regression | espflash flashing + real-device smoke test (boot log/LED/button)        |                                                      |
+| 🟠 P1    | ❌     | —    | Firmware web installer       | `docs/static/flasher/` static single page (GitHub Pages): upload bin → client-side parse (magic/ChipID/flash params/CRC/SHA256) → esptool-js WebSerial flash merged.bin to 0x0; real-chip comparison guards against wrong flashing; Chrome/Edge only, with GUI/esptool fallback |                                                      |
 | 🟡 P2    | ❌     | ❌   | OTA firmware upgrade          | Version check/download verification/dual-partition rollback             |                                                      |
 | 🟡 P2    | ❌     | ❌   | MQTT extended telemetry       | rumqttd broker + QoS/LWT online status + transport negotiation (prefer MQTT, fallback HTTP) |                                                      |
 | 🟡 P2    | ❌     | ❌   | Reconnect/buffering           | Retransmission and message buffering                                    |                                                      |

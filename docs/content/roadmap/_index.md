@@ -489,6 +489,7 @@ sort_by = "weight"
 | 🟠 P1  | ❌   | ❌   | 首个非 esp 家族迁移          | `-stm32` 变体：app 家族别名 + 入口块 + thumbv7em + 固件作用域                   |                                                      |
 | 🟠 P1  | ❌   | ❌   | 语音助手外设                 | Opus 编解码 + WS 语音客户端 + 唤醒词                                            |                                                      |
 | 🟠 P1  | ❌   | ❌   | 真机验证/回归                | espflash 烧录 + 实机 smoke test（boot log/LED/按键）                            |                                                      |
+| 🟠 P1  | ❌   | —    | 固件 Web 安装器              | `docs/static/flasher/` 静态单页（GitHub Pages）：上传 bin → 前端自解析（magic/ChipID/flash 参数/CRC/SHA256）→ esptool-js WebSerial 直刷 merged.bin 至 0x0；真机芯片比对防错刷；Chrome/Edge 限定，附 GUI/esptool 兜底 |                                                      |
 | 🟡 P2  | ❌   | ❌   | OTA 固件升级                 | 版本检查/下载校验/双分区回滚                                                    |                                                      |
 | 🟡 P2  | ❌   | ❌   | MQTT 扩展遥测                | rumqttd broker + QoS/LWT 在线状态 + 传输协商（优先 MQTT 回退 HTTP）             |                                                      |
 | 🟡 P2  | ❌   | ❌   | 断线重连/缓冲                | 补传与消息缓冲                                                                  |                                                      |
