@@ -108,7 +108,10 @@ jobs:
           {
             echo "Firmware for boards: ${{ inputs.boards }}"
             echo ""
-            echo "Flash with: \`espflash flash <vanling-iot-<board>-<version>-${{ inputs.target }}.elf>\`"
+            echo "Flash:"
+            for board in $(printf '%s' '${{ inputs.boards }}' | jq -r '.[]'); do
+              echo "- \`espflash flash vanling-iot-${board}-${{ inputs.version }}-${{ inputs.target }}.elf\`"
+            done
             echo ""
             echo "Run number: ${GITHUB_RUN_NUMBER}"
             echo "Version: ${{ inputs.version }}"
