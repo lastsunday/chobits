@@ -2,7 +2,7 @@
 title = "Layering and Composition"
 weight = 20
 [extra]
-source_file_hash = "25db3e61def7134d4fa3dc2ebbb05da37f6cce12"
+source_file_hash = "191fa272e77e1f0141c522512acbb9d9e2d65e02"
 translated_at = "2026-09-09T00:00:00Z"
 +++
 
@@ -47,5 +47,5 @@ The esp family is fixed as `iot-chip-esp`/`iot-bsp-esp`; adding a non-esp family
 1. Add the `iot-chip-<family>`/`iot-bsp-<family>` crates.
 2. Gate that family's entry dependencies behind the app family-alias feature; add the family entry block to `main` (`#[cfg(feature)]`).
 3. Toolchain target + `rust-toolchain.toml` + a CI matrix row.
-4. Switch `moon`/`lefthook` `--workspace --target` to the firmware scope.
+4. Switch `moon`/`lefthook` `--workspace --target` to the firmware scope; the toolchain target flows into moon tasks via `CARGO_ESP_TARGET` (set in `.envrc`/CI env and workflow inputs; tasks take `- '$CARGO_ESP_TARGET'` in `inputs` to keep cross-chip build caches isolated).
 5. Verify.
