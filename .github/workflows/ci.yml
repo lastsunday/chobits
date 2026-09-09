@@ -49,6 +49,7 @@ jobs:
           --ignore-env
           -k HOME
           -k CARGO_BUILD_RUSTC_WRAPPER
+          -k CARGO_ESP_TARGET
           -k SCCACHE_GHA_ENABLED
           -k ACTIONS_CACHE_URL
           -k ACTIONS_RUNTIME_TOKEN
@@ -56,6 +57,7 @@ jobs:
           -k MOON_OUTPUT_STYLE
           --command moon ci --base=${{ github.event.before || format('origin/{0}', github.base_ref || 'dev') }}
         env:
+          CARGO_ESP_TARGET: riscv32imac-unknown-none-elf
           MOON_OUTPUT_STYLE: buffer-only-failure
           MOON_LOG: error
 

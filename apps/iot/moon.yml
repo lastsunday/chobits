@@ -16,11 +16,15 @@ tasks:
 
   check:
     command: 'cargo check -p iot-app --bin vanling --target $CARGO_ESP_TARGET'
+    inputs:
+      - '$CARGO_ESP_TARGET'
     deps:
       - ~:format
 
   build:
     command: 'cargo build --release -p iot-app --bin vanling --target $CARGO_ESP_TARGET'
+    inputs:
+      - '$CARGO_ESP_TARGET'
     outputs:
       - 'target/$CARGO_ESP_TARGET/release/vanling'
     deps:
@@ -33,6 +37,8 @@ tasks:
 
   lint:
     command: 'cargo clippy -p iot-app --bin vanling --target $CARGO_ESP_TARGET -- -D warnings'
+    inputs:
+      - '$CARGO_ESP_TARGET'
     deps:
       - ~:check
 

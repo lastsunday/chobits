@@ -44,5 +44,5 @@ esp 家族仓固定为 `iot-chip-esp`/`iot-bsp-esp`；新增非 esp 家族：
 1. 新增 `iot-chip-<family>`/`iot-bsp-<family>` crate
 2. app 家族别名 feature 门控该家族 entry deps；`main` 加家族入口块（`#[cfg(feature)]`）
 3. 工具链目标 + `rust-toolchain.toml` + CI matrix 行
-4. `moon`/`lefthook` 的 `--workspace --target` 改按固件作用域
+4. `moon`/`lefthook` 的 `--workspace --target` 改按固件作用域；工具链目标经 `CARGO_ESP_TARGET` 传入 moon 任务（`.envrc`/CI env 与 workflow inputs 提供，moon 任务以 `- '$CARGO_ESP_TARGET'` 收入 inputs 保证跨芯片缓存隔离）
 5. 验证
