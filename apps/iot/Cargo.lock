@@ -1182,7 +1182,6 @@ dependencies = [
 name = "iot-bsp-esp"
 version = "0.1.0"
 dependencies = [
- "embedded-graphics-core",
  "embedded-hal 1.0.0",
  "esp-hal",
  "esp-hal-smartled",

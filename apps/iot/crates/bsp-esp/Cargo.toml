@@ -5,15 +5,22 @@ edition.workspace = true
 
 [features]
 default = ["esp32c6-devkitc-1"]
-esp32c6-devkitc-1 = []
-lckfb-szpi-esp32s3 = ["dep:embedded-graphics-core", "dep:embedded-hal", "dep:mipidsi"]
+# Real components: one feature per module (one axis, module-backed); a board
+# feature below is the aggregate of the wiring it needs.
+button = []
+pca9557 = []
+ws2812 = ["dep:esp-hal-smartled", "dep:smart-leds"]
+st7789 = ["dep:embedded-hal", "dep:mipidsi"]
+# Virtual components: assembled from real components.
+display-light = ["st7789"]
+esp32c6-devkitc-1 = ["button", "ws2812"]
+lckfb-szpi-esp32s3 = ["button", "pca9557", "st7789", "display-light"]
 
 [dependencies]
-embedded-graphics-core = { workspace = true, optional = true }
 embedded-hal = { workspace = true, optional = true }
 esp-hal = { workspace = true }
-esp-hal-smartled = { workspace = true }
-smart-leds = { workspace = true }
+esp-hal-smartled = { workspace = true, optional = true }
+smart-leds = { workspace = true, optional = true }
 iot-core = { workspace = true }
 log = { workspace = true }
 mipidsi = { workspace = true, optional = true }
