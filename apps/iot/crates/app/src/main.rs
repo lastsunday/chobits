@@ -13,11 +13,15 @@ use iot_core::state::DeviceManager;
 #[cfg(feature = "esp32c6-devkitc-1")]
 type Board = iot_bsp_esp::Board<'static>;
 
+#[cfg(feature = "lckfb-szpi-esp32s3")]
+type Board = iot_bsp_esp::Board<'static>;
+
 /// Heap for the pluggable renderer registry and other runtime allocation.
 #[global_allocator]
 static HEAP: embedded_alloc::Heap = embedded_alloc::Heap::empty();
 
-static mut HEAP_MEM: [u8; 32 * 1024] = [0; 32 * 1024];
+/// Sized to hold the LCD frame buffer (240×320×2 B) plus renderer registry headroom.
+static mut HEAP_MEM: [u8; 200 * 1024] = [0; 200 * 1024];
 
 #[cfg(feature = "esp32c6")]
 #[esp_rtos::main]
@@ -27,7 +31,27 @@ async fn main(_spawner: Spawner) -> ! {
     unsafe {
         HEAP.init(
             core::ptr::addr_of_mut!(HEAP_MEM) as usize,
-            core::mem::size_of::<[u8; 32 * 1024]>(),
+            core::mem::size_of::<[u8; 200 * 1024]>(),
+        );
+    }
+
+    let peripherals = iot_chip_esp::chip_init();
+    iot_chip_esp::init_logging();
+    log::info!("[IOT] boot ok");
+
+    let (board, timg0, from_cpu_intr) = Board::new(peripherals).expect("failed to init board");
+
+    iot_chip_esp::start_rtos(timg0.timer0, from_cpu_intr);
+    run(board).await
+}
+
+#[cfg(feature = "esp32s3")]
+#[esp_rtos::main]
+async fn main(_spawner: Spawner) -> ! {
+    unsafe {
+        HEAP.init(
+            core::ptr::addr_of_mut!(HEAP_MEM) as usize,
+            core::mem::size_of::<[u8; 200 * 1024]>(),
         );
     }
 

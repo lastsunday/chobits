@@ -12,16 +12,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "aligned"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee4508988c62edf04abd8d92897fca0c2995d907ce1dfeaf369dac3716a40685"
+dependencies = [
+ "as-slice",
+]
+
+[[package]]
 name = "allocator-api2"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c583acf993cf4245c4acb0a2cc2ab1f9cc097de73411bb6d3647ff6af2b1013d"
 
 [[package]]
+name = "as-slice"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "516b6b4f0e40d50dcda9365d53964ec74560ad4284da2e7fc97122cd83174516"
+dependencies = [
+ "stable_deref_trait",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
+
+[[package]]
+name = "az"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b7e4c2464d97fe331d41de9d5db0def0a96f4d823b8b32a2efd503578988973"
 
 [[package]]
 name = "bitfield"
@@ -65,6 +89,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2f6c7dbe95a6ed67ad9f18e57daf93a2f034c524b99fd2b76d18fdfeb6660aa"
 dependencies = [
  "hybrid-array",
+]
+
+[[package]]
+name = "block-device-driver"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44c051592f59fe68053524b4c4935249b806f72c1f544cfb7abe4f57c3be258e"
+dependencies = [
+ "aligned",
 ]
 
 [[package]]
@@ -460,6 +493,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "embassy-usb-driver"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa675c5f4349b6aa0fcffc4bf9b241f18cd11b97c1f8323273fb9a5449937fbd"
+dependencies = [
+ "embedded-io-async 0.6.1",
+ "embedded-io-async 0.7.0",
+]
+
+[[package]]
+name = "embassy-usb-synopsys-otg"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6efd0c0e0b21bcf91b475b8fa47347c1df32c9a99728ae1e1b0e6625862dfd1a"
+dependencies = [
+ "critical-section",
+ "embassy-sync 0.8.0",
+ "embassy-time",
+ "embassy-usb-driver",
+ "portable-atomic",
+]
+
+[[package]]
 name = "embedded-alloc"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -476,6 +532,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e9d2e857f87ac832df68fa498d18ddc679175cf3d2e4aa893988e5601baf9438"
 dependencies = [
  "nb 1.1.0",
+]
+
+[[package]]
+name = "embedded-graphics-core"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95743bef3ff70fcba3930246c4e6872882bbea0dcc6da2ca860112e0cd4bd09f"
+dependencies = [
+ "az",
+ "byteorder",
 ]
 
 [[package]]
@@ -603,6 +669,7 @@ dependencies = [
  "esp-println",
  "heapless 0.9.3",
  "riscv",
+ "semihosting",
  "xtensa-lx",
 ]
 
@@ -652,6 +719,8 @@ dependencies = [
  "embassy-embedded-hal",
  "embassy-futures",
  "embassy-sync 0.8.0",
+ "embassy-usb-driver",
+ "embassy-usb-synopsys-otg",
  "embedded-can",
  "embedded-hal 1.0.0",
  "embedded-hal-async",
@@ -686,6 +755,7 @@ dependencies = [
  "rand_core 0.6.4",
  "rand_core 0.9.5",
  "riscv",
+ "sdio",
  "somni-template",
  "static_cell",
  "strum",
@@ -761,6 +831,7 @@ dependencies = [
  "document-features",
  "esp-metadata-generated",
  "esp32c6",
+ "esp32s3",
 ]
 
 [[package]]
@@ -799,6 +870,7 @@ dependencies = [
  "esp-rom-sys",
  "esp-sync",
  "esp32c6",
+ "esp32s3",
 ]
 
 [[package]]
@@ -1095,7 +1167,10 @@ dependencies = [
  "embassy-sync 0.8.0",
  "embassy-time",
  "embedded-alloc",
+ "esp-backtrace",
+ "esp-bootloader-esp-idf",
  "esp-hal",
+ "esp-println",
  "esp-rtos",
  "iot-bsp-esp",
  "iot-chip-esp",
@@ -1107,9 +1182,13 @@ dependencies = [
 name = "iot-bsp-esp"
 version = "0.1.0"
 dependencies = [
+ "embedded-graphics-core",
+ "embedded-hal 1.0.0",
  "esp-hal",
  "esp-hal-smartled",
  "iot-core",
+ "log",
+ "mipidsi",
  "smart-leds",
 ]
 
@@ -1228,6 +1307,17 @@ name = "memchr"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
+
+[[package]]
+name = "mipidsi"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "790ebd28bd67addbccf41b1c0c188c26bb9f5bdcd91d4d6da9bd558e20d97a1d"
+dependencies = [
+ "embedded-graphics-core",
+ "embedded-hal 1.0.0",
+ "heapless 0.8.0",
+]
 
 [[package]]
 name = "nb"
@@ -1460,6 +1550,24 @@ name = "scoped-tls"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e1cf6437eb19a8f4a6cc0f7dca544973b0b78843adbfeb3683d1a94a0024a294"
+
+[[package]]
+name = "sdio"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f7328e9dbad1337ef2d94a8404428a42d77a9916cda7c2e51287a1998da9afb"
+dependencies = [
+ "aligned",
+ "block-device-driver",
+ "embedded-hal 1.0.0",
+ "embedded-hal-async",
+]
+
+[[package]]
+name = "semihosting"
+version = "0.1.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8e4abf97879f4e80db69a9fba7bd64998e9bdad25f58ef045a778e191172fd4"
 
 [[package]]
 name = "serde"

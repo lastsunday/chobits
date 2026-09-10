@@ -486,6 +486,7 @@ sort_by = "weight"
 | 🟠 P1  | ❌   | ❌   | server IoT API               | 遥测接入 + 设备管理                                                             |                                                      |
 | 🟠 P1  | ⚠️   | ✅   | 业务组合模型                 | bin 板清单 move 注入能力；产品档 = feature 别名；判据见 features.md             |                                                      |
 | 🟠 P1  | ❌   | ❌   | 多芯片移植底座               | 家族分仓 `iot-chip-<f>`/`iot-bsp-<f>` + main cfg 家族入口 + toolchain/CI matrix |                                                      |
+| 🟡 P2  | ❌   | ❌   | ESP32-S3（实战派）板支持      | xtensa-esp32s3 目标 + 实战派 szpi-bsp + moon 双板任务 + display-HasLight       |                                                      |
 | 🟠 P1  | ❌   | ❌   | 首个非 esp 家族迁移          | `-stm32` 变体：app 家族别名 + 入口块 + thumbv7em + 固件作用域                   |                                                      |
 | 🟠 P1  | ❌   | ❌   | 语音助手外设                 | Opus 编解码 + WS 语音客户端 + 唤醒词                                            |                                                      |
 | 🟠 P1  | ❌   | ❌   | 真机验证/回归                | espflash 烧录 + 实机 smoke test（boot log/LED/按键）                            |                                                      |

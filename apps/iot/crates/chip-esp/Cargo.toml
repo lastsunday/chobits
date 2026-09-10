@@ -6,6 +6,7 @@ edition.workspace = true
 [features]
 default = ["esp32c6"]
 esp32c6 = []
+esp32s3 = []
 
 [dependencies]
 esp-backtrace = { workspace = true }

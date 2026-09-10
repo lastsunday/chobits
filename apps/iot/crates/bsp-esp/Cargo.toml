@@ -6,9 +6,14 @@ edition.workspace = true
 [features]
 default = ["esp32c6-devkitc-1"]
 esp32c6-devkitc-1 = []
+lckfb-szpi-esp32s3 = ["dep:embedded-graphics-core", "dep:embedded-hal", "dep:mipidsi"]
 
 [dependencies]
+embedded-graphics-core = { workspace = true, optional = true }
+embedded-hal = { workspace = true, optional = true }
 esp-hal = { workspace = true }
 esp-hal-smartled = { workspace = true }
 smart-leds = { workspace = true }
 iot-core = { workspace = true }
+log = { workspace = true }
+mipidsi = { workspace = true, optional = true }

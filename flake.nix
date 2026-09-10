@@ -293,7 +293,9 @@
               fvm
               curl
               unzip
+              rustup
               espflash
+              espup
               # Flutter build dependencies
               jdk17
               cmake
@@ -402,6 +404,30 @@
                 echo "  [linux-deps] PKG_CONFIG_PATH: ''$(echo $PKG_CONFIG_PATH | cut -c1-200)..."
                 echo "  [linux-deps] CFLAGS (len): ''${#CFLAGS}"
                 echo "  [linux-deps] LIBRARY_PATH: ''$(echo $LIBRARY_PATH | cut -c1-200)..."
+              fi
+
+              # Initialize rustup if not present (needed by espup for Xtensa toolchain)
+              if command -v rustup &>/dev/null && [ ! -d "''${RUSTUP_HOME:-$HOME/.rustup}/toolchains" ]; then
+                echo "  [rustup] Initializing Rust toolchain..."
+                RUSTUP_HOME="''${RUSTUP_HOME:-$HOME/.rustup}"
+                CARGO_HOME="''${CARGO_HOME:-$HOME/.cargo}"
+                export RUSTUP_HOME CARGO_HOME
+                rustup toolchain install stable
+                rustup default stable
+              fi
+
+              # Auto-install Xtensa Rust toolchain via espup (for ESP32-S3 / xtensa targets)
+              if command -v espup &>/dev/null; then
+                ESPUP_HOME="''${RUSTUP_HOME:-$HOME/.rustup}"
+                ESPUP_TOOLCHAIN_DIR="$ESPUP_HOME/toolchains/esp"
+                if [ ! -f "$ESPUP_TOOLCHAIN_DIR/bin/rustc" ]; then
+                  echo "  [espup] Installing Xtensa Rust toolchain..."
+                  espup install --name esp
+                fi
+                ESPUP_EXPORT="''${ESPUP_EXPORT_FILE:-$HOME/export-esp.sh}"
+                if [ -f "$ESPUP_EXPORT" ]; then
+                  . "$ESPUP_EXPORT"
+                fi
               fi
 
               echo "✦ vanling devShell (${system})"

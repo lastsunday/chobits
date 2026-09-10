@@ -6,7 +6,7 @@ use embassy_futures::select::select;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_time::{Duration, Instant, Timer};
-use iot_core::drivers::light::{Rgb, RgbLight, breathe};
+use iot_core::drivers::light::{Rgb, RgbLight, breathe, should_repaint};
 use iot_core::render::{
     Activity, LightAppearance, RenderController, Renderer, SATURATION, Slot, SlotAppearance,
 };
@@ -160,7 +160,12 @@ impl<R: RgbLight> LightRenderer<R> {
     }
 
     fn drive(&mut self, color: Rgb) {
-        if self.last != Some(color) {
+        let step = self.light.repaint_step();
+        let repaint = match self.last {
+            None => true,
+            Some(last) => should_repaint(last, color, step),
+        };
+        if repaint {
             self.last = Some(color);
             self.light.set_rgb(color);
         }

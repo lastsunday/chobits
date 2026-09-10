@@ -4,6 +4,13 @@ pub struct Rgb(pub u8, pub u8, pub u8);
 /// Abstraction over a light surface that accepts an RGB color.
 pub trait RgbLight {
     fn set_rgb(&mut self, color: Rgb);
+
+    /// Minimum per-channel delta that warrants a repaint. Slow-refresh
+    /// surfaces (panel RAM rewritten over SPI) return a step > 0 to skip
+    /// imperceptible drift; instant LEDs keep the default 0.
+    fn repaint_step(&self) -> u8 {
+        0
+    }
 }
 
 const FIXED_POINT: u64 = 1 << 16;
@@ -69,6 +76,17 @@ pub fn breathe(
     let value = smooth_brightness(elapsed_ms, breath_period_ms, max_brightness);
     let hue = hue_phase(elapsed_ms, hue_period_ms);
     hsv_to_rgb(hue, saturation, value)
+}
+
+/// Whether `next` differs from `last` enough to repaint a slow refresh surface.
+/// Any channel moving by at least `step` counts as a visible change; `step == 0`
+/// repaints on every difference, so an Off-to-idle transition always goes out.
+pub fn should_repaint(last: Rgb, next: Rgb, step: u8) -> bool {
+    if last == next {
+        return false;
+    }
+    let delta = |a: u8, b: u8| u8::abs_diff(a, b);
+    delta(last.0, next.0) >= step || delta(last.1, next.1) >= step || delta(last.2, next.2) >= step
 }
 
 #[cfg(test)]
@@ -214,5 +232,31 @@ mod tests {
     fn breathe_never_panics_on_zero_periods() {
         let color = breathe(123, 0, 0, 80, 200);
         assert_eq!(color, Rgb(0, 0, 0));
+    }
+
+    #[test]
+    fn should_repaint_skips_identical_color() {
+        assert!(!should_repaint(Rgb(10, 20, 30), Rgb(10, 20, 30), 1));
+    }
+
+    #[test]
+    fn should_repaint_skips_sub_step_drift() {
+        assert!(!should_repaint(Rgb(10, 20, 30), Rgb(19, 21, 28), 12));
+        assert!(!should_repaint(Rgb(10, 20, 30), Rgb(10, 31, 30), 12));
+        assert!(!should_repaint(Rgb(10, 20, 30), Rgb(10, 20, 41), 12));
+    }
+
+    #[test]
+    fn should_repaint_triggers_at_step_or_more() {
+        assert!(should_repaint(Rgb(10, 20, 30), Rgb(22, 20, 30), 12));
+        assert!(should_repaint(Rgb(10, 20, 30), Rgb(10, 32, 30), 12));
+        assert!(should_repaint(Rgb(10, 20, 30), Rgb(10, 20, 42), 12));
+        assert!(should_repaint(Rgb(0, 0, 0), Rgb(255, 255, 255), 12));
+    }
+
+    #[test]
+    fn should_repaint_step_zero_repaints_on_any_difference() {
+        assert!(should_repaint(Rgb(10, 20, 30), Rgb(10, 21, 30), 0));
+        assert!(!should_repaint(Rgb(10, 21, 30), Rgb(10, 21, 30), 0));
     }
 }

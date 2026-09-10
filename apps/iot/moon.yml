@@ -1,6 +1,9 @@
 language: 'rust'
 tags: ['iot']
 
+env:
+  CARGO_ESP_TARGET: 'riscv32imac-unknown-none-elf'
+
 tasks:
   bump:
     script: |
@@ -51,6 +54,62 @@ tasks:
     command: 'cargo run -p iot-app --release --target $CARGO_ESP_TARGET'
     deps:
       - ~:build
+    options:
+      persistent: true
+      cache: false
+      runInCI: false
+
+  check-c6:
+    command: 'cargo check -p iot-app --bin vanling --target $CARGO_ESP_TARGET'
+    inputs:
+      - '$CARGO_ESP_TARGET'
+    env:
+      CARGO_ESP_TARGET: 'riscv32imac-unknown-none-elf'
+
+  build-c6:
+    command: 'cargo build --release -p iot-app --bin vanling --target $CARGO_ESP_TARGET'
+    inputs:
+      - '$CARGO_ESP_TARGET'
+    outputs:
+      - 'target/$CARGO_ESP_TARGET/release/vanling'
+    env:
+      CARGO_ESP_TARGET: 'riscv32imac-unknown-none-elf'
+    deps:
+      - ~:check-c6
+
+  # S3 uses Docker: esp-rs rust-build dropped x86_64-apple-darwin (v1.91+),
+  # so the Xtensa toolchain must run in the espressif/idf-rust container.
+  # The nightly fork ships no prebuilt Xtensa rust-std, hence -Z build-std.
+  check-s3:
+    script: |
+      docker run --rm \
+        -v "$PWD:/project" \
+        -w /project \
+        espressif/idf-rust:esp32s3_1.95.0.0 \
+        bash -lc 'source /home/esp/export-esp.sh && cargo check -p iot-app --bin vanling \
+        --target xtensa-esp32s3-none-elf \
+        -Z build-std=core,alloc \
+        --no-default-features --features lckfb-szpi-esp32s3'
+
+  build-s3:
+    script: |
+      docker run --rm \
+        -v "$PWD:/project" \
+        -w /project \
+        espressif/idf-rust:esp32s3_1.95.0.0 \
+        bash -lc 'source /home/esp/export-esp.sh && cargo build --release -p iot-app --bin vanling \
+        --target xtensa-esp32s3-none-elf \
+        -Z build-std=core,alloc \
+        --no-default-features --features lckfb-szpi-esp32s3'
+    outputs:
+      - 'target/xtensa-esp32s3-none-elf/release/vanling'
+    deps:
+      - ~:check-s3
+
+  flash-s3:
+    command: 'espflash flash --chip esp32s3 target/xtensa-esp32s3-none-elf/release/vanling'
+    deps:
+      - ~:build-s3
     options:
       persistent: true
       cache: false

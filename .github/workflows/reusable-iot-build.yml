@@ -37,6 +37,11 @@ on:
         type: string
         default: "esp32c6"
         description: "Espressif chip the boards belong to (for merged image generation)"
+      use-xtensa-toolchain:
+        required: false
+        type: boolean
+        default: false
+        description: "Install Xtensa fork toolchain via espup (for esp32s3 targets)"
 
 env:
   CARGO_TERM_COLOR: always
@@ -57,6 +62,18 @@ jobs:
           fetch-depth: 1
 
       - uses: ./.github/actions/setup-nix
+
+      - name: Install Xtensa Rust toolchain
+        if: inputs.use-xtensa-toolchain
+        run: >
+          nix develop
+          --ignore-env
+          -k HOME
+          -k SCCACHE_GHA_ENABLED
+          -k ACTIONS_CACHE_URL
+          -k ACTIONS_RUNTIME_TOKEN
+          -k GITHUB_TOKEN
+          --command espup install --name esp
 
       - name: Check IoT workspace (default board)
         run: >

@@ -7,3 +7,9 @@ pub mod esp32c6_devkitc_1;
 
 #[cfg(feature = "esp32c6-devkitc-1")]
 pub use esp32c6_devkitc_1::{Board, BootButton, Ws2812RgbLed};
+
+#[cfg(feature = "lckfb-szpi-esp32s3")]
+pub mod lckfb_szpi_esp32s3;
+
+#[cfg(feature = "lckfb-szpi-esp32s3")]
+pub use lckfb_szpi_esp32s3::{Board, BootButton, DisplayLight};
