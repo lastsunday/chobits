@@ -6,9 +6,11 @@ use embassy_futures::select::select;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_time::{Duration, Instant, Timer};
-use iot_core::drivers::light::{Rgb, RgbLight, breathe, should_repaint};
+use iot_core::drivers::light::{
+    Fill, Rgb, RgbLight, backlight_level, group_hue, hsv_to_rgb, should_repaint, smooth_brightness,
+};
 use iot_core::render::{
-    Activity, LightAppearance, RenderController, Renderer, SATURATION, Slot, SlotAppearance,
+    Activity, LightAppearance, RenderController, Renderer, Slot, SlotAppearance,
 };
 use iot_core::state::{Breath, DeviceManager, DeviceState};
 
@@ -141,9 +143,10 @@ impl Default for Render {
     }
 }
 
-/// Renderer for a physical light surface (the WS2812 LED on the DevKitC-1).
-/// Breathing is time-driven: the render
-/// layer steps it every tick to produce frames from the schedule.
+/// Renderer for a physical light surface: the WS2812 strip on the DevKitC-1
+/// or the ST7789 panel (with its LEDC backlight) on the S3 board. Breathing is
+/// time-driven: the render layer steps it every tick to produce frames from
+/// the schedule.
 pub struct LightRenderer<R: RgbLight> {
     light: R,
     last: Option<Rgb>,
@@ -159,7 +162,7 @@ impl<R: RgbLight> LightRenderer<R> {
         }
     }
 
-    fn drive(&mut self, color: Rgb) {
+    fn drive(&mut self, fill: Fill, color: Rgb) {
         let step = self.light.repaint_step();
         let repaint = match self.last {
             None => true,
@@ -167,8 +170,18 @@ impl<R: RgbLight> LightRenderer<R> {
         };
         if repaint {
             self.last = Some(color);
-            self.light.set_rgb(color);
+            self.light.set_fill(fill, color);
         }
+    }
+
+    /// Paint one breathing frame and the matching backlight level. `drive`
+    /// only rewrites panel RAM when the color moved at least `repaint_step`,
+    /// but the backlight tracks the envelope on every tick so the PWM ramps
+    /// smoothly.
+    fn draw(&mut self, now_ms: u32, breath: Breath) {
+        let color = breath_frame(now_ms, breath);
+        self.drive(Fill::Uniform, color);
+        self.light.set_backlight(backlight_for(now_ms, breath));
     }
 }
 
@@ -181,17 +194,19 @@ impl<R: RgbLight> Renderer for LightRenderer<R> {
         match appearance {
             SlotAppearance::Light(LightAppearance::Off) => {
                 self.breath = None;
-                self.drive(Rgb(0, 0, 0));
+                self.drive(Fill::Uniform, Rgb(0, 0, 0));
+                self.light.set_backlight(0);
                 Activity::Idle
             }
             SlotAppearance::Light(LightAppearance::Color(color)) => {
                 self.breath = None;
-                self.drive(color);
+                self.drive(Fill::Uniform, color);
+                self.light.set_backlight(100);
                 Activity::Idle
             }
             SlotAppearance::Light(LightAppearance::Breathing(breath)) => {
                 self.breath = Some(breath);
-                self.drive(light_frame(now_ms, breath));
+                self.draw(now_ms, breath);
                 Activity::TimeDriven
             }
         }
@@ -200,7 +215,7 @@ impl<R: RgbLight> Renderer for LightRenderer<R> {
     fn step(&mut self, now_ms: u32) -> Activity {
         match self.breath {
             Some(breath) => {
-                self.drive(light_frame(now_ms, breath));
+                self.draw(now_ms, breath);
                 Activity::TimeDriven
             }
             None => Activity::Idle,
@@ -208,13 +223,31 @@ impl<R: RgbLight> Renderer for LightRenderer<R> {
     }
 }
 
-fn light_frame(now_ms: u32, breath: Breath) -> Rgb {
-    breathe(
+fn breath_frame(now_ms: u32, breath: Breath) -> Rgb {
+    let hue = group_hue(
+        now_ms,
+        breath.hue_period_ms,
+        breath.hue_span,
+        breath.hue,
+        breath.group,
+        breath.group_len,
+    );
+    let value = smooth_brightness(
         now_ms,
         breath.period_ms,
-        breath.hue_period_ms,
+        breath.min_brightness,
         breath.max_brightness,
-        SATURATION,
+    );
+    hsv_to_rgb(hue, breath.saturation, value)
+}
+
+fn backlight_for(now_ms: u32, breath: Breath) -> u8 {
+    backlight_level(
+        now_ms,
+        breath.period_ms,
+        breath.min_brightness,
+        breath.max_brightness,
+        DeviceManager::BACKLIGHT_FLOOR_PCT,
     )
 }
 

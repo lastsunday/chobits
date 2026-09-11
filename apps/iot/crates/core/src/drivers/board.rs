@@ -32,14 +32,14 @@ pub trait HasInput: Board {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::drivers::input::{BUTTON_SCAN_MS, Button, ButtonScanner, PassThrough};
-    use crate::drivers::light::Rgb;
+    use crate::drivers::input::{BUTTON_SCAN_MS, Button, ButtonScanner, DoubleClickAggregator};
+    use crate::drivers::light::{Fill, Rgb};
     use alloc::{boxed::Box, vec};
 
     struct FakeLight;
 
     impl RgbLight for FakeLight {
-        fn set_rgb(&mut self, _color: Rgb) {}
+        fn set_fill(&mut self, _fill: Fill, _color: Rgb) {}
     }
 
     struct FakeButton;
@@ -88,7 +88,7 @@ mod tests {
             light: None,
             input: Some(vec![PollEntry::new(
                 Box::new(ButtonScanner::new(FakeButton)),
-                Box::new(PassThrough),
+                Box::new(DoubleClickAggregator::new()),
                 BUTTON_SCAN_MS,
             )]),
         };

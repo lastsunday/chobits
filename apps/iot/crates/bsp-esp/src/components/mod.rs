@@ -1,3 +1,5 @@
+#[cfg(feature = "backlight")]
+pub mod backlight;
 #[cfg(feature = "button")]
 pub mod button;
 #[cfg(feature = "pca9557")]

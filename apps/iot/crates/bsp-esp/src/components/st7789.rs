@@ -7,15 +7,24 @@ use esp_hal::delay::Delay;
 use esp_hal::gpio::Output;
 use esp_hal::spi::Mode;
 use esp_hal::spi::master as spi_master;
-use mipidsi::Builder;
 use mipidsi::interface::{Interface, InterfaceKind};
 use mipidsi::models::ST7789;
 use mipidsi::options::ColorInversion;
+use mipidsi::{Builder, InitError};
 
 pub const SPI_FREQ_HZ: u32 = 80_000_000;
 pub const SPI_MODE: Mode = Mode::_2;
 
 const SPI_SCRATCH_BYTES: usize = 8192;
+
+/// Panel bring-up failure.
+#[derive(Debug)]
+pub enum St7789Error {
+    /// The SPI bus rejected a transfer during initialization.
+    Spi(esp_hal::spi::Error),
+    /// The requested window/size combination is unsupported by the panel.
+    Config,
+}
 
 /// No-op reset driver: the panel keeps RST unconnected, but `Builder::init`
 /// only suppresses its software reset when a pin is provided. Driving a
@@ -164,7 +173,7 @@ impl St7789 {
         dc: Output<'static>,
         width: u16,
         height: u16,
-    ) -> Result<Self, ()> {
+    ) -> Result<Self, St7789Error> {
         let scratch: &'static mut [u8] =
             Box::leak(alloc::vec![0u8; SPI_SCRATCH_BYTES].into_boxed_slice());
         let iface = Spi4 {
@@ -180,7 +189,11 @@ impl St7789 {
             .invert_colors(ColorInversion::Inverted)
             .reset_pin(DummyReset)
             .init(&mut NoDelay)
-            .map_err(|_| ())?;
+            .map_err(|e| match e {
+                InitError::Interface(e) => St7789Error::Spi(e),
+                InitError::ResetPin(never) => match never {},
+                InitError::InvalidConfiguration(_) => St7789Error::Config,
+            })?;
         let (iface, _, _) = display.release();
 
         Ok(Self {

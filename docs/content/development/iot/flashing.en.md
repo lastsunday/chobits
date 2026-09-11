@@ -2,8 +2,8 @@
 title = "Firmware Installation"
 weight = 30
 [extra]
-source_file_hash = "ca62b89c89ca5bbbb27578dc33f1bf8780824275"
-translated_at = "2026-09-09T00:00:00Z"
+source_file_hash = "e619ee249cdaec65222de48c1f7639f8050c0a95"
+translated_at = "2026-09-11T00:00:00Z"
 +++
 
 # Firmware Installation
@@ -22,6 +22,25 @@ This page explains how to install vanling firmware onto a development board. A [
     target/riscv32imac-unknown-none-elf/debug/vanling \
     vanling-merged.bin
   ```
+
+## Local artifact generation
+
+The artifact pipeline runs equivalently on GitHub Actions (`reusable-iot-build.yml`) and locally, so a failed Action can be substituted by generating artifacts locally and uploading them to the release. One-command generation (under `apps/iot`):
+
+```sh
+moon run iot:image           # all boards: ELF + merged.bin
+moon run iot:image-c6        # esp32c6-devkitc-1 only
+moon run iot:image-s3        # lckfb-szpi-esp32s3 only
+```
+
+`iot:image` pulls the per-board `build-*` tasks and writes artifacts to the repo-root `dist/`, with names identical to the CI ones:
+
+| Artifact | Name                                         |
+| -------- | -------------------------------------------- |
+| ELF      | `vanling-iot-<board>-<version>-<target>.elf` |
+| merged   | `vanling-iot-<board>-<version>-merged.bin`   |
+
+`version` comes from `scripts/version.sh` (reading `apps/iot/Cargo.toml`), the same source as the CI `DEV_VERSION` (`iot-dev-release.yml`); locally it is `x.y.z-dev.<run>.<date>.<sha>`.
 
 ## Single-device installation
 

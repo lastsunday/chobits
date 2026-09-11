@@ -20,6 +20,25 @@ weight = 30
     vanling-merged.bin
   ```
 
+## 产物本地生成
+
+产物流程在 GitHub Action（`reusable-iot-build.yml`）与本地等价可运行：Action 异常时，可用本地产物替补生成并上传 release 工件。一键命令（在 `apps/iot` 下）：
+
+```sh
+moon run iot:image           # 全部板：ELF + merged.bin
+moon run iot:image-c6        # 仅 esp32c6-devkitc-1
+moon run iot:image-s3        # 仅 lckfb-szpi-esp32s3
+```
+
+`iot:image` 依赖各板的 `build-*` 任务，产物写入仓库根 `dist/`，命名与 CI 逐字符一致：
+
+| 产物        | 命名                                              |
+| ----------- | ------------------------------------------------- |
+| ELF         | `vanling-iot-<board>-<version>-<target>.elf`      |
+| 整片镜像    | `vanling-iot-<board>-<version>-merged.bin`        |
+
+`version` 经 `scripts/version.sh`（读取 `apps/iot/Cargo.toml`）生成，与 CI 的 `DEV_VERSION`（`iot-dev-release.yml`）同源，本地为 `x.y.z-dev.<run>.<date>.<sha>`。
+
 ## 单一设备安装
 
 ### 1. 浏览器直刷（推荐）

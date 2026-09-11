@@ -3,7 +3,7 @@ use esp_hal::gpio::interconnect::PeripheralOutput;
 use esp_hal::rmt::TxChannelCreator;
 use esp_hal::time::Rate;
 use esp_hal_smartled::{RmtSmartLeds, WS2812_TIMING, color_order};
-use iot_core::drivers::light::{Rgb, RgbLight};
+use iot_core::drivers::light::{Fill, Rgb, RgbLight};
 use smart_leds::{RGB8, SmartLedsWrite};
 
 /// RMT base clock the WS2812 timing table is calibrated against; the RMT
@@ -35,7 +35,7 @@ impl<'d, const BUFFER_SIZE: usize> Ws2812RgbLed<'d, BUFFER_SIZE> {
 }
 
 impl<const BUFFER_SIZE: usize> RgbLight for Ws2812RgbLed<'_, BUFFER_SIZE> {
-    fn set_rgb(&mut self, color: Rgb) {
+    fn set_fill(&mut self, _fill: Fill, color: Rgb) {
         let data = RGB8::new(color.0, color.1, color.2);
         let strip = core::iter::repeat_n(data, self.led_count);
         self.driver

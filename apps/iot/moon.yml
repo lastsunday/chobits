@@ -84,22 +84,26 @@ tasks:
     script: |
       docker run --rm \
         -v "$PWD:/project" \
+        -v "$HOME/.cargo/registry:/home/esp/.cargo/registry" \
         -w /project \
         espressif/idf-rust:esp32s3_1.95.0.0 \
         bash -lc 'source /home/esp/export-esp.sh && cargo check -p iot-app --bin vanling \
         --target xtensa-esp32s3-none-elf \
         -Z build-std=core,alloc \
+        --offline \
         --no-default-features --features lckfb-szpi-esp32s3'
 
   build-s3:
     script: |
       docker run --rm \
         -v "$PWD:/project" \
+        -v "$HOME/.cargo/registry:/home/esp/.cargo/registry" \
         -w /project \
         espressif/idf-rust:esp32s3_1.95.0.0 \
         bash -lc 'source /home/esp/export-esp.sh && cargo build --release -p iot-app --bin vanling \
         --target xtensa-esp32s3-none-elf \
         -Z build-std=core,alloc \
+        --offline \
         --no-default-features --features lckfb-szpi-esp32s3'
     outputs:
       - 'target/xtensa-esp32s3-none-elf/release/vanling'
@@ -112,5 +116,30 @@ tasks:
       - ~:build-s3
     options:
       persistent: true
+      cache: false
+      runInCI: false
+
+  image:
+    script: 'bash ../../scripts/iot-image.sh'
+    deps:
+      - ~:image-c6
+      - ~:image-s3
+    options:
+      cache: false
+      runInCI: false
+
+  image-c6:
+    script: 'bash ../../scripts/iot-image.sh esp32c6-devkitc-1'
+    deps:
+      - ~:build-c6
+    options:
+      cache: false
+      runInCI: false
+
+  image-s3:
+    script: 'bash ../../scripts/iot-image.sh lckfb-szpi-esp32s3'
+    deps:
+      - ~:build-s3
+    options:
       cache: false
       runInCI: false

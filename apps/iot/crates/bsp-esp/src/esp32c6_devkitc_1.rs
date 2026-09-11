@@ -5,7 +5,7 @@ use esp_hal::time::Rate;
 use esp_hal::timer::timg::TimerGroup;
 use esp_hal_smartled::buffer_size;
 use iot_core::drivers::board::Board as BoardTrait;
-use iot_core::drivers::input::{BUTTON_SCAN_MS, ButtonScanner, PassThrough, PollEntry};
+use iot_core::drivers::input::{BUTTON_SCAN_MS, ButtonScanner, DoubleClickAggregator, PollEntry};
 use smart_leds::RGB8;
 
 pub use crate::components::button::PullButton;
@@ -73,7 +73,7 @@ impl iot_core::drivers::board::HasInput for Board<'static> {
         self.button.take().map(|button| {
             vec![PollEntry::new(
                 Box::new(ButtonScanner::new(button)),
-                Box::new(PassThrough),
+                Box::new(DoubleClickAggregator::new()),
                 BUTTON_SCAN_MS,
             )]
         })

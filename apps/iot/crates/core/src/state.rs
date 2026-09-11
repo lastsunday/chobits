@@ -1,4 +1,4 @@
-use crate::drivers::light::Rgb;
+use crate::drivers::light::{GROUP_CAPACITY, Rgb};
 use crate::intent::Intent;
 
 /// All state owned by the device manager.
@@ -7,19 +7,40 @@ pub struct DeviceState {
     pub light: LightState,
 }
 
-/// A breathing schedule.
+/// A breathing schedule: brightness envelope plus the hue path it travels.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Breath {
     pub period_ms: u32,
     pub hue_period_ms: u32,
+    /// Hue sweep width; `0` means a static standalone color. Ignored when
+    /// `group_len > 0`.
+    pub hue_span: u8,
+    /// Trough value of the brightness envelope. A nonzero floor keeps the
+    /// breathing glow lit instead of fading fully to black.
+    pub min_brightness: u8,
     pub max_brightness: u8,
+    pub saturation: u8,
+    /// Base hue the sweep starts from (or holds when `hue_span == 0`). Ignored
+    /// when `group_len > 0`.
+    pub hue: u8,
+    /// Color waypoints on the 256-step hue wheel. `group_len` picks the
+    /// trajectory: `0` = the `hue`/`hue_span` sweep above; `1` = a static
+    /// standalone color, `group[0]`; `>=2` = rotate through the waypoints,
+    /// walking each `group[i] -> group[i+1]` segment over
+    /// `hue_period_ms / group_len` and wrapping `group[last] -> group[0]`.
+    pub group: [u8; Self::MAX_GROUP],
+    pub group_len: u8,
+}
+
+impl Breath {
+    pub const MAX_GROUP: usize = GROUP_CAPACITY;
 }
 
 /// Light behavior, read by the render loop.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LightState {
     Off,
-    Solid { color: Rgb },
+    Solid { color: Rgb, brightness: u8 },
     Breath(Breath),
 }
 
@@ -28,7 +49,13 @@ impl LightState {
         LightState::Breath(Breath {
             period_ms: DeviceManager::DEFAULT_PERIOD_MS,
             hue_period_ms: DeviceManager::DEFAULT_HUE_PERIOD_MS,
+            hue_span: DeviceManager::DEFAULT_HUE_SPAN,
+            min_brightness: DeviceManager::DEFAULT_MIN_BRIGHTNESS,
             max_brightness: DeviceManager::DEFAULT_MAX_BRIGHTNESS,
+            saturation: DeviceManager::DEFAULT_SATURATION,
+            hue: DeviceManager::DEFAULT_HUE,
+            group: DeviceManager::DEFAULT_GROUP,
+            group_len: DeviceManager::DEFAULT_GROUP_LEN,
         })
     }
 }
@@ -46,9 +73,26 @@ pub struct DeviceManager {
 }
 
 impl DeviceManager {
-    pub const DEFAULT_PERIOD_MS: u32 = 2_000;
-    pub const DEFAULT_HUE_PERIOD_MS: u32 = 8_000;
+    pub const DEFAULT_PERIOD_MS: u32 = 3_000;
+    pub const DEFAULT_HUE_PERIOD_MS: u32 = 60_000;
+    pub const DEFAULT_HUE_SPAN: u8 = 255;
+    pub const DEFAULT_MIN_BRIGHTNESS: u8 = 24;
     pub const DEFAULT_MAX_BRIGHTNESS: u8 = 80;
+    pub const DEFAULT_SATURATION: u8 = 200;
+    pub const DEFAULT_HUE: u8 = 0;
+    /// Warm sunset: amber, golden, deep rose — low-blue palette favored by
+    /// circadian research for a calm ambient breathing glow.
+    pub const DEFAULT_GROUP: [u8; Breath::MAX_GROUP] = [16, 32, 3, 0, 0, 0, 0];
+    pub const DEFAULT_GROUP_LEN: u8 = 3;
+
+    /// Full-brightness entry point for solid mode; dimming is a long-press
+    /// advance from here.
+    pub const SOLID_DEFAULT_BRIGHTNESS: u8 = 255;
+
+    /// Backlight floor for the breathing envelope: the panel never sinks below
+    /// this percent while pixels are lit, so the trough stays a dim glow
+    /// instead of a hard on/off blip.
+    pub const BACKLIGHT_FLOOR_PCT: u8 = 12;
 
     pub const fn new() -> Self {
         Self {
@@ -91,9 +135,15 @@ mod tests {
     use super::*;
 
     const BREATH: LightState = LightState::Breath(Breath {
-        period_ms: 2_000,
-        hue_period_ms: 8_000,
+        period_ms: 3_000,
+        hue_period_ms: 60_000,
+        hue_span: 255,
+        min_brightness: 24,
         max_brightness: 80,
+        saturation: 200,
+        hue: 0,
+        group: [16, 32, 3, 0, 0, 0, 0],
+        group_len: 3,
     });
 
     #[test]
@@ -119,22 +169,26 @@ mod tests {
         let mut manager = DeviceManager::new();
         manager.apply(LightState::Solid {
             color: Rgb(200, 100, 50),
+            brightness: DeviceManager::SOLID_DEFAULT_BRIGHTNESS,
         });
         assert_eq!(
             manager.light_state(),
             LightState::Solid {
-                color: Rgb(200, 100, 50)
+                color: Rgb(200, 100, 50),
+                brightness: DeviceManager::SOLID_DEFAULT_BRIGHTNESS,
             }
         );
 
         manager.apply(LightState::Off);
         manager.apply(LightState::Solid {
             color: Rgb(1, 2, 3),
+            brightness: DeviceManager::SOLID_DEFAULT_BRIGHTNESS,
         });
         assert_eq!(
             manager.light_state(),
             LightState::Solid {
-                color: Rgb(1, 2, 3)
+                color: Rgb(1, 2, 3),
+                brightness: DeviceManager::SOLID_DEFAULT_BRIGHTNESS,
             }
         );
     }
@@ -145,14 +199,26 @@ mod tests {
         manager.apply(LightState::Breath(Breath {
             period_ms: 1_000,
             hue_period_ms: 3_000,
+            hue_span: 80,
+            min_brightness: 8,
             max_brightness: 40,
+            saturation: 120,
+            hue: 170,
+            group: [200, 250, 30, 0, 0, 0, 0],
+            group_len: 3,
         }));
         assert_eq!(
             manager.light_state(),
             LightState::Breath(Breath {
                 period_ms: 1_000,
                 hue_period_ms: 3_000,
+                hue_span: 80,
+                min_brightness: 8,
                 max_brightness: 40,
+                saturation: 120,
+                hue: 170,
+                group: [200, 250, 30, 0, 0, 0, 0],
+                group_len: 3,
             })
         );
     }
@@ -162,6 +228,7 @@ mod tests {
         let mut manager = DeviceManager::new();
         manager.apply(LightState::Solid {
             color: Rgb(9, 8, 7),
+            brightness: DeviceManager::SOLID_DEFAULT_BRIGHTNESS,
         });
         assert_eq!(manager.state().light, manager.light_state());
     }
@@ -173,11 +240,13 @@ mod tests {
         assert_eq!(manager.light_state(), LightState::Off);
         manager.apply_intent(crate::intent::Intent::Light(LightState::Solid {
             color: Rgb(3, 4, 5),
+            brightness: DeviceManager::SOLID_DEFAULT_BRIGHTNESS,
         }));
         assert_eq!(
             manager.light_state(),
             LightState::Solid {
-                color: Rgb(3, 4, 5)
+                color: Rgb(3, 4, 5),
+                brightness: DeviceManager::SOLID_DEFAULT_BRIGHTNESS,
             }
         );
     }

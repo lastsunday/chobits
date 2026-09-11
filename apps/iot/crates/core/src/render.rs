@@ -1,8 +1,5 @@
-use crate::drivers::light::Rgb;
+use crate::drivers::light::{Rgb, scale_brightness};
 use crate::state::{Breath, DeviceState, LightState};
-
-/// Saturation used by the breathing animation.
-pub const SATURATION: u8 = 200;
 
 /// A device slot the render layer knows about.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,7 +35,11 @@ impl SlotAppearance {
 pub fn light_appearance(state: LightState) -> LightAppearance {
     match state {
         LightState::Off => LightAppearance::Off,
-        LightState::Solid { color } => LightAppearance::Color(color),
+        LightState::Solid { color, brightness } => {
+            // Brightness is presentation, folded into the color the renderer
+            // drives; the state object keeps color and brightness orthogonal.
+            LightAppearance::Color(scale_brightness(color, brightness))
+        }
         LightState::Breath(breath) => LightAppearance::Breathing(breath),
     }
 }
@@ -120,9 +121,15 @@ mod tests {
     use super::*;
 
     const BOOT_BREATH: crate::state::Breath = crate::state::Breath {
-        period_ms: 2_000,
-        hue_period_ms: 8_000,
+        period_ms: 3_000,
+        hue_period_ms: 60_000,
+        hue_span: 255,
+        min_brightness: 24,
         max_brightness: 80,
+        saturation: 200,
+        hue: 0,
+        group: [16, 32, 3, 0, 0, 0, 0],
+        group_len: 3,
     };
 
     fn state(light: LightState) -> DeviceState {
@@ -161,6 +168,7 @@ mod tests {
         collect(&mut ctl, &state(LightState::boot()));
         let target = state(LightState::Solid {
             color: Rgb(1, 2, 3),
+            brightness: 255,
         });
         assert_eq!(
             collect(&mut ctl, &target),
@@ -187,7 +195,13 @@ mod tests {
         let second = state(LightState::Breath(crate::state::Breath {
             period_ms: 1_000,
             hue_period_ms: 3_000,
+            hue_span: 80,
+            min_brightness: 4,
             max_brightness: 40,
+            saturation: 120,
+            hue: 200,
+            group: [200, 250, 30, 0, 0, 0, 0],
+            group_len: 3,
         }));
         let seen = collect(&mut ctl, &second);
         assert_eq!(seen.len(), 1);
@@ -204,10 +218,12 @@ mod tests {
             &mut ctl,
             &state(LightState::Solid {
                 color: Rgb(5, 5, 5),
+                brightness: 255,
             }),
         );
         let target = state(LightState::Solid {
             color: Rgb(9, 9, 9),
+            brightness: 255,
         });
         assert_eq!(
             collect(&mut ctl, &target),
@@ -221,6 +237,7 @@ mod tests {
         assert_eq!(ctl.current(Slot::Light), None);
         let target = state(LightState::Solid {
             color: Rgb(7, 6, 5),
+            brightness: 255,
         });
         collect(&mut ctl, &target);
         assert_eq!(
@@ -241,11 +258,23 @@ mod tests {
     }
 
     #[test]
+    fn light_appearance_scales_solid_brightness() {
+        assert_eq!(
+            light_appearance(LightState::Solid {
+                color: Rgb(200, 100, 50),
+                brightness: 128,
+            }),
+            LightAppearance::Color(Rgb(100, 50, 25))
+        );
+    }
+
+    #[test]
     fn light_appearance_maps_every_state() {
         assert_eq!(light_appearance(LightState::Off), LightAppearance::Off);
         assert_eq!(
             light_appearance(LightState::Solid {
-                color: Rgb(1, 2, 3)
+                color: Rgb(1, 2, 3),
+                brightness: 255,
             }),
             LightAppearance::Color(Rgb(1, 2, 3))
         );
@@ -253,7 +282,13 @@ mod tests {
             light_appearance(LightState::Breath(crate::state::Breath {
                 period_ms: 1,
                 hue_period_ms: 2,
-                max_brightness: 3
+                hue_span: 3,
+                min_brightness: 1,
+                max_brightness: 3,
+                saturation: 4,
+                hue: 5,
+                group: [6, 7, 8, 0, 0, 0, 0],
+                group_len: 3,
             })),
             LightAppearance::Breathing(_)
         ));

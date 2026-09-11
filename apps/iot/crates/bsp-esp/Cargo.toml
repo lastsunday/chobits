@@ -7,6 +7,7 @@ edition.workspace = true
 default = ["esp32c6-devkitc-1"]
 # Real components: one feature per module (one axis, module-backed); a board
 # feature below is the aggregate of the wiring it needs.
+backlight = []
 button = []
 pca9557 = []
 ws2812 = ["dep:esp-hal-smartled", "dep:smart-leds"]
@@ -14,7 +15,7 @@ st7789 = ["dep:embedded-hal", "dep:mipidsi"]
 # Virtual components: assembled from real components.
 display-light = ["st7789"]
 esp32c6-devkitc-1 = ["button", "ws2812"]
-lckfb-szpi-esp32s3 = ["button", "pca9557", "st7789", "display-light"]
+lckfb-szpi-esp32s3 = ["button", "pca9557", "st7789", "display-light", "backlight"]
 
 [dependencies]
 embedded-hal = { workspace = true, optional = true }

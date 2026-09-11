@@ -9,6 +9,7 @@ pub trait Button {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ButtonEvent {
     Click,
+    DoubleClick,
     LongPress,
 }
 
@@ -25,6 +26,11 @@ pub const INPUT_BASE_MS: u64 = 5;
 
 pub const LONG_PRESS_MS: u64 = 600;
 
+/// How long a first click stays pending while the driver waits for a second
+/// click. Must be well below `LONG_PRESS_MS` so a held press classifies
+/// cleanly instead of being buffered as the first half of a double click.
+pub const DOUBLE_CLICK_WINDOW_MS: u64 = 300;
+
 /// Consecutive identical samples needed to confirm a state change.
 const DEBOUNCE_SAMPLES: u32 = 3;
 
@@ -39,6 +45,13 @@ pub trait InputSource {
 /// durations) and suppress intermediate events.
 pub trait EventAggregator {
     fn feed(&mut self, event: InputEvent, now_ms: u64) -> Option<InputEvent>;
+
+    /// Advance the aggregator's clock without a raw sample, so time-held
+    /// gestures (e.g. a pending double-click window) can expire deterministically
+    /// even when the source stays quiet. Default: no time-sensitivity.
+    fn tick(&mut self, _now_ms: u64) -> Option<InputEvent> {
+        None
+    }
 }
 
 /// Identity aggregator — passes every event through unchanged.
@@ -47,6 +60,66 @@ pub struct PassThrough;
 impl EventAggregator for PassThrough {
     fn feed(&mut self, event: InputEvent, _now_ms: u64) -> Option<InputEvent> {
         Some(event)
+    }
+}
+
+/// Coalesces two clicks within [`DOUBLE_CLICK_WINDOW_MS`] into a single
+/// `DoubleClick`, holding a lone first click until the window closes before
+/// releasing it as `Click`. A `LongPress` or any non-click event flushes the
+/// pending click immediately.
+pub struct DoubleClickAggregator {
+    first_click_at_ms: Option<u64>,
+}
+
+impl DoubleClickAggregator {
+    pub const fn new() -> Self {
+        Self {
+            first_click_at_ms: None,
+        }
+    }
+}
+
+impl Default for DoubleClickAggregator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl EventAggregator for DoubleClickAggregator {
+    fn feed(&mut self, event: InputEvent, now_ms: u64) -> Option<InputEvent> {
+        match event {
+            InputEvent::Button(ButtonEvent::Click) => match self.first_click_at_ms {
+                None => {
+                    self.first_click_at_ms = Some(now_ms);
+                    None
+                }
+                Some(first) if now_ms.saturating_sub(first) <= DOUBLE_CLICK_WINDOW_MS => {
+                    self.first_click_at_ms = None;
+                    Some(InputEvent::Button(ButtonEvent::DoubleClick))
+                }
+                // The pending click outlived the window without a tick (e.g. a
+                // cadence gap); release it now and buffer this one as the new
+                // first click.
+                Some(_) => {
+                    self.first_click_at_ms = Some(now_ms);
+                    Some(InputEvent::Button(ButtonEvent::Click))
+                }
+            },
+            _ => {
+                self.first_click_at_ms = None;
+                Some(event)
+            }
+        }
+    }
+
+    fn tick(&mut self, now_ms: u64) -> Option<InputEvent> {
+        match self.first_click_at_ms {
+            Some(first) if now_ms.saturating_sub(first) > DOUBLE_CLICK_WINDOW_MS => {
+                self.first_click_at_ms = None;
+                Some(InputEvent::Button(ButtonEvent::Click))
+            }
+            _ => None,
+        }
     }
 }
 
@@ -87,10 +160,15 @@ impl PollEntry {
         self.next_at_ms
     }
 
-    /// Poll the source and fold the raw sample through the aggregator.
+    /// Poll the source, then fold the raw sample (or the tick that stands in
+    /// for it) through the aggregator.
     pub fn poll(&mut self, now_ms: u64) -> Option<InputEvent> {
-        let event = self.source.poll(now_ms)?;
-        self.aggregator.feed(event, now_ms)
+        match self.source.poll(now_ms) {
+            Some(event) => self.aggregator.feed(event, now_ms),
+            // No raw sample this pass; still let time-based aggregators expire
+            // held gestures on their cadence grid.
+            None => self.aggregator.tick(now_ms),
+        }
     }
 
     /// Advance the source's schedule past `now_ms`, keeping it on its own
@@ -275,6 +353,85 @@ mod tests {
     }
 
     #[test]
+    fn double_click_buffers_first_click() {
+        let mut agg = DoubleClickAggregator::new();
+        let click = InputEvent::Button(ButtonEvent::Click);
+        assert_eq!(agg.feed(click, 100), None);
+    }
+
+    #[test]
+    fn double_click_emits_on_second_click_within_window() {
+        let mut agg = DoubleClickAggregator::new();
+        let click = InputEvent::Button(ButtonEvent::Click);
+        assert_eq!(agg.feed(click, 100), None);
+        assert_eq!(
+            agg.feed(click, 100 + DOUBLE_CLICK_WINDOW_MS),
+            Some(InputEvent::Button(ButtonEvent::DoubleClick))
+        );
+    }
+
+    #[test]
+    fn lone_click_flushes_after_window_via_tick() {
+        let mut agg = DoubleClickAggregator::new();
+        let click = InputEvent::Button(ButtonEvent::Click);
+        assert_eq!(agg.feed(click, 100), None);
+        // Inside the window (399-100=299 < 300): still pending.
+        assert_eq!(agg.tick(100 + DOUBLE_CLICK_WINDOW_MS - 1), None);
+        // Exactly at the boundary (300 == 300): still pending; the feed side
+        // uses `<= window`, so a second click at this instant qualifies.
+        assert_eq!(agg.tick(100 + DOUBLE_CLICK_WINDOW_MS), None);
+        // Past the window: released as a lone Click.
+        assert_eq!(
+            agg.tick(100 + DOUBLE_CLICK_WINDOW_MS + 1),
+            Some(InputEvent::Button(ButtonEvent::Click))
+        );
+    }
+
+    #[test]
+    fn stale_first_click_releases_before_new_buffer() {
+        let mut agg = DoubleClickAggregator::new();
+        let click = InputEvent::Button(ButtonEvent::Click);
+        assert_eq!(agg.feed(click, 100), None);
+        // A second click arrives after the window with no tick in between:
+        // the stale pending click is released and the new one stays buffered.
+        assert_eq!(
+            agg.feed(click, 100 + DOUBLE_CLICK_WINDOW_MS + 1),
+            Some(InputEvent::Button(ButtonEvent::Click)),
+            "stale pending click released"
+        );
+        // The new buffer (at t=401) is independent; tick expires it as a
+        // lone Click after its own window.
+        assert_eq!(
+            agg.tick(100 + DOUBLE_CLICK_WINDOW_MS + 1 + DOUBLE_CLICK_WINDOW_MS + 1),
+            Some(InputEvent::Button(ButtonEvent::Click)),
+            "new buffer expires as a lone click"
+        );
+    }
+
+    #[test]
+    fn long_press_flushes_pending_click() {
+        let mut agg = DoubleClickAggregator::new();
+        let click = InputEvent::Button(ButtonEvent::Click);
+        let long = InputEvent::Button(ButtonEvent::LongPress);
+        assert_eq!(agg.feed(click, 100), None);
+        assert_eq!(agg.feed(long, 100 + DOUBLE_CLICK_WINDOW_MS - 1), Some(long));
+        assert_eq!(agg.tick(100 + 2 * DOUBLE_CLICK_WINDOW_MS), None);
+    }
+
+    #[test]
+    fn non_click_event_passes_through_immediately() {
+        let mut agg = DoubleClickAggregator::new();
+        let long = InputEvent::Button(ButtonEvent::LongPress);
+        assert_eq!(agg.feed(long, 100), Some(long));
+    }
+
+    #[test]
+    fn double_click_window_sits_below_long_press() {
+        const _: () = assert!(DOUBLE_CLICK_WINDOW_MS < LONG_PRESS_MS);
+        const _: () = assert!(DOUBLE_CLICK_WINDOW_MS.is_multiple_of(INPUT_BASE_MS));
+    }
+
+    #[test]
     fn poll_entry_anchors_first_sample_on_cadence_grid() {
         // Leak an owned cell so the boxed, `'static` input source can share
         // the press state with the test drive loop.
@@ -311,5 +468,39 @@ mod tests {
         assert!(entry.poll(40).is_none());
         assert!(entry.poll(50).is_none());
         assert_eq!(entry.poll(60), Some(InputEvent::Button(ButtonEvent::Click)));
+    }
+
+    #[test]
+    fn poll_entry_double_click_via_aggregator() {
+        let pressed: &'static Cell<bool> = Box::leak(Box::new(Cell::new(false)));
+        let btn = FakeButton { pressed };
+        let mut entry = PollEntry::new(
+            Box::new(ButtonScanner::new(btn)),
+            Box::new(DoubleClickAggregator::new()),
+            BUTTON_SCAN_MS,
+        );
+        // First click: pressed 0-20 (debounce confirms press at 20), released
+        // 30-40 (release confirmed at 50) → Click buffered by the aggregator.
+        for ms in [0, 10, 20] {
+            pressed.set(true);
+            assert!(entry.poll(ms).is_none());
+        }
+        pressed.set(false);
+        assert!(entry.poll(30).is_none());
+        assert!(entry.poll(40).is_none());
+        assert!(entry.poll(50).is_none());
+        // Second click: pressed 60-80, released 90-100 → confirmed at 110,
+        // still inside the double-click window of the first one (t=50).
+        for ms in [60, 70, 80] {
+            pressed.set(true);
+            assert!(entry.poll(ms).is_none());
+        }
+        pressed.set(false);
+        assert!(entry.poll(90).is_none());
+        assert!(entry.poll(100).is_none());
+        assert_eq!(
+            entry.poll(110),
+            Some(InputEvent::Button(ButtonEvent::DoubleClick))
+        );
     }
 }
