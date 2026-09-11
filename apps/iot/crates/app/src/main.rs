@@ -3,12 +3,7 @@
 
 extern crate alloc;
 
-use alloc::boxed::Box;
 use embassy_executor::Spawner;
-use iot_app::input::{DEVICE_STATE, INTENT_BUS, input_task};
-use iot_app::render::{LightRenderer, RENDER_BUS, Render, render_loop};
-use iot_core::drivers::board::{Board as BoardTrait, HasInput, HasLight};
-use iot_core::state::DeviceManager;
 
 #[cfg(feature = "esp32c6-devkitc-1")]
 type Board = iot_bsp_esp::Board<'static>;
@@ -42,7 +37,7 @@ async fn main(_spawner: Spawner) -> ! {
     let (board, timg0, from_cpu_intr) = Board::new(peripherals).expect("failed to init board");
 
     iot_chip_esp::start_rtos(timg0.timer0, from_cpu_intr);
-    run(board).await
+    iot_app::run(board).await
 }
 
 #[cfg(feature = "esp32s3")]
@@ -62,32 +57,5 @@ async fn main(_spawner: Spawner) -> ! {
     let (board, timg0, from_cpu_intr) = Board::new(peripherals).expect("failed to init board");
 
     iot_chip_esp::start_rtos(timg0.timer0, from_cpu_intr);
-    run(board).await
-}
-
-/// Application composition: takes the board's light and input sources,
-/// registers the light renderer, and runs the two persistent tasks (input +
-/// render). Generic over capabilities, so every board wiring the same
-/// capabilities is served by this single copy.
-async fn run<B>(mut board: B) -> !
-where
-    B: BoardTrait + HasLight + HasInput + 'static,
-{
-    let light = board.take_light().expect("board has a wired light");
-    let sources = board.take_input().expect("board has wired input");
-
-    let mut render = Render::new();
-    render.register(Box::new(LightRenderer::new(light)), 0);
-    let never = embassy_futures::join::join(
-        input_task(&INTENT_BUS, &DEVICE_STATE, sources),
-        render_loop(
-            &INTENT_BUS,
-            &DEVICE_STATE,
-            &RENDER_BUS,
-            render,
-            DeviceManager::new(),
-        ),
-    )
-    .await;
-    match never {}
+    iot_app::run(board).await
 }

@@ -467,6 +467,7 @@ dependencies = [
  "critical-section",
  "document-features",
  "embassy-time-driver",
+ "embassy-time-queue-utils",
  "embedded-hal 0.2.7",
  "embedded-hal 1.0.0",
  "embedded-hal-async",
@@ -1162,6 +1163,7 @@ dependencies = [
 name = "iot-app"
 version = "0.1.0"
 dependencies = [
+ "critical-section",
  "embassy-executor",
  "embassy-futures",
  "embassy-sync 0.8.0",

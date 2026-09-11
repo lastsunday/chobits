@@ -7,22 +7,46 @@ edition.workspace = true
 name = "vanling"
 path = "src/main.rs"
 
+[[bin]]
+name = "host-smoke"
+path = "src/bin/host-smoke.rs"
+required-features = ["host"]
+
 [features]
-default = ["esp32c6-devkitc-1"]
+default = ["esp32c6-devkitc-1", "console-auto"]
 esp32c6 = [
-  "iot-chip-esp/esp32c6", "dep:esp-hal", "dep:esp-rtos",
+  "dep:iot-chip-esp", "dep:esp-hal", "dep:esp-rtos",
+  "dep:esp-backtrace", "dep:esp-bootloader-esp-idf",
+  "iot-chip-esp/esp32c6",
   "esp-backtrace/esp32c6", "esp-bootloader-esp-idf/esp32c6",
   "esp-hal/esp32c6", "esp-println/esp32c6", "esp-rtos/esp32c6",
 ]
-esp32c6-devkitc-1 = ["esp32c6", "iot-bsp-esp/esp32c6-devkitc-1"]
+esp32c6-devkitc-1 = ["esp32c6", "dep:iot-bsp-esp", "iot-bsp-esp/esp32c6-devkitc-1"]
 esp32s3 = [
-  "iot-chip-esp/esp32s3", "dep:esp-hal", "dep:esp-rtos",
+  "dep:iot-chip-esp", "dep:esp-hal", "dep:esp-rtos",
+  "dep:esp-backtrace", "dep:esp-bootloader-esp-idf",
+  "iot-chip-esp/esp32s3",
   "esp-backtrace/esp32s3", "esp-bootloader-esp-idf/esp32s3",
   "esp-hal/esp32s3", "esp-println/esp32s3", "esp-rtos/esp32s3",
 ]
-lckfb-szpi-esp32s3 = ["esp32s3", "iot-bsp-esp/lckfb-szpi-esp32s3"]
+lckfb-szpi-esp32s3 = ["esp32s3", "dep:iot-bsp-esp", "iot-bsp-esp/lckfb-szpi-esp32s3"]
+
+# Log console routing for esp_println. `console-auto` mirrors device behavior:
+# USB-Serial/JTAG when a host is attached, UART otherwise. `console-uart` forces
+# UART0, which the esp-emu smoke build needs -- the emulator only scans UART0
+# for --exit-on (see docs/content/development/iot/emulation.md).
+console-auto = ["esp-println/auto"]
+console-uart = ["esp-println/uart"]
+
+# Host testing backend (runs on the development machine, no ESP hardware).
+host = [
+  "embassy-executor/platform-std", "embassy-executor/executor-thread",
+  "embassy-time/std",
+  "dep:critical-section", "critical-section/std",
+]
 
 [dependencies]
+critical-section = { workspace = true, optional = true }
 embassy-executor = { workspace = true }
 embassy-futures = { workspace = true }
 embassy-sync = { workspace = true }
@@ -33,7 +57,7 @@ esp-bootloader-esp-idf = { workspace = true, optional = true }
 esp-hal = { workspace = true, optional = true }
 esp-println = { workspace = true, optional = true }
 esp-rtos = { workspace = true, optional = true }
-iot-bsp-esp = { workspace = true }
-iot-chip-esp = { workspace = true }
+iot-bsp-esp = { workspace = true, optional = true }
+iot-chip-esp = { workspace = true, optional = true }
 iot-core = { workspace = true }
 log = { workspace = true }

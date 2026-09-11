@@ -50,6 +50,25 @@ tasks:
     deps:
       - ~:check
 
+  lint-smoke:
+    command: >-
+      cargo clippy -p iot-app --bin host-smoke
+      --no-default-features --features host -- -D warnings
+
+  check-host:
+    command: >-
+      cargo check -p iot-app --bin host-smoke
+      --no-default-features --features host
+
+  smoke-host:
+    command: >-
+      cargo run --quiet -p iot-app --bin host-smoke
+      --no-default-features --features host
+    deps:
+      - ~:check-host
+    options:
+      cache: false
+
   flash:
     command: 'cargo run -p iot-app --release --target $CARGO_ESP_TARGET'
     deps:
@@ -87,14 +106,14 @@ tasks:
       bash ../../scripts/iot-xtensa.sh check -p iot-app --bin vanling \
         --target xtensa-esp32s3-none-elf \
         -Z build-std=core,alloc \
-        --no-default-features --features lckfb-szpi-esp32s3
+        --no-default-features --features lckfb-szpi-esp32s3,console-auto
 
   build-s3:
     script: |
       bash ../../scripts/iot-xtensa.sh build --release -p iot-app --bin vanling \
         --target xtensa-esp32s3-none-elf \
         -Z build-std=core,alloc \
-        --no-default-features --features lckfb-szpi-esp32s3
+        --no-default-features --features lckfb-szpi-esp32s3,console-auto
     outputs:
       - 'target/xtensa-esp32s3-none-elf/release/vanling'
     deps:
@@ -135,3 +154,22 @@ tasks:
     options:
       cache: false
       runInCI: false
+
+  # C6 emulator smoke: builds with the esp-println UART console (esp-emu only
+  # scans UART0; see docs/content/development/iot/emulation.md) and boots the
+  # merged image through esp-emu, asserting `[IOT] boot ok`.
+  build-c6-emu:
+    script: 'bash ../../scripts/iot-emu-image.sh'
+    outputs:
+      - 'target/emu/riscv32imac-unknown-none-elf/release/vanling'
+    deps:
+      - ~:check
+    options:
+      cache: false
+
+  emu-smoke:
+    script: 'bash ../../scripts/iot-emu.sh'
+    deps:
+      - ~:build-c6-emu
+    options:
+      cache: false
