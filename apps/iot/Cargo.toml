@@ -7,23 +7,22 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace.dependencies]
-embedded-alloc = "0.5"
-embedded-graphics = { version = "0.8", default-features = false }
-embedded-graphics-core = { version = "0.4", default-features = false }
-embedded-hal = { version = "1.0", default-features = false }
-esp-backtrace = { version = "0.20", features = ["panic-handler", "println"] }
-esp-bootloader-esp-idf = { version = "0.6.0" }
-esp-hal = { version = "~1.2", default-features = false, features = ["rt", "unstable"] }
-esp-hal-smartled = "0.18"
-esp-println = { version = "0.18", features = ["auto", "log-04"] }
-esp-rtos = { version = "0.4", features = ["embassy"] }
-embassy-executor = { version = "0.10", default-features = false }
-embassy-futures = "0.1"
-embassy-sync = "0.8"
-embassy-time = "0.5"
-log = "0.4"
-mipidsi = "0.10"
-smart-leds = "0.4"
+embedded-alloc = "0.5.1"
+embedded-graphics-core = { version = "0.4.1", default-features = false }
+embedded-hal = { version = "1.0.0", default-features = false }
+esp-backtrace = { version = "0.20.0", features = ["panic-handler", "println"] }
+esp-bootloader-esp-idf = "0.6.0"
+esp-hal = { version = "~1.2.0", default-features = false, features = ["rt", "unstable"] }
+esp-hal-smartled = "0.18.0"
+esp-println = { version = "0.18.0", features = ["auto", "log-04"] }
+esp-rtos = { version = "0.4.0", features = ["embassy"] }
+embassy-executor = { version = "0.10.0", default-features = false }
+embassy-futures = "0.1.2"
+embassy-sync = "0.8.0"
+embassy-time = "0.5.1"
+log = "0.4.34"
+mipidsi = "0.10.0"
+smart-leds = "0.4.0"
 iot-core = { path = "crates/core" }
 iot-chip-esp = { path = "crates/chip-esp", default-features = false }
 iot-bsp-esp = { path = "crates/bsp-esp", default-features = false }
