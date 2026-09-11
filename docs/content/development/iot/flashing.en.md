@@ -2,7 +2,7 @@
 title = "Firmware Installation"
 weight = 30
 [extra]
-source_file_hash = "e7ef39ca8a34f8250319bde1b62d127cf25ba53a"
+source_file_hash = "3027e22a58607a89565b8d4336273d26144bf3a4"
 translated_at = "2026-09-11T00:00:00Z"
 +++
 
@@ -32,6 +32,8 @@ moon run iot:image           # all boards: ELF + merged.bin
 moon run iot:image-c6        # esp32c6-devkitc-1 only
 moon run iot:image-s3        # lckfb-szpi-esp32s3 only
 ```
+
+> s3 builds dispatch via `scripts/iot-xtensa.sh`: a fully installed espup `esp` 1.95.0.0 toolchain (CI/release) compiles natively; otherwise the `espressif/idf-rust:esp32s3_1.95.0.0` container is used locally (macOS Intel). Both use the same toolchain version, so artifacts are byte-identical.
 
 `iot:image` pulls the per-board `build-*` tasks and writes artifacts to the repo-root `dist/`, with names identical to the CI ones:
 

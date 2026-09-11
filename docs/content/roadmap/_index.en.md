@@ -3,8 +3,8 @@ title = "Roadmap"
 weight = 20
 sort_by = "weight"
 [extra]
-source_file_hash = "0585763257dfefaa1f778860f9b41321b9e30309"
-translated_at = "2026-09-09T03:46:33Z"
+source_file_hash = "316560eb6cf9f968c0e9912eb8a99c57bb9c7f76"
+translated_at = "2026-09-11T00:00:00Z"
 +++
 
 ## Overview
@@ -489,6 +489,7 @@ Priority reference:
 | 🟠 P1    | ❌     | ❌   | Server IoT API               | Telemetry ingestion + device management                                 |                                                      |
 | 🟠 P1    | ⚠️     | ✅   | Business composition model   | bin board manifest move-injects capabilities; product tier = feature alias; criteria in features.md |                                                      |
 | 🟠 P1    | ❌     | ❌   | Multi-chip port base         | Family split crates `iot-chip-<f>`/`iot-bsp-<f>` + main cfg family entry + toolchain/CI matrix |                                                      |
+| 🟡 P2    | ❌     | ❌   | ESP32-S3 (Szpai) board support | xtensa-esp32s3 target + Szpai szpi-bsp + moon dual-board task + display-HasLight |                                                      |
 | 🟠 P1    | ❌     | ❌   | First non-esp family migration | `-stm32` variant: app family alias + entry block + thumbv7em + firmware scoping |                                                      |
 | 🟠 P1    | ❌     | ❌   | Voice assistant peripheral  | Opus codec + WS voice client + wake word                                |                                                      |
 | 🟠 P1    | ❌     | ❌   | On-device validation/regression | espflash flashing + real-device smoke test (boot log/LED/button)        |                                                      |

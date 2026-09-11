@@ -41,7 +41,7 @@ Edition 2024（RPIT 捕获规则、无 `'_` elision）/ Mantine v9 / zod v4 / OX
 - **IoT 组合**: 三轴正交（硬件⊥模块⊥能力）；组合点 = bin 板清单（能力 move 注入、缺能力 = 编译错）；产品档 = feature 别名；渲染层运行时可插拔（`RenderController` + renderer 注册表）；详见 architecture.md
 - **IoT 日志**: 只用 `log` façade（`log::info!` 等），输出通道由家族 `iot-chip-esp` 初始化（esp 为 `esp_println::logger`）；业务代码禁止 `println!` / `esp_println::println!`
 - **IoT 软 feature**: 一个 feature = 一个模块（`mod` 处门控一次、off 即文件不存在）；消费者文件禁 `#[cfg(feature=...)]`（能力经 trait 注入）；新增须每子集独立编译过测；判据与六规则见 `docs/content/development/iot/features.md`
-- **IoT 产物可本地复现**: 产物流程须在 Action 与本地等价运行——`moon run iot:image` 一键生成与 CI 同名的 ELF + merged.bin（命名对齐 `reusable-iot-build.yml`，版本经 `scripts/version.sh`），Action 异常时可用本地产物替补上传；详见 `docs/content/development/iot/flashing.md`
+- **IoT 产物可本地复现**: `moon run iot:image` 一键生成与 CI 同名的 ELF + merged.bin（命名对齐 `reusable-iot-build.yml`，版本经 `scripts/version.sh`）；s3 的 Xtensa 构建经 `scripts/iot-xtensa.sh` 按环境分发——espup `esp` 1.95.0.0 工具链齐备（CI/发布）时原生编译，macOS Intel 本地自动回退 `espressif/idf-rust:esp32s3_1.95.0.0` 容器（同版本、字节可一致），Action 异常时可用本地产物替补上传；详见 `docs/content/development/iot/flashing.md`
 
 ### ⚠️ Ask First
 

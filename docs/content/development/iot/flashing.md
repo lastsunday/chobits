@@ -30,6 +30,8 @@ moon run iot:image-c6        # 仅 esp32c6-devkitc-1
 moon run iot:image-s3        # 仅 lckfb-szpi-esp32s3
 ```
 
+> s3 的 Xtensa 构建经 `scripts/iot-xtensa.sh` 按环境分发：espup `esp` 1.95.0.0 工具链齐备（CI/发布）时原生编译；否则本地自动回退 `espressif/idf-rust:esp32s3_1.95.0.0` 容器（macOS Intel）。同版本工具链，产物字节一致。
+
 `iot:image` 依赖各板的 `build-*` 任务，产物写入仓库根 `dist/`，命名与 CI 逐字符一致：
 
 | 产物        | 命名                                              |

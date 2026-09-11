@@ -23,6 +23,11 @@
         versions = {
           moon = "2.4.4";
           sherpaOnnx = "1.13.4";
+          # Xtensa Rust toolchain for ESP32-S3; must match the
+          # espressif/idf-rust:esp32s3_${xtensaRust} container tag used by
+          # scripts/iot-xtensa.sh so CI (native) and macOS Intel (Docker)
+          # build byte-identical firmware.
+          xtensaRust = "1.95.0.0";
           android = {
             buildTools = "36.0.0";
             ndk = "28.2.13676358";
@@ -421,8 +426,8 @@
                 ESPUP_HOME="''${RUSTUP_HOME:-$HOME/.rustup}"
                 ESPUP_TOOLCHAIN_DIR="$ESPUP_HOME/toolchains/esp"
                 if [ ! -f "$ESPUP_TOOLCHAIN_DIR/bin/rustc" ]; then
-                  echo "  [espup] Installing Xtensa Rust toolchain..."
-                  espup install --name esp
+                  echo "  [espup] Installing Xtensa Rust toolchain ${versions.xtensaRust}..."
+                  espup install --name esp -v ${versions.xtensaRust}
                 fi
                 ESPUP_EXPORT="''${ESPUP_EXPORT_FILE:-$HOME/export-esp.sh}"
                 if [ -f "$ESPUP_EXPORT" ]; then

@@ -77,38 +77,30 @@ tasks:
     deps:
       - ~:check-c6
 
-  # S3 uses Docker: esp-rs rust-build dropped x86_64-apple-darwin (v1.91+),
-  # so the Xtensa toolchain must run in the espressif/idf-rust container.
-  # The nightly fork ships no prebuilt Xtensa rust-std, hence -Z build-std.
+  # s3 (xtensa-esp32s3): dispatched by scripts/iot-xtensa.sh. Uses the espup
+  # "esp" toolchain natively (pinned to 1.95.0.0) when fully installed
+  # (CI/release); otherwise falls back to the espressif/idf-rust:esp32s3_1.95.0.0
+  # container (macOS Intel, where esp-rs stopped shipping toolchains at v1.91+).
+  # The esp nightly fork ships no prebuilt Xtensa rust-std, hence -Z build-std.
   check-s3:
     script: |
-      docker run --rm \
-        -v "$PWD:/project" \
-        -v "$HOME/.cargo/registry:/home/esp/.cargo/registry" \
-        -w /project \
-        espressif/idf-rust:esp32s3_1.95.0.0 \
-        bash -lc 'source /home/esp/export-esp.sh && cargo check -p iot-app --bin vanling \
+      bash ../../scripts/iot-xtensa.sh check -p iot-app --bin vanling \
         --target xtensa-esp32s3-none-elf \
         -Z build-std=core,alloc \
-        --offline \
-        --no-default-features --features lckfb-szpi-esp32s3'
+        --no-default-features --features lckfb-szpi-esp32s3
 
   build-s3:
     script: |
-      docker run --rm \
-        -v "$PWD:/project" \
-        -v "$HOME/.cargo/registry:/home/esp/.cargo/registry" \
-        -w /project \
-        espressif/idf-rust:esp32s3_1.95.0.0 \
-        bash -lc 'source /home/esp/export-esp.sh && cargo build --release -p iot-app --bin vanling \
+      bash ../../scripts/iot-xtensa.sh build --release -p iot-app --bin vanling \
         --target xtensa-esp32s3-none-elf \
         -Z build-std=core,alloc \
-        --offline \
-        --no-default-features --features lckfb-szpi-esp32s3'
+        --no-default-features --features lckfb-szpi-esp32s3
     outputs:
       - 'target/xtensa-esp32s3-none-elf/release/vanling'
     deps:
       - ~:check-s3
+    options:
+      runInCI: false
 
   flash-s3:
     command: 'espflash flash --chip esp32s3 target/xtensa-esp32s3-none-elf/release/vanling'

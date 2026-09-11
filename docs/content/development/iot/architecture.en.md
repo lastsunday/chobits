@@ -2,7 +2,7 @@
 title = "Layering and Composition"
 weight = 20
 [extra]
-source_file_hash = "19f87d9aa38f7931b87cb7fcdcae575495fac33f"
+source_file_hash = "07d5519b877b9efd0cd9844b0262e399ecf879d5"
 translated_at = "2026-09-11T00:00:00Z"
 +++
 
@@ -37,7 +37,7 @@ Only the `log` facade (`log::info!` etc.); the output channel is initialized by 
 1. Add the board module to `bsp-esp/` (Board + HasXxx traits) with feature gating.
 2. Add the `type Board` / run-dispatch cfg branch in `app/src/main.rs`.
 3. Forward the app feature `iot-bsp-esp/<board>`.
-4. Add the board to the `platforms` default JSON in `reusable-iot-build.yml` and the `platforms` input of `iot-dev-release.yml` (xtensa boards need `use-xtensa-toolchain: true` and build via the existing Docker tasks such as `build-s3`).
+4. Add the board to the `platforms` default JSON in `reusable-iot-build.yml` and the `platforms` input of `iot-dev-release.yml` (xtensa boards need `use-xtensa-toolchain: true` and go through the `build-s3` task: the espup native `esp` 1.95.0.0 toolchain on CI/release, falling back to the same-version Docker image locally on macOS Intel).
 5. Verify: `cargo build -p iot-app --bin vanling --target riscv32imac-unknown-none-elf --no-default-features --features <board>`
 
 ## Adding a chip family
