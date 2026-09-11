@@ -43,6 +43,29 @@ jobs:
           restore-keys: |
             models-
 
+      - name: Restore Xtensa Rust toolchain
+        id: xtensa-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.rustup/toolchains/esp
+            ~/export-esp.sh
+          key: iot-esp-${{ runner.os }}-${{ hashFiles('**/flake.nix') }}
+          restore-keys: |
+            iot-esp-${{ runner.os }}-
+
+      - name: Install Xtensa Rust toolchain
+        if: steps.xtensa-cache.outputs.cache-hit != 'true'
+        run: >
+          nix develop
+          --ignore-env
+          -k HOME
+          -k SCCACHE_GHA_ENABLED
+          -k ACTIONS_CACHE_URL
+          -k ACTIONS_RUNTIME_TOKEN
+          -k GITHUB_TOKEN
+          --command espup install --name esp -v 1.95.0.0
+
       - name: Moon CI pipeline (affected)
         run: >
           nix develop
@@ -53,6 +76,7 @@ jobs:
           -k SCCACHE_GHA_ENABLED
           -k ACTIONS_CACHE_URL
           -k ACTIONS_RUNTIME_TOKEN
+          -k GITHUB_TOKEN
           -k MOON_LOG
           -k MOON_OUTPUT_STYLE
           --command moon ci --base=${{ github.event.before || format('origin/{0}', github.base_ref || 'dev') }}
