@@ -7,7 +7,10 @@ set -euo pipefail
 #   - native: a complete espup "esp" toolchain (pinned to 1.95.0.0, matching
 #     the Docker image below) is available -> run cargo directly. Handles both
 #     the unified xtensa-esp-elf layout (espup 0.17+) and the legacy per-chip
-#     xtensa-esp32s3-elf layout;
+#     xtensa-esp32s3-elf layout. The esp fork is a nightly build, so the
+#     -Z build-std flags in the moon tasks work here; it is invoked by its
+#     absolute path because a plain `cargo` in this nix shell resolves to the
+#     stable toolchain, which rejects -Z;
 #   - docker: esp toolchain missing/incomplete (e.g. macOS Intel, where esp-rs
 #     stopped shipping toolchains at v1.91+) -> fall back to the
 #     espressif/idf-rust container;
@@ -30,10 +33,11 @@ find_gcc_bin() {
   if [ -n "$gcc" ]; then dirname "$gcc"; fi
 }
 
-# Only a complete espup install counts as native: besides rustc itself we
-# need a GCC linker and the rust-src component for -Z build-std.
+# Only a complete espup install counts as native: besides rustc and its cargo
+# we need a GCC linker and the rust-src component for -Z build-std.
 has_native_esp() {
   [ -x "$ESP_DIR/bin/rustc" ] &&
+    [ -x "$ESP_DIR/bin/cargo" ] &&
     [ -n "$(find_gcc_bin)" ] &&
     [ -d "$ESP_DIR/lib/rustlib/src/rust/library" ]
 }
@@ -47,9 +51,10 @@ run_native() {
   [ -f "$ESP_DIR/export-esp.sh" ] && . "$ESP_DIR/export-esp.sh"
   local gcc_bin
   gcc_bin="$(find_gcc_bin)"
-  [ -n "$gcc_bin" ] && export PATH="$gcc_bin:$PATH"
+  export PATH="$ESP_DIR/bin${gcc_bin:+:$gcc_bin}:$PATH"
+  export RUSTUP_TOOLCHAIN=esp
   cd "$PROJECT"
-  RUSTUP_TOOLCHAIN=esp cargo "$@"
+  "$ESP_DIR/bin/cargo" "$@"
 }
 
 run_docker() {
