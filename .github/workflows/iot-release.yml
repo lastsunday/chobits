@@ -11,18 +11,12 @@ on:
         description: Skip GitHub release
         type: boolean
         default: false
-      boards:
-        description: 'JSON array of board feature names (e.g. ["esp32c6-devkitc-1"])'
+      platforms:
+        description: >-
+          JSON array of platform specs. Each: {"chip","target",
+          "use-xtensa-toolchain","boards":[...]}. Empty = all boards
+          (esp32c6-devkitc-1 + lckfb-szpi-esp32s3).
         type: string
-        default: '["esp32c6-devkitc-1"]'
-      target:
-        description: "Rust target triple of the chip the boards belong to"
-        type: string
-        default: "riscv32imac-unknown-none-elf"
-      chip:
-        description: "Espressif chip the boards belong to (for merged image)"
-        type: string
-        default: "esp32c6"
   push:
     tags:
       - "vanling-iot@*"
@@ -43,7 +37,5 @@ jobs:
     with:
       version: ${{ needs.prepare.outputs.version }}
       dry-run: ${{ inputs.dry-run || false }}
-      boards: ${{ inputs.boards || '["esp32c6-devkitc-1"]' }}
-      target: ${{ inputs.target || 'riscv32imac-unknown-none-elf' }}
-      chip: ${{ inputs.chip || 'esp32c6' }}
+      platforms: ${{ inputs.platforms }}
     secrets: inherit

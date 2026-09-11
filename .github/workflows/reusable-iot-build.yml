@@ -22,40 +22,49 @@ on:
         type: string
         default: ""
         description: "Git tag for the release (defaults to GITHUB_REF_NAME)"
-      boards:
+      platforms:
         required: false
         type: string
-        default: '["esp32c6-devkitc-1"]'
-        description: "JSON array of board feature names (boards must share the chip of the target triple)"
-      target:
-        required: false
-        type: string
-        default: "riscv32imac-unknown-none-elf"
-        description: "Rust target triple of the chip the boards belong to"
-      chip:
-        required: false
-        type: string
-        default: "esp32c6"
-        description: "Espressif chip the boards belong to (for merged image generation)"
-      use-xtensa-toolchain:
-        required: false
-        type: boolean
-        default: false
-        description: "Install Xtensa fork toolchain via espup (for esp32s3 targets)"
+        default: ""
+        description: >
+          JSON array of platform specs; each is
+          {"chip","target","use-xtensa-toolchain","boards":[...]}.
+          Empty falls back to all supported boards (esp32c6 + esp32s3).
 
 env:
   CARGO_TERM_COLOR: always
   ARTIFACT_PREFIX: vanling-iot
 
 jobs:
+  matrix-prepare:
+    runs-on: ubuntu-latest
+    env:
+      PLATFORMS_DEFAULT: >-
+        [{"chip":"esp32c6","target":"riscv32imac-unknown-none-elf","use-xtensa-toolchain":false,"boards":["esp32c6-devkitc-1"]},{"chip":"esp32s3","target":"xtensa-esp32s3-none-elf","use-xtensa-toolchain":true,"boards":["lckfb-szpi-esp32s3"]}]
+    outputs:
+      matrix: ${{ steps.flatten.outputs.matrix }}
+      platforms: ${{ steps.flatten.outputs.platforms }}
+    steps:
+      - id: flatten
+        env:
+          PLATFORMS: ${{ inputs.platforms }}
+        run: |
+          set -euo pipefail
+          PLATFORMS="${PLATFORMS:-}"
+          [ -z "$PLATFORMS" ] && PLATFORMS="$PLATFORMS_DEFAULT"
+          printf '%s' "$PLATFORMS" | jq -e 'type == "array" and length > 0' >/dev/null
+          echo "platforms=$(printf '%s' "$PLATFORMS" | jq -c .)" >> "$GITHUB_OUTPUT"
+          MATRIX=$(printf '%s' "$PLATFORMS" | jq -c '[.[] as $p | $p.boards[] | {board: ., target: $p.target, chip: $p.chip, use_xtensa_toolchain: ($p["use-xtensa-toolchain"] // false)}]')
+          [ "$MATRIX" != "[]" ] || { echo "::error::platforms contains no boards"; exit 1; }
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: matrix-prepare
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        board: ${{ fromJson(inputs.boards) }}
-    env:
-      CARGO_ESP_TARGET: ${{ inputs.target }}
+        include: ${{ fromJson(needs.matrix-prepare.outputs.matrix) }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
@@ -64,7 +73,7 @@ jobs:
       - uses: ./.github/actions/setup-nix
 
       - name: Install Xtensa Rust toolchain
-        if: inputs.use-xtensa-toolchain
+        if: matrix.use_xtensa_toolchain
         run: >
           nix develop
           --ignore-env
@@ -81,7 +90,6 @@ jobs:
           --ignore-env
           -k HOME
           -k CARGO_BUILD_RUSTC_WRAPPER
-          -k CARGO_ESP_TARGET
           -k SCCACHE_GHA_ENABLED
           -k ACTIONS_CACHE_URL
           -k ACTIONS_RUNTIME_TOKEN
@@ -90,13 +98,21 @@ jobs:
           MOON_OUTPUT_STYLE: buffer-only-failure
           MOON_LOG: error
 
+      - name: Fetch deps for Xtensa Docker builds
+        if: matrix.use_xtensa_toolchain
+        run: >
+          nix develop
+          --ignore-env
+          -k HOME
+          --command cargo fetch --manifest-path apps/iot/Cargo.toml
+
       - name: Build firmware for ${{ matrix.board }}
+        if: ${{ !matrix.use_xtensa_toolchain }}
         run: >
           nix develop
           --ignore-env
           -k HOME
           -k CARGO_BUILD_RUSTC_WRAPPER
-          -k CARGO_ESP_TARGET
           -k SCCACHE_GHA_ENABLED
           -k ACTIONS_CACHE_URL
           -k ACTIONS_RUNTIME_TOKEN
@@ -106,10 +122,25 @@ jobs:
           MOON_OUTPUT_STYLE: buffer-only-failure
           MOON_LOG: error
 
+      - name: Build firmware for ${{ matrix.board }} (Docker)
+        if: matrix.use_xtensa_toolchain
+        run: >
+          nix develop
+          --ignore-env
+          -k HOME
+          -k CARGO_BUILD_RUSTC_WRAPPER
+          -k SCCACHE_GHA_ENABLED
+          -k ACTIONS_CACHE_URL
+          -k ACTIONS_RUNTIME_TOKEN
+          --command moon run iot:build-s3
+        env:
+          MOON_OUTPUT_STYLE: buffer-only-failure
+          MOON_LOG: error
+
       - name: Rename firmware for artifact
         run: |
-          cp apps/iot/target/${{ env.CARGO_ESP_TARGET }}/release/vanling \
-             "${{ env.ARTIFACT_PREFIX }}-${{ matrix.board }}-${{ inputs.version }}-${{ env.CARGO_ESP_TARGET }}.elf"
+          cp apps/iot/target/${{ matrix.target }}/release/vanling \
+             "${{ env.ARTIFACT_PREFIX }}-${{ matrix.board }}-${{ inputs.version }}-${{ matrix.target }}.elf"
 
       - name: Generate merged image for ${{ matrix.board }}
         run: >
@@ -117,14 +148,13 @@ jobs:
           --ignore-env
           -k HOME
           -k CARGO_BUILD_RUSTC_WRAPPER
-          -k CARGO_ESP_TARGET
           -k SCCACHE_GHA_ENABLED
           -k ACTIONS_CACHE_URL
           -k ACTIONS_RUNTIME_TOKEN
           --command espflash save-image
-          --chip ${{ inputs.chip }}
+          --chip ${{ matrix.chip }}
           --merge
-          "${{ env.ARTIFACT_PREFIX }}-${{ matrix.board }}-${{ inputs.version }}-${{ env.CARGO_ESP_TARGET }}.elf"
+          "${{ env.ARTIFACT_PREFIX }}-${{ matrix.board }}-${{ inputs.version }}-${{ matrix.target }}.elf"
           "${{ env.ARTIFACT_PREFIX }}-${{ matrix.board }}-${{ inputs.version }}-merged.bin"
 
       - name: Upload firmware artifact
@@ -132,27 +162,26 @@ jobs:
         with:
           name: ${{ env.ARTIFACT_PREFIX }}-${{ matrix.board }}-${{ inputs.version }}
           path: |
-            ${{ env.ARTIFACT_PREFIX }}-${{ matrix.board }}-${{ inputs.version }}-${{ env.CARGO_ESP_TARGET }}.elf
+            ${{ env.ARTIFACT_PREFIX }}-${{ matrix.board }}-${{ inputs.version }}-${{ matrix.target }}.elf
             ${{ env.ARTIFACT_PREFIX }}-${{ matrix.board }}-${{ inputs.version }}-merged.bin
           retention-days: 7
 
   create-release:
-    needs: build
+    needs: [build, matrix-prepare]
     if: ${{ !inputs.dry-run }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - name: Prepare release body
+        env:
+          PLATFORMS: ${{ needs.matrix-prepare.outputs.platforms }}
         run: |
           {
-            echo "Firmware for boards: ${{ inputs.boards }}"
-            echo ""
-            echo "Flash:"
-            for board in $(printf '%s' '${{ inputs.boards }}' | jq -r '.[]'); do
-              echo "- \`esptool.py write_flash 0x0 vanling-iot-${board}-${{ inputs.version }}-merged.bin\` (merged image)"
-              echo "- \`espflash flash vanling-iot-${board}-${{ inputs.version }}-${{ inputs.target }}.elf\`"
-            done
+            echo "Firmware for boards:"
+            printf '%s' "$PLATFORMS" | jq -r '.[] as $p | $p.boards[] as $b |
+              "- `esptool.py write_flash 0x0 vanling-iot-\($b)-${{ inputs.version }}-merged.bin` (merged image)",
+              "- `espflash flash vanling-iot-\($b)-${{ inputs.version }}-\($p.target).elf`"'
             echo ""
             echo "Run number: ${GITHUB_RUN_NUMBER}"
             echo "Version: ${{ inputs.version }}"

@@ -9,7 +9,7 @@ weight = 30
 
 ## 前置条件
 
-- 一块受支持的开发板（当前为 esp32c6）
+- 一块受支持的开发板（esp32c6：`esp32c6-devkitc-1`；esp32s3：`lckfb-szpi-esp32s3`）
 - 一个固件产物。发布产物（含 `merged.bin`）来自 CD release（tag `vanling-iot@x.y.z`）；本地则用：
   ```sh
   # 在 apps/iot 下

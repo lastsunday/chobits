@@ -2,7 +2,7 @@
 title = "Firmware Installation"
 weight = 30
 [extra]
-source_file_hash = "e619ee249cdaec65222de48c1f7639f8050c0a95"
+source_file_hash = "e7ef39ca8a34f8250319bde1b62d127cf25ba53a"
 translated_at = "2026-09-11T00:00:00Z"
 +++
 
@@ -12,7 +12,7 @@ This page explains how to install vanling firmware onto a development board. A [
 
 ## Prerequisites
 
-- A supported dev board (currently esp32c6)
+- A supported dev board (esp32c6: `esp32c6-devkitc-1`; esp32s3: `lckfb-szpi-esp32s3`)
 - A firmware artifact. Release artifacts (incl. `merged.bin`) come from the CD release (`tag vanling-iot@x.y.z`); for local builds:
   ```sh
   # under apps/iot

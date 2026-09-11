@@ -6,6 +6,13 @@ permissions:
 
 on:
   workflow_dispatch:
+    inputs:
+      platforms:
+        description: >-
+          JSON array of platform specs. Each: {"chip","target",
+          "use-xtensa-toolchain","boards":[...]}. Empty = all boards
+          (esp32c6-devkitc-1 + lckfb-szpi-esp32s3).
+        type: string
   workflow_run:
     workflows: ["ci"]
     types: [completed]
@@ -54,8 +61,7 @@ jobs:
       version: ${{ needs.prepare.outputs.dev-version }}
       prerelease: true
       tag-name: dev-iot-${{ github.run_number }}
-      boards: '["esp32c6-devkitc-1"]'
-      target: "riscv32imac-unknown-none-elf"
+      platforms: ${{ inputs.platforms }}
     secrets: inherit
 
   cleanup:
