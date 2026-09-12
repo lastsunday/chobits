@@ -60,27 +60,9 @@ iot-core     — 无 [features]
 iot-bsp-esp  — 元件 feature（button / pca9557 / ws2812 / st7789 / display-light）
                板 feature（esp32c6-devkitc-1 / lckfb-szpi-esp32s3）＝ 元件聚合
 iot-app      — esp32c6（chip 别名）/ esp32c6-devkitc-1（default）/ lckfb-szpi-esp32s3
-               console-auto / console-uart / host
 ```
 
-- **console 路由软 feature（判据 4，运行支持开关）**：`console-auto`（设备生产默认，USB-Serial/JTAG 自适应）与 `console-uart`（esp-emu 冒烟专用，只扫 UART0）经 `esp-println` 的 `auto`/`uart` 互斥，feature 天然不可并存。
-- **host 软 feature（判据 4，std 运行时）**：host 测试后端跑在开发机，`host-smoke` bin 以 `required-features = ["host"]` 整体门控（规则 3）。
-- **三编译目标**：C6 固件（`default`）、S3 固件（`--no-default-features --features lckfb-szpi-esp32s3,console-auto`）、宿主冒烟（`--no-default-features --features host`）。前两者互斥（硬件轴），`host` 亦与 esp features 互斥（std 后端不能与嵌入式运行时并存）。
 - **元件 feature 是模块轴**：一个 feature = 一个元件模块（`components/` 里 `mod` 处门控一次、off 即文件不存在），板 feature 只聚合接线所需的元件，不散装依赖。空 feature（如 `button = []`）靠模块背书合法化（判据 rule 1/6 的「模块背书」），不属于当初删除的纯 cfg 开关。
 - **两轴命名判别**（rule 6「不同词根」的落地）：硬件轴用芯片/板产品名作词根（`esp32c6`、`esp32s3`、`esp32c6-devkitc-1`、`lckfb-szpi-esp32s3`），模块轴用元件裸名（`button`、`pca9557`、`st7789`、`ws2812`、`display-light`）。二者从名称即可分明互斥/加法语义，不加 `cmp-`/`board-`/`chip-` 前缀；真撞名后（如「板名恰等于元件名」）才考虑前缀。
 - **板 feature 是硬件轴**：互斥，一次只开一个，由物理板型决定；`iot-core` 仍零 cfg，能力经组合点（板接线）经 trait 注入。
 - CI 固定 `--no-default-features --features <board>`，构建的即该板全功能固件。将来引入任何能力/行为轴软 feature，都必须重新满足四判据 + 六规则，并补齐矩阵验证。
-
-## 编辑器：feature 切换
-
-rust-analyzer（RA）一次只分析一套 feature/cfg 组合：未启用的 feature 内代码会**变暗**，且补全、跳转、内联诊断均不可用。这是 RA 的设计行为而非报错——同一仓库跨多个互斥 feature 目标（如上三编译目标）时无法让全部代码同时高亮。
-
-`apps/iot/rust-analyzer.toml` 固定当前分析目标。RA 原生热重载该文件：保存即生效，无需 `:CargoReload`；切换时反注释目标预设、注释掉其余两套即可（默认 C6）。三预设对应关系：
-
-| 目标           | features                                    | noDefaultFeatures | target |
-| -------------- | ------------------------------------------- | ----------------- | ------ |
-| C6 固件         | `esp32c6-devkitc-1` + `console-auto`         | 否                | `riscv32imac-unknown-none-elf` |
-| S3 固件         | `lckfb-szpi-esp32s3` + `console-auto`        | 是                | —（xtensa std 由 espup `esp` 工具链提供，不在 rustup targets） |
-| host 冒烟       | `host`                                     | 是                | —（宿主架构） |
-
-`noDefaultFeatures = true`（S3/host）对应 CI/moon 的 `--no-default-features`；`host` 预设必须与 `noDefaultFeatures` 搭配，否则默认的 esp features 会把嵌入式运行时带进宿主后端。

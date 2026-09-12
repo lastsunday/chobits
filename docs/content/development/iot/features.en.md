@@ -2,8 +2,8 @@
 title = "Cargo Feature Criteria and Cohesion"
 weight = 10
 [extra]
-source_file_hash = "4884e328f959bf203de0d73985f57de75fd45262"
-translated_at = "2026-09-12T00:00:00Z"
+source_file_hash = "ca843a85fe32b9d5f493d4dca98257820f8c8d42"
+translated_at = "2026-09-11T00:00:00Z"
 +++
 
 # Cargo Feature Criteria and Cohesion
@@ -63,27 +63,9 @@ iot-core     — no [features]
 iot-bsp-esp  — component features (button / pca9557 / ws2812 / st7789 / display-light)
                board features (esp32c6-devkitc-1 / lckfb-szpi-esp32s3) = component aggregate
 iot-app      — esp32c6 (chip alias) / esp32c6-devkitc-1 (default) / lckfb-szpi-esp32s3
-               console-auto / console-uart / host
 ```
 
-- **Console routing soft features (criterion 4, runtime support switch)**: `console-auto` (device production default, USB-Serial/JTAG adaptive) and `console-uart` (esp-emu smoke only, scans UART0) are mutually exclusive via `esp-println`'s `auto`/`uart`, so the features inherently cannot coexist.
-- **`host` soft feature (criterion 4, std runtime)**: the host test backend runs on the dev machine; the `host-smoke` bin is gated wholesale by `required-features = ["host"]` (rule 3).
-- **Three build targets**: C6 firmware (`default`), S3 firmware (`--no-default-features --features lckfb-szpi-esp32s3,console-auto`), host smoke (`--no-default-features --features host`). The first two are mutually exclusive (hardware axis); `host` also excludes esp features (a std backend cannot coexist with the embedded runtime).
 - **Component features are a module axis**: one feature = one component module (gated once at the `mod` declaration in `components/`; off means the file does not exist). Board features only aggregate the components their wiring needs, with no loose dependencies. Empty features (e.g. `button = []`) are legalized by module endorsement (rule 1/6 "module endorsement"); they are not the pure cfg switches removed earlier.
 - **Two-axis naming** (rule 6 "distinct roots" in practice): the hardware axis uses chip/board product names as roots (`esp32c6`, `esp32s3`, `esp32c6-devkitc-1`, `lckfb-szpi-esp32s3`); the module axis uses bare component names (`button`, `pca9557`, `st7789`, `ws2812`, `display-light`). Mutually-exclusive vs additive semantics are clear from the name alone; no `cmp-`/`board-`/`chip-` prefix; only consider a prefix after a real collision (e.g. a board name that equals a component name).
 - **Board features are the hardware axis**: mutually exclusive, exactly one at a time, set by the physical board; `iot-core` still has zero cfg, with capabilities injected via traits at the composition point (board wiring).
 - CI uses a fixed `--no-default-features --features <board>`, building the fully-featured firmware for that board. Any future capability/behavior-axis soft feature must satisfy the four criteria plus the six rules again, and add matrix validation.
-
-## Editor: feature switching
-
-rust-analyzer (RA) analyzes one feature/cfg combination at a time: code behind an inactive feature is **dimmed**, and completion, navigation, and inlay diagnostics are unavailable. This is RA's designed behavior, not an error — with multiple mutually exclusive feature targets in one repo (the three build targets above), all code cannot be highlighted at once.
-
-`apps/iot/rust-analyzer.toml` pins the currently analyzed target. RA hot-reloads this file natively: save to apply, no `:CargoReload` needed; to switch, uncomment the target preset and comment out the other two (C6 is the default). The three presets map as follows:
-
-| Target      | features                                   | noDefaultFeatures | target |
-| ----------- | ------------------------------------------ | ----------------- | ------ |
-| C6 firmware | `esp32c6-devkitc-1` + `console-auto`        | no                | `riscv32imac-unknown-none-elf` |
-| S3 firmware | `lckfb-szpi-esp32s3` + `console-auto`       | yes               | — (xtensa std is provided by the espup `esp` toolchain, not rustup targets) |
-| host smoke  | `host`                                    | yes               | — (host arch) |
-
-`noDefaultFeatures = true` (S3/host) matches CI/moon's `--no-default-features`; the `host` preset must be paired with it, otherwise the default esp features would pull the embedded runtime into the host backend.
