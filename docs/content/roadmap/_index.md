@@ -489,6 +489,7 @@ sort_by = "weight"
 | 🟡 P2  | ❌   | ❌   | ESP32-S3（实战派）板支持      | xtensa-esp32s3 目标 + 实战派 szpi-bsp + moon 双板任务 + display-HasLight       |                                                      |
 | 🟠 P1  | ❌   | ❌   | 首个非 esp 家族迁移          | `-stm32` 变体：app 家族别名 + 入口块 + thumbv7em + 固件作用域                   |                                                      |
 | 🟠 P1  | ❌   | ❌   | 语音助手外设                 | Opus 编解码 + WS 语音客户端 + 唤醒词                                            |                                                      |
+| 🔴 P0  | ✅   | ✅   | 无硬件回归冒烟              | 宿主 std harness（意图→状态→渲染行为断言）+ esp-emu C6 硅层 boot smoke，CI 必经 | [仿真与冒烟](../../development/iot/emulation.md) |
 | 🟠 P1  | ❌   | ❌   | 真机验证/回归                | espflash 烧录 + 实机 smoke test（boot log/LED/按键）                            |                                                      |
 | 🟠 P1  | ❌   | —    | 固件 Web 安装器              | `docs/static/flasher/` 静态单页（GitHub Pages）：上传 bin → 前端自解析（magic/ChipID/flash 参数/CRC/SHA256）→ esptool-js WebSerial 直刷 merged.bin 至 0x0；真机芯片比对防错刷；Chrome/Edge 限定，附 GUI/esptool 兜底 |                                                      |
 | 🟡 P2  | ❌   | ❌   | OTA 固件升级                 | 版本检查/下载校验/双分区回滚                                                    |                                                      |

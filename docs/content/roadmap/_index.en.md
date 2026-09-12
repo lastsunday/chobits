@@ -3,8 +3,8 @@ title = "Roadmap"
 weight = 20
 sort_by = "weight"
 [extra]
-source_file_hash = "316560eb6cf9f968c0e9912eb8a99c57bb9c7f76"
-translated_at = "2026-09-11T00:00:00Z"
+source_file_hash = "d7db36d244df7fc78e51217e3e6b24cc0a51a1ed"
+translated_at = "2026-09-12T00:00:00Z"
 +++
 
 ## Overview
@@ -492,6 +492,7 @@ Priority reference:
 | 🟡 P2    | ❌     | ❌   | ESP32-S3 (Szpai) board support | xtensa-esp32s3 target + Szpai szpi-bsp + moon dual-board task + display-HasLight |                                                      |
 | 🟠 P1    | ❌     | ❌   | First non-esp family migration | `-stm32` variant: app family alias + entry block + thumbv7em + firmware scoping |                                                      |
 | 🟠 P1    | ❌     | ❌   | Voice assistant peripheral  | Opus codec + WS voice client + wake word                                |                                                      |
+| 🔴 P0    | ✅     | ✅   | Hardware-free regression smoke | Host std harness (intent → state → render behavior assertions) + esp-emu C6 silicon boot smoke, mandatory in CI | [Emulation & smoke](../../development/iot/emulation.en.md) |
 | 🟠 P1    | ❌     | ❌   | On-device validation/regression | espflash flashing + real-device smoke test (boot log/LED/button)        |                                                      |
 | 🟠 P1    | ❌     | —    | Firmware web installer       | `docs/static/flasher/` static single page (GitHub Pages): upload bin → client-side parse (magic/ChipID/flash params/CRC/SHA256) → esptool-js WebSerial flash merged.bin to 0x0; real-chip comparison guards against wrong flashing; Chrome/Edge only, with GUI/esptool fallback |                                                      |
 | 🟡 P2    | ❌     | ❌   | OTA firmware upgrade          | Version check/download verification/dual-partition rollback             |                                                      |

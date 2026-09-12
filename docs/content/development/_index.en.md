@@ -3,8 +3,8 @@ title = "Development Documentation"
 weight = 30
 sort_by = "weight"
 [extra]
-source_file_hash = "7626ceff41a131ea2b2b7ea25b50f8b9f4b9e247"
-translated_at = "2026-09-09T00:00:00Z"
+source_file_hash = "5442ce8e4ac277bc8076575826550b9b9967389c"
+translated_at = "2026-09-12T00:00:00Z"
 +++
 
 # Development Documentation
@@ -43,6 +43,7 @@ Debugging and diagnostics documentation.
 Development documentation for the Vanling ESP32 firmware (`apps/iot`).
 
 - [Cargo Feature Criteria and Cohesion](@/development/iot/features.en.md) — hard/soft feature definitions, introduction criteria, cohesion rules
+- [Hardware-free Emulation and Regression Smoke](@/development/iot/emulation.en.md) — host harness + esp-emu, decision matrix
 
 ## [Model Download](@/development/downloader.en.md)
 
